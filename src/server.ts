@@ -1,0 +1,43 @@
+import express from 'express';
+import * as dotenv from 'dotenv';
+import cors from 'cors';
+import routes from './routes';
+import helmet from 'helmet';
+import morgan from 'morgan';
+dotenv.config();
+
+const app = express();
+
+// CORS Configuration
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production'
+    ? process.env.CORS_ORIGIN_PROD || 'https://app.yapbay.com'
+    : process.env.CORS_ORIGIN_DEV || 'http://localhost:3000',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+// Security middleware
+app.use(helmet());
+
+// Logging middleware
+app.use(morgan('dev'));
+
+// CORS and JSON parsing
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// Routes
+app.use('/', routes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`YapBay API running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Connected to Celo network: ${process.env.CELO_RPC_URL}`);
+});

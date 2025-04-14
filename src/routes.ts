@@ -14,7 +14,7 @@ interface Request extends ExpressRequest {
 
 // JWT Verification Setup
 const client = jwksClient({
-  jwksUri: 'https://app.dynamic.xyz/api/v0/sdk/20c1c15c-2ea4-4917-bb3c-2abd455c71ee/.well-known/jwks',
+  jwksUri: 'https://app.dynamic.xyz/api/v0/sdk/322e23a8-06d7-445f-b525-66426d63d858/.well-known/jwks',
   rateLimit: true,
   cache: true,
   cacheMaxEntries: 5,
@@ -218,6 +218,36 @@ router.get('/offers/:id', withErrorHandling(async (req: Request, res: Response):
 // PRIVATE ROUTES
 // PRIVATE ROUTES - Require JWT
 router.use(requireJWT);
+
+// Health Check Endpoint (Authenticated)
+router.get('/health', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+  const walletAddress = getWalletAddressFromJWT(req);
+  let dbOk = false;
+  let celoNetwork: ethers.Network | null = null;
+  let celoError: string | null = null;
+
+  try {
+    await query('SELECT 1');
+    dbOk = true;
+  } catch (dbErr) {
+    logError('Health check DB query failed', dbErr as Error);
+  }
+
+  try {
+    celoNetwork = await provider.getNetwork();
+  } catch (celoErr) {
+    logError('Health check Celo provider failed', celoErr as Error);
+    celoError = (celoErr as Error).message;
+  }
+
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    userWallet: walletAddress || 'Not Found',
+    dbStatus: dbOk ? 'Connected' : 'Error',
+    celoProviderStatus: celoNetwork ? `Connected (${celoNetwork.name}, ChainID: ${celoNetwork.chainId})` : `Error (${celoError || 'Unknown'})`,
+  });
+}));
 
 // 1. Accounts Endpoints
 // Create a new account

@@ -15,6 +15,7 @@ The YapBay API provides endpoints for:
 - Node.js (v18 or higher)
 - PostgreSQL database
 - Celo Alfajores testnet account with USDC tokens
+- Private key for a funded Celo Alfajores account
 
 ## Setup
 
@@ -55,19 +56,16 @@ npm run test:connection
 ```bash
 npm run build
 ```
-
 7. Start the server:
 ```bash
-# Start with Solana (original)
+# Start the server
 npm start
-
-# Start with Celo
-npm run start:celo
 ```
 
 For development:
 ```bash
 npm run start:dev
+```
 ```
 
 ## API Endpoints
@@ -106,17 +104,15 @@ Authorization: Bearer your-jwt-token
 
 - `POST /escrows/create` - Create a new escrow
 - `POST /escrows/fund` - Fund an escrow
-- `POST /escrows/mark-fiat-paid` - Mark fiat as paid
+- `GET /escrows/:trade_id` - Get escrow details by trade ID
+- `GET /my/escrows` - Get authenticated user's escrows
 - `POST /escrows/release` - Release an escrow
 - `POST /escrows/cancel` - Cancel an escrow
 - `POST /escrows/dispute` - Open a dispute
-- `GET /escrows/:id` - Get escrow details
-- `GET /escrows/trade/:trade_id` - Get escrows for a trade
-- `GET /my/escrows` - Get authenticated user's escrows
 
 ## Smart Contract Interaction
 
-The API interacts with the YapBayEscrow smart contract deployed on the Celo Alfajores testnet. The contract handles:
+The API interacts with the YapBayEscrow smart contract deployed on the Celo Alfajores testnet using ethers.js. The contract handles:
 
 - Creating escrows
 - Funding escrows with USDC
@@ -133,10 +129,10 @@ The API interacts with the YapBayEscrow smart contract deployed on the Celo Alfa
 # Run all tests
 npm test
 
-# Run only Celo-related tests
-npm run test:celo
+# Run blockchain-related tests
+npm run test:blockchain
 
-# Test Celo connection
+# Test blockchain connection
 npm run test:connection
 ```
 
@@ -148,4 +144,4 @@ npm run lint
 
 ## License
 
-This project is licensed under the ISC License.
+This project is licensed under the MIT License.

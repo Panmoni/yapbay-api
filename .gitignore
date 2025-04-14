@@ -1,0 +1,8 @@
+// .gitignore
+node_modules/
+dist/
+.env
+.vscode/
+.keys/
+jwt.txt
+api.log

@@ -20,7 +20,7 @@ The YapBay API provides endpoints for:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/yapbay-api.git
+git clone https://github.com/Panmoni/yapbay-api.git
 cd yapbay-api
 ```
 

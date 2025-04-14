@@ -14,8 +14,15 @@ if (!PRIVATE_KEY) {
   console.warn('Warning: PRIVATE_KEY not set in environment variables');
 }
 
-// Set up provider
-const provider = new ethers.JsonRpcProvider(CELO_RPC_URL);
+// Define Celo Alfajores network details
+const celoAlfajoresNetwork = {
+    name: "celo-alfajores",
+    chainId: 44787,
+    _defaultProvider: (providers: any) => new providers.JsonRpcProvider(CELO_RPC_URL)
+};
+
+// Set up provider with explicit network details
+const provider = new ethers.JsonRpcProvider(CELO_RPC_URL, celoAlfajoresNetwork);
 
 // Set up signer if private key is available
 const getSigner = () => {

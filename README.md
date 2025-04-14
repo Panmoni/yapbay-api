@@ -1,13 +1,32 @@
 # YapBay API
 
-This is the backend API for YapBay, a peer-to-peer trading platform built on the Celo blockchain.
+This is the backend API for YapBay, a peer-to-peer cryptocurrency trading platform that facilitates secure exchanges between crypto and fiat currencies. The platform utilizes blockchain-based smart contracts for escrow services, ensuring secure and trustless transactions.
+
+## Project Documentation
+
+For detailed project requirements and specifications, see [Project Requirements](docs/reqs.md).
 
 ## Overview
+
+YapBay is a platform that supports both single-leg trades (simple crypto-to-fiat exchanges) and sequential trades (multi-leg transactions that enable fiat-to-fiat exchanges through crypto as an intermediary).
+
+### System Architecture
+
+The YapBay platform consists of the following key components:
+
+1. **Smart Contract Layer**: Ethereum/Celo-based escrow contracts that handle the secure holding and release of cryptocurrency funds
+2. **Database Layer**: PostgreSQL database that stores user accounts, trade information, and dispute records
+3. **API Layer**: Node.js/Express backend that connects the blockchain and database layers
+4. **Client Applications**: Web and mobile interfaces that interact with the API
+
+### API Functionality
 
 The YapBay API provides endpoints for:
 - User account management
 - Creating and managing offers
 - Initiating and completing trades
+- Escrow operations (create, fund, release, cancel)
+- Dispute handling and resolution
 - Interacting with the YapBayEscrow smart contract on Celo Alfajores testnet
 
 ## Prerequisites
@@ -114,12 +133,23 @@ Authorization: Bearer your-jwt-token
 
 The API interacts with the YapBayEscrow smart contract deployed on the Celo Alfajores testnet using ethers.js. The contract handles:
 
-- Creating escrows
+- Creating escrows between buyers and sellers
 - Funding escrows with USDC
 - Marking fiat as paid
 - Releasing funds to the buyer
-- Cancelling escrows
-- Handling disputes
+- Cancelling escrows when conditions are not met
+- Handling disputes with bond requirements
+- Supporting sequential escrows (linked trades)
+
+Key contract functions include:
+- `createEscrow`: Initializes a new escrow agreement
+- `fundEscrow`: Deposits cryptocurrency into the escrow
+- `markFiatPaid`: Confirms fiat payment has been made
+- `releaseEscrow`: Releases funds to the buyer
+- `cancelEscrow`: Cancels the escrow and returns funds to the seller
+- `openDisputeWithBond`: Initiates a dispute with a bond requirement
+- `respondToDisputeWithBond`: Responds to a dispute with evidence
+- `resolveDisputeWithExplanation`: Resolves a dispute with arbitrator decision
 
 ## Development
 
@@ -141,6 +171,22 @@ npm run test:connection
 ```bash
 npm run lint
 ```
+
+## Security Considerations
+
+- JWT-based authentication and authorization
+- Secure blockchain key management
+- Transaction verification
+- Data encryption for sensitive information
+- Rate limiting and input validation
+- HTTPS enforcement
+
+## Constraints and Limitations
+
+1. Maximum escrow amount is limited to 100 USDC per trade for security reasons
+2. Dispute resolution requires bond deposits from both parties
+3. Time limits for escrow operations are enforced by the smart contract
+4. Sequential trades must be properly linked to ensure atomic execution
 
 ## License
 

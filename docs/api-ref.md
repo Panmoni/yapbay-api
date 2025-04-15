@@ -1,5 +1,8 @@
 # API REF
 
+User 1 0xDD304336Cf878dF7d2647435D5f57C2345B140C1
+User 2 0x14140b0dbC4736124ea9F5230D851f62F99b0ac5
+
 ## Health
 curl http://localhost:3011/health/ -H "Content-Type: application/json" -H "Authorization: Bearer $(cat jwt.txt)"
 ## Accounts
@@ -8,19 +11,19 @@ curl http://localhost:3011/accounts/me -H "Authorization: Bearer $(cat jwt.txt)"
 ### Create Account
 curl -X POST http://localhost:3011/accounts \
 -H "Content-Type: application/json" \
--H "Authorization: Bearer $(cat jwt.txt)" \
+-H "Authorization: Bearer $(cat jwt2.txt)" \
 -d '{
-  "wallet_address": "0xDD304336Cf878dF7d2647435D5f57C2345B140C1",
-  "username": "george",
-  "email": "george.donnelly+yapbay@gmail.com"
+  "wallet_address": "0x14140b0dbC4736124ea9F5230D851f62F99b0ac5",
+  "username": "gsd",
+  "email": "george.donnelly+yapbay2@gmail.com"
 }'
 ## Offers
 ### Create Offer
 curl -X POST http://localhost:3011/offers \
 -H "Content-Type: application/json" \
--H "Authorization: Bearer $(cat jwt.txt)" \
+-H "Authorization: Bearer $(cat jwt2.txt)" \
 -d '{
-  "creator_account_id": 1,
+  "creator_account_id": 2,
   "offer_type": "SELL",
   "token": "USDC",
   "fiat_currency": "USD",
@@ -41,3 +44,12 @@ curl -X PUT http://localhost:3011/offers/1 \
 curl -X DELETE http://localhost:3011/offers/1 -H "Authorization: Bearer $(cat jwt.txt)" | jq '.'
 ## Trades
 ### Create Trade
+curl -X POST http://localhost:3011/trades \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $(cat jwt.txt)" \
+-d '{
+"leg1_offer_id": 3,
+"leg1_crypto_amount": 20,
+"from_fiat_currency": "USD"
+}' | jq '.'
+### 

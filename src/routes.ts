@@ -14,8 +14,6 @@ interface Request extends ExpressRequest {
   user?: CustomJwtPayload; // Use imported CustomJwtPayload
 }
 
-// Removed duplicate CustomJwtPayload interface definition
-
 // JWT Verification Setup
 const client = jwksClient({
   jwksUri: 'https://app.dynamic.xyz/api/v0/sdk/322e23a8-06d7-445f-b525-66426d63d858/.well-known/jwks',
@@ -61,7 +59,6 @@ const requireJWT = (req: Request, res: Response, next: NextFunction): void => {
       return;
     }
     req.user = decoded as CustomJwtPayload; // Use the imported custom type
-    // Removed previous debug log here, now handled in jwtUtils
     next();
   });
 };
@@ -81,8 +78,6 @@ const withErrorHandling = (handler: (req: Request, res: Response) => Promise<voi
     }
   };
 };
-
-// Removed old getWalletAddressFromJWT function definition
 
 // Middleware to check ownership
 const restrictToOwner = (
@@ -215,9 +210,7 @@ router.get('/offers', withErrorHandling(async (req: Request, res: Response): Pro
       params.push(token as string);
     }
 
-    // If authenticated and requesting own offers
-    const walletAddress = getWalletAddressFromJWT(req); // Uses imported function
-    // Removed previous debug logs here, now handled in jwtUtils
+    const walletAddress = getWalletAddressFromJWT(req);
     if (owner === 'me' && walletAddress) {
       console.log(`[GET /offers] Applying owner filter for wallet: ${walletAddress}`);
       sql += ' AND creator_account_id IN (SELECT id FROM accounts WHERE LOWER(wallet_address) = LOWER($' + (params.length + 1) + '))';
@@ -315,18 +308,40 @@ router.get('/accounts/me', withErrorHandling(async (req: Request, res: Response)
   res.json(result[0]);
 }));
 
-// Retrieve account details (publicly accessible) - This should probably be private or restricted
+// Retrieve specific account details (limited public view)
 router.get('/accounts/:id', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  // TODO: Add authentication/authorization check? Or is this intended to be public?
+  const requesterWalletAddress = getWalletAddressFromJWT(req);
+
   try {
     const result = await query('SELECT * FROM accounts WHERE id = $1', [id]);
     if (result.length === 0) {
       res.status(404).json({ error: 'Account not found' });
       return;
     }
-    res.json(result[0]);
+
+    const accountData = result[0];
+
+    // Check if the requester is the owner of the account
+    if (requesterWalletAddress && accountData.wallet_address.toLowerCase() === requesterWalletAddress.toLowerCase()) {
+      // Requester is the owner, return full details
+      res.json(accountData);
+    } else {
+      // Requester is not the owner, return limited public details
+      const publicProfile = {
+        id: accountData.id,
+        username: accountData.username,
+        profile_photo_url: accountData.profile_photo_url,
+        available_from: accountData.available_from,
+        available_to: accountData.available_to,
+        timezone: accountData.timezone,
+        created_at: accountData.created_at,
+        // Explicitly exclude sensitive fields: wallet_address, email, telegram_*, phone_*
+      };
+      res.json(publicProfile);
+    }
   } catch (err) {
+    logError(`Error fetching account ${id}`, err as Error);
     res.status(500).json({ error: (err as Error).message });
   }
 }));

@@ -314,7 +314,11 @@ router.get('/accounts/:id', withErrorHandling(async (req: Request, res: Response
   const requesterWalletAddress = getWalletAddressFromJWT(req);
 
   try {
-    const result = await query('SELECT * FROM accounts WHERE id = $1', [id]);
+    // Fetch only necessary fields initially
+    const result = await query(
+        'SELECT id, username, wallet_address, email, telegram_username, telegram_id, profile_photo_url, phone_country_code, phone_number, available_from, available_to, timezone, created_at FROM accounts WHERE id = $1', 
+        [id]
+    );
     if (result.length === 0) {
       res.status(404).json({ error: 'Account not found' });
       return;
@@ -324,8 +328,9 @@ router.get('/accounts/:id', withErrorHandling(async (req: Request, res: Response
 
     // Check if the requester is the owner of the account
     if (requesterWalletAddress && accountData.wallet_address.toLowerCase() === requesterWalletAddress.toLowerCase()) {
-      // Requester is the owner, return full details
-      res.json(accountData);
+      // Requester is the owner, return full details (excluding wallet_address for consistency?)
+      // Or return everything as fetched:
+       res.json(accountData); 
     } else {
       // Requester is not the owner, return limited public details
       const publicProfile = {
@@ -345,6 +350,7 @@ router.get('/accounts/:id', withErrorHandling(async (req: Request, res: Response
     res.status(500).json({ error: (err as Error).message });
   }
 }));
+
 
 // Update account info (restricted to owner)
 router.put('/accounts/:id', restrictToOwner('account', 'id'), withErrorHandling(async (req: Request, res: Response): Promise<void> => {
@@ -642,26 +648,7 @@ router.post(
   })
 );
 
-// List trades (publicly accessible with filters)
-router.get('/trades', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
-  const { status, user } = req.query;
-  try {
-    let sql = 'SELECT * FROM trades WHERE 1=1';
-    const params: string[] = [];
-    if (status) {
-      sql += ' AND overall_status = $' + (params.length + 1);
-      params.push(status as string);
-    }
-    if (user) {
-      sql += ' AND (leg1_offer_id IN (SELECT id FROM offers WHERE creator_account_id = $' + (params.length + 1) + '))';
-      params.push(user as string);
-    }
-    const result = await query(sql, params);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
-}));
+// List trades (publicly accessible with filters) - REMOVED as per user request
 
 // List trades for authenticated user
 router.get('/my/trades', withErrorHandling(async (req: Request, res: Response): Promise<void> => {

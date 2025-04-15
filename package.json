@@ -16,7 +16,7 @@
     "lint": "eslint . --ext .ts"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "description": "API for YapBay Escrow on Celo Alfajores testnet",
   "devDependencies": {
     "@types/chai": "^5.2.1",

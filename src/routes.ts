@@ -328,8 +328,7 @@ router.get('/accounts/:id', withErrorHandling(async (req: Request, res: Response
 
     // Check if the requester is the owner of the account
     if (requesterWalletAddress && accountData.wallet_address.toLowerCase() === requesterWalletAddress.toLowerCase()) {
-      // Requester is the owner, return full details (excluding wallet_address for consistency?)
-      // Or return everything as fetched:
+      // Requester is the owner, return full details
        res.json(accountData); 
     } else {
       // Requester is not the owner, return limited public details
@@ -648,8 +647,6 @@ router.post(
   })
 );
 
-// List trades (publicly accessible with filters) - REMOVED as per user request
-
 // List trades for authenticated user
 router.get('/my/trades', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const jwtWalletAddress = getWalletAddressFromJWT(req);
@@ -664,20 +661,71 @@ router.get('/my/trades', withErrorHandling(async (req: Request, res: Response): 
   res.json(result);
 }));
 
-// Get trade details (publicly accessible)
+// Get trade details (restricted to participants)
 router.get('/trades/:id', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
+  const requesterWalletAddress = getWalletAddressFromJWT(req);
+
+  if (!requesterWalletAddress) {
+      // Should be caught by requireJWT, but handle defensively
+      res.status(401).json({ error: 'Authentication required to view trade details' }); // Removed return
+      return; // Added return to satisfy void promise
+  }
+
   try {
-    const result = await query('SELECT * FROM trades WHERE id = $1', [id]);
-    if (result.length === 0) {
+    // Fetch trade data including all potential participant account IDs
+    const tradeResult = await query(
+        'SELECT *, leg1_seller_account_id, leg1_buyer_account_id, leg2_seller_account_id, leg2_buyer_account_id FROM trades WHERE id = $1', 
+        [id]
+    );
+    if (tradeResult.length === 0) {
       res.status(404).json({ error: 'Trade not found' });
       return;
     }
-    res.json(result[0]);
+    const tradeData = tradeResult[0];
+
+    // Collect unique, non-null participant account IDs
+    const participantAccountIds = [
+        tradeData.leg1_seller_account_id,
+        tradeData.leg1_buyer_account_id,
+        tradeData.leg2_seller_account_id,
+        tradeData.leg2_buyer_account_id
+    ].filter((accountId): accountId is number => accountId !== null && accountId !== undefined); // Filter out nulls and ensure type is number
+    
+    const uniqueParticipantAccountIds = [...new Set(participantAccountIds)];
+
+    if (uniqueParticipantAccountIds.length === 0) {
+        // Should not happen if trade exists, but handle defensively
+        logError(`Trade ${id} has no valid participant account IDs.`, new Error('Missing participant account IDs in trade data')); // Added Error object
+        res.status(500).json({ error: 'Internal server error processing trade participants' }); // Removed return
+        return; // Added return
+    }
+
+    // Fetch wallet addresses for all participants in one query
+    const accountsResult = await query(
+        'SELECT id, wallet_address FROM accounts WHERE id = ANY($1::int[])',
+        [uniqueParticipantAccountIds]
+    );
+
+    // Create a set of participant wallet addresses (lowercase)
+    const participantWallets = new Set(
+        accountsResult.map(acc => acc.wallet_address.toLowerCase())
+    );
+
+    // Check if the requester is a participant
+    if (participantWallets.has(requesterWalletAddress.toLowerCase())) {
+      // Requester is a participant, return full trade details
+      res.json(tradeData);
+    } else {
+      // Requester is not a participant, return 403 Forbidden
+      res.status(403).json({ error: 'Forbidden: You are not authorized to view this trade' });
+    }
   } catch (err) {
+    logError(`Error fetching trade ${id} or checking participation`, err as Error);
     res.status(500).json({ error: (err as Error).message });
   }
 }));
+
 
 // Update trade info (restricted to trade participants)
 router.put('/trades/:id', withErrorHandling(async (req: Request, res: Response): Promise<void> => {

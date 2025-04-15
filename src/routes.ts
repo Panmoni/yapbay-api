@@ -6,11 +6,15 @@ import jwt, { JwtPayload } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import axios from 'axios';
 import { ethers } from 'ethers';
+import YapBayEscrowABI from './contract/YapBayEscrow.json'; // Import ABI
+import { getWalletAddressFromJWT, CustomJwtPayload } from './utils/jwtUtils'; // Import from new util file
 
 // Extend Express Request interface
 interface Request extends ExpressRequest {
-  user?: JwtPayload;
+  user?: CustomJwtPayload; // Use imported CustomJwtPayload
 }
+
+// Removed duplicate CustomJwtPayload interface definition
 
 // JWT Verification Setup
 const client = jwksClient({
@@ -56,7 +60,8 @@ const requireJWT = (req: Request, res: Response, next: NextFunction): void => {
       res.status(401).json({ error: 'Invalid token' });
       return;
     }
-    req.user = decoded as jwt.JwtPayload;
+    req.user = decoded as CustomJwtPayload; // Use the imported custom type
+    // Removed previous debug log here, now handled in jwtUtils
     next();
   });
 };
@@ -77,11 +82,7 @@ const withErrorHandling = (handler: (req: Request, res: Response) => Promise<voi
   };
 };
 
-// Helper to get wallet address from JWT
-const getWalletAddressFromJWT = (req: Request): string | undefined => {
-  const credentials = req.user?.verified_credentials;
-  return credentials?.find((cred: any) => cred.format === 'blockchain')?.address;
-};
+// Removed old getWalletAddressFromJWT function definition
 
 // Middleware to check ownership
 const restrictToOwner = (
@@ -93,9 +94,10 @@ const restrictToOwner = (
     res: Response,
     next: NextFunction
   ): Promise<void> => {
-    const walletAddress = getWalletAddressFromJWT(req);
+    const walletAddress = getWalletAddressFromJWT(req); // Now uses imported function
     if (!walletAddress) {
-      res.status(403).json({ error: "No wallet address in token" });
+      console.error('[restrictToOwner] Failed to get wallet address from JWT for ownership check.');
+      res.status(403).json({ error: "No wallet address could be extracted from token" });
       return;
     }
     const resourceId = req.params.id || req.body[resourceKey];
@@ -115,13 +117,20 @@ const restrictToOwner = (
         resourceType === "account"
           ? result[0].wallet_address
           : result[0].creator_account_id;
-      const accountCheck =
-        resourceType === "offer"
-          ? await query("SELECT wallet_address FROM accounts WHERE id = $1", [
-              ownerField,
-            ])
-          : [{ wallet_address: ownerField }];
-      if (accountCheck[0].wallet_address.toLowerCase() !== walletAddress.toLowerCase()) {
+      
+      let ownerWalletAddress: string;
+      if (resourceType === "offer") {
+          const accountCheck = await query("SELECT wallet_address FROM accounts WHERE id = $1", [ownerField]);
+          if (accountCheck.length === 0) {
+              res.status(404).json({ error: `Creator account for ${resourceType} not found` });
+              return;
+          }
+          ownerWalletAddress = accountCheck[0].wallet_address;
+      } else {
+          ownerWalletAddress = ownerField;
+      }
+
+      if (ownerWalletAddress.toLowerCase() !== walletAddress.toLowerCase()) {
         res
           .status(403)
           .json({
@@ -131,6 +140,7 @@ const restrictToOwner = (
       }
       next();
     } catch (err) {
+      logError(`[restrictToOwner] Error checking ownership for ${resourceType} ${resourceId}`, err as Error);
       res.status(500).json({ error: (err as Error).message });
     }
   };
@@ -170,37 +180,7 @@ router.get('/prices', withErrorHandling(async (req: Request, res: Response): Pro
   }
 }));
 
-// List offers (publicly accessible but can filter by owner if authenticated)
-router.get('/offers', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
-  const { type, token, owner } = req.query;
-  try {
-    let sql = 'SELECT * FROM offers WHERE 1=1';
-    const params: string[] = [];
-
-    if (type) {
-      sql += ' AND offer_type = $' + (params.length + 1);
-      params.push(type as string);
-    }
-    if (token) {
-      sql += ' AND token = $' + (params.length + 1);
-      params.push(token as string);
-    }
-
-    // If authenticated and requesting own offers
-    const walletAddress = getWalletAddressFromJWT(req);
-    if (owner === 'me' && walletAddress) {
-      sql += ' AND creator_account_id IN (SELECT id FROM accounts WHERE wallet_address = $' + (params.length + 1) + ')';
-      params.push(walletAddress);
-    }
-
-    const result = await query(sql, params);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
-}));
-
-// Get offer details (publicly accessible)
+// Get offer details (publicly accessible) - Moved before requireJWT
 router.get('/offers/:id', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   try {
@@ -217,7 +197,43 @@ router.get('/offers/:id', withErrorHandling(async (req: Request, res: Response):
 
 // PRIVATE ROUTES
 // PRIVATE ROUTES - Require JWT
-router.use(requireJWT);
+router.use(requireJWT); // Apply JWT middleware to all subsequent routes
+
+// List offers (now private, requires JWT)
+router.get('/offers', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+  const { type, token, owner } = req.query;
+  try {
+    let sql = 'SELECT * FROM offers WHERE 1=1';
+    const params: string[] = [];
+
+    if (type) {
+      sql += ' AND offer_type = $' + (params.length + 1);
+      params.push(type as string);
+    }
+    if (token) {
+      sql += ' AND token = $' + (params.length + 1);
+      params.push(token as string);
+    }
+
+    // If authenticated and requesting own offers
+    const walletAddress = getWalletAddressFromJWT(req); // Uses imported function
+    // Removed previous debug logs here, now handled in jwtUtils
+    if (owner === 'me' && walletAddress) {
+      console.log(`[GET /offers] Applying owner filter for wallet: ${walletAddress}`);
+      sql += ' AND creator_account_id IN (SELECT id FROM accounts WHERE LOWER(wallet_address) = LOWER($' + (params.length + 1) + '))';
+      params.push(walletAddress);
+    } else if (owner === 'me' && !walletAddress) {
+        console.warn('[GET /offers] owner=me filter requested but no wallet address found in token.');
+    }
+
+    const result = await query(sql, params);
+    res.json(result);
+  } catch (err) {
+    logError('[GET /offers] Error fetching offers', err as Error);
+    res.status(500).json({ error: (err as Error).message });
+  }
+}));
+
 
 // Health Check Endpoint (Authenticated)
 router.get('/health', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
@@ -280,6 +296,10 @@ router.post('/accounts', withErrorHandling(async (req: Request, res: Response): 
 router.get('/accounts/me', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const walletAddress = getWalletAddressFromJWT(req);
   console.log('Searching for account with wallet:', walletAddress);
+  if (!walletAddress) {
+      res.status(404).json({ error: 'Wallet address not found in token' });
+      return;
+  }
   const result = await query(
     'SELECT * FROM accounts WHERE LOWER(wallet_address) = LOWER($1)',
     [walletAddress]
@@ -295,9 +315,10 @@ router.get('/accounts/me', withErrorHandling(async (req: Request, res: Response)
   res.json(result[0]);
 }));
 
-// Retrieve account details (publicly accessible)
+// Retrieve account details (publicly accessible) - This should probably be private or restricted
 router.get('/accounts/:id', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
+  // TODO: Add authentication/authorization check? Or is this intended to be public?
   try {
     const result = await query('SELECT * FROM accounts WHERE id = $1', [id]);
     if (result.length === 0) {
@@ -416,7 +437,6 @@ router.post('/offers', withErrorHandling(async (req: Request, res: Response): Pr
 // Update an offer (restricted to creator)
 router.put('/offers/:id', restrictToOwner('offer', 'id'), withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { min_amount } = req.body;
   try {
     const {
       min_amount,
@@ -431,7 +451,6 @@ router.put('/offers/:id', restrictToOwner('offer', 'id'), withErrorHandling(asyn
       token
     } = req.body;
 
-    // Format time limits as PostgreSQL interval strings
     const formatTimeLimit = (limit: any) => {
       if (!limit) return null;
       if (typeof limit === 'string') return limit;
@@ -539,13 +558,11 @@ router.post(
       return;
     }
 
-    // Calculate the new total_available_amount
     const amountToSubtract = parseFloat(leg1_crypto_amount || leg1Offer[0].min_amount);
     const newTotalAvailable = parseFloat(leg1Offer[0].total_available_amount) - amountToSubtract;
     const maxAmount = parseFloat(leg1Offer[0].max_amount);
     const minAmount = parseFloat(leg1Offer[0].min_amount);
 
-    // Check if the trade would make the available amount negative
     if (newTotalAvailable < 0) {
       res.status(400).json({ error: 'Insufficient available amount for this trade' });
       return;
@@ -559,7 +576,6 @@ router.post(
       ? buyerAccount[0].id
       : creatorAccount[0].id;
     
-    // Add check to prevent self-trades
     if (leg1SellerAccountId === leg1BuyerAccountId) {
       res.status(400).json({ error: 'Cannot create a trade with your own offer' });
       return;
@@ -588,23 +604,19 @@ router.post(
       ]
     );
 
-    // Check if the new total would violate the constraint
     if (newTotalAvailable < maxAmount) {
-      // If new total would be less than min_amount, update all three values
       if (newTotalAvailable < minAmount) {
         await query(
           'UPDATE offers SET total_available_amount = $1, max_amount = $1, min_amount = $1 WHERE id = $2',
           [newTotalAvailable, leg1_offer_id]
         );
       } else {
-        // Otherwise just update total_available_amount and max_amount
         await query(
           'UPDATE offers SET total_available_amount = $1, max_amount = $1 WHERE id = $2',
           [newTotalAvailable, leg1_offer_id]
         );
       }
     } else {
-      // Just update total_available_amount
       await query(
         'UPDATE offers SET total_available_amount = total_available_amount - $1 WHERE id = $2',
         [amountToSubtract, leg1_offer_id]
@@ -639,8 +651,12 @@ router.get('/trades', withErrorHandling(async (req: Request, res: Response): Pro
 // List trades for authenticated user
 router.get('/my/trades', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const jwtWalletAddress = getWalletAddressFromJWT(req);
+   if (!jwtWalletAddress) {
+      res.status(404).json({ error: 'Wallet address not found in token' });
+      return;
+  }
   const result = await query(
-    'SELECT t.* FROM trades t JOIN accounts a ON t.leg1_seller_account_id = a.id OR t.leg1_buyer_account_id = a.id WHERE a.wallet_address = $1',
+    'SELECT t.* FROM trades t JOIN accounts a ON t.leg1_seller_account_id = a.id OR t.leg1_buyer_account_id = a.id WHERE LOWER(a.wallet_address) = LOWER($1)',
     [jwtWalletAddress]
   );
   res.json(result);
@@ -680,21 +696,49 @@ router.put('/trades/:id', withErrorHandling(async (req: Request, res: Response):
 
   const sellerWallet = await query('SELECT wallet_address FROM accounts WHERE id = $1', [trade[0].leg1_seller_account_id]);
   const buyerWallet = await query('SELECT wallet_address FROM accounts WHERE id = $1', [trade[0].leg1_buyer_account_id]);
-  if (sellerWallet[0].wallet_address.toLowerCase() !== jwtWalletAddress.toLowerCase() && 
-      (!buyerWallet[0] || buyerWallet[0].wallet_address.toLowerCase() !== jwtWalletAddress.toLowerCase())) {
+  
+  const isParticipant = (sellerWallet.length > 0 && sellerWallet[0].wallet_address.toLowerCase() === jwtWalletAddress.toLowerCase()) ||
+                        (buyerWallet.length > 0 && buyerWallet[0].wallet_address.toLowerCase() === jwtWalletAddress.toLowerCase());
+
+  if (!isParticipant) {
     res.status(403).json({ error: 'Unauthorized: Only trade participants can update' });
     return;
   }
 
-  if (fiat_paid) {
-    await query('UPDATE trades SET leg1_fiat_paid_at = NOW() WHERE id = $1', [id]);
+  if (fiat_paid === true) {
+    await query('UPDATE trades SET leg1_fiat_paid_at = NOW() WHERE id = $1 AND leg1_fiat_paid_at IS NULL', [id]);
+  } else if (fiat_paid === false) {
+     await query('UPDATE trades SET leg1_fiat_paid_at = NULL WHERE id = $1', [id]);
   }
 
-  const result = await query(
-    'UPDATE trades SET leg1_state = COALESCE($1, leg1_state), overall_status = COALESCE($2, overall_status) WHERE id = $3 RETURNING id',
-    [leg1_state, overall_status, id]
-  );
-  res.json({ id: result[0].id });
+  const updateFields: string[] = [];
+  const updateParams: any[] = [];
+  let paramIndex = 1;
+
+  if (leg1_state !== undefined) {
+      updateFields.push(`leg1_state = $${paramIndex++}`);
+      updateParams.push(leg1_state);
+  }
+  if (overall_status !== undefined) {
+      updateFields.push(`overall_status = $${paramIndex++}`);
+      updateParams.push(overall_status);
+  }
+
+  if (updateFields.length > 0) {
+      updateParams.push(id);
+      const sql = `UPDATE trades SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING id`;
+      const result = await query(sql, updateParams);
+       if (result.length > 0) {
+           res.json({ id: result[0].id });
+       } else {
+           res.status(404).json({ error: 'Trade not found during update' });
+       }
+  } else if (fiat_paid !== undefined) {
+      res.json({ id: parseInt(id, 10) });
+  }
+   else {
+      res.status(400).json({ error: 'No fields provided for update' });
+  }
 }));
 
 // 4. Escrows Endpoints
@@ -703,13 +747,20 @@ router.post('/escrows/create', withErrorHandling(async (req: Request, res: Respo
   const { trade_id, buyer, amount, sequential, sequential_escrow_address } = req.body;
   const jwtWalletAddress = getWalletAddressFromJWT(req);
   
+  const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+  if (!CONTRACT_ADDRESS) {
+      logError('CONTRACT_ADDRESS environment variable not set', new Error('CONTRACT_ADDRESS not set'));
+      res.status(500).json({ error: 'Server configuration error: Contract address not set' });
+      return;
+  }
+  
   if (!jwtWalletAddress) {
     res.status(403).json({ error: 'No wallet address in token' });
     return;
   }
   
-  if (jwtWalletAddress.toLowerCase() !== req.body.seller.toLowerCase()) {
-    res.status(403).json({ error: 'Seller must match authenticated user' });
+  if (!req.body.seller || jwtWalletAddress.toLowerCase() !== req.body.seller.toLowerCase()) {
+    res.status(403).json({ error: 'Seller must match authenticated user and be provided' });
     return;
   }
   
@@ -724,13 +775,11 @@ router.post('/escrows/create', withErrorHandling(async (req: Request, res: Respo
   }
 
   try {
-    // Check if buyer is a valid address
     if (!ethers.isAddress(buyer)) {
       res.status(400).json({ error: 'buyer must be a valid Ethereum address' });
       return;
     }
 
-    // Validate sequential parameters
     if (sequential === true && !sequential_escrow_address) {
       res.status(400).json({ error: 'sequential_escrow_address must be provided when sequential is true' });
       return;
@@ -747,14 +796,10 @@ router.post('/escrows/create', withErrorHandling(async (req: Request, res: Respo
       return;
     }
 
-    // Convert amount to USDC format (6 decimals)
     const amountInUSDC = formatUSDC(amount);
-    
-    // Get the contract with signer
-    const contract = getSignedContract();
+    const contract = getSignedContract(); 
     
     try {
-      // Create escrow transaction
       const tx = await contract.createEscrow(
         BigInt(trade_id),
         buyer,
@@ -763,46 +808,46 @@ router.post('/escrows/create', withErrorHandling(async (req: Request, res: Respo
         sequential_escrow_address || ethers.ZeroAddress
       );
       
-      // Wait for transaction to be mined
       const receipt = await tx.wait();
       
-      // Get the escrow ID from the transaction receipt
       let escrowId: bigint | null = null;
       if (receipt && receipt.logs) {
+        const escrowCreatedInterface = new ethers.Interface(YapBayEscrowABI.abi);
         for (const log of receipt.logs) {
-          try {
-            const parsedLog = contract.interface.parseLog({
-              topics: log.topics as string[],
-              data: log.data
-            });
-            
-            if (parsedLog && parsedLog.name === 'EscrowCreated') {
-              escrowId = parsedLog.args.escrowId;
-              break;
-            }
-          } catch (e) {
-            // Skip logs that can't be parsed
-            continue;
-          }
+           if (log.address.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
+               try {
+                   const parsedLog = escrowCreatedInterface.parseLog({
+                       topics: log.topics as string[],
+                       data: log.data
+                   });
+                   
+                   if (parsedLog && parsedLog.name === 'EscrowCreated') {
+                       escrowId = parsedLog.args.escrowId;
+                       break;
+                   }
+               } catch (e) {
+                   // Ignore logs
+               }
+           }
         }
       }
       
       if (!escrowId) {
+        logError(`Failed to get escrow ID from transaction receipt for trade ${trade_id}`, { txHash: receipt?.hash });
         throw new Error('Failed to get escrow ID from transaction receipt');
       }
       
-      // Update the trade with the escrow address
-      const updateResult = await query(
-        'UPDATE trades SET leg1_escrow_address = $1 WHERE id = $2 RETURNING id, leg1_escrow_address',
-        [req.body.seller, trade_id]
+      const escrowContractAddress = CONTRACT_ADDRESS; 
+      await query(
+        'UPDATE trades SET leg1_escrow_address = $1 WHERE id = $2',
+        [escrowContractAddress, trade_id] 
       );
       
-      // Insert into escrows table
       await query(
         'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
         [
           trade_id,
-          req.body.seller,
+          escrowContractAddress,
           req.body.seller,
           buyer,
           process.env.ARBITRATOR_ADDRESS,
@@ -819,17 +864,16 @@ router.post('/escrows/create', withErrorHandling(async (req: Request, res: Respo
         blockNumber: receipt?.blockNumber
       });
     } catch (txError) {
-      console.error('Transaction error:', txError);
+      logError(`Transaction error during escrow creation for trade ${trade_id}`, txError as Error);
       res.status(500).json({
         error: (txError as Error).message,
         details: 'Error occurred during contract interaction'
       });
     }
   } catch (err) {
-    console.error('Error in /escrows/create:', err);
-    const error = err as Error;
+     logError(`Error in /escrows/create endpoint for trade ${trade_id}`, err as Error);
     res.status(500).json({
-      error: error.message,
+      error: (err as Error).message,
       details: 'Error occurred while creating escrow'
     });
   }

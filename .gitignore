@@ -5,4 +5,5 @@ dist/
 .vscode/
 .keys/
 jwt.txt
+jwt2.txt
 api.log

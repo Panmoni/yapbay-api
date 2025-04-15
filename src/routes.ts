@@ -558,6 +558,12 @@ router.post(
     const leg1BuyerAccountId = isSeller
       ? buyerAccount[0].id
       : creatorAccount[0].id;
+    
+    // Add check to prevent self-trades
+    if (leg1SellerAccountId === leg1BuyerAccountId) {
+      res.status(400).json({ error: 'Cannot create a trade with your own offer' });
+      return;
+    }
 
     const result = await query(
       `INSERT INTO trades (

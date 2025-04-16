@@ -12,7 +12,7 @@ const app = express();
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production'
     ? process.env.CORS_ORIGIN_PROD || 'https://app.yapbay.com'
-    : process.env.CORS_ORIGIN_DEV || 'http://localhost:3000',
+    : process.env.CORS_ORIGIN_DEV || 'http://localhost:5173',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 };

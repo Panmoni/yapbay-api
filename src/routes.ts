@@ -174,8 +174,7 @@ router.get('/prices', withErrorHandling(async (req: Request, res: Response): Pro
     });
   }
 }));
-
-// Get offer details (publicly accessible) - Moved before requireJWT
+// Get offer details (publicly accessible)
 router.get('/offers/:id', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   try {
@@ -190,11 +189,7 @@ router.get('/offers/:id', withErrorHandling(async (req: Request, res: Response):
   }
 }));
 
-// PRIVATE ROUTES
-// PRIVATE ROUTES - Require JWT
-router.use(requireJWT); // Apply JWT middleware to all subsequent routes
-
-// List offers (now private, requires JWT)
+// List offers (publicly accessible but can filter by owner if authenticated)
 router.get('/offers', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const { type, token, owner } = req.query;
   try {
@@ -210,13 +205,14 @@ router.get('/offers', withErrorHandling(async (req: Request, res: Response): Pro
       params.push(token as string);
     }
 
+    // If authenticated and requesting own offers
     const walletAddress = getWalletAddressFromJWT(req);
     if (owner === 'me' && walletAddress) {
       console.log(`[GET /offers] Applying owner filter for wallet: ${walletAddress}`);
       sql += ' AND creator_account_id IN (SELECT id FROM accounts WHERE LOWER(wallet_address) = LOWER($' + (params.length + 1) + '))';
       params.push(walletAddress);
     } else if (owner === 'me' && !walletAddress) {
-        console.warn('[GET /offers] owner=me filter requested but no wallet address found in token.');
+      console.warn('[GET /offers] owner=me filter requested but no wallet address found in token.');
     }
 
     const result = await query(sql, params);
@@ -226,6 +222,11 @@ router.get('/offers', withErrorHandling(async (req: Request, res: Response): Pro
     res.status(500).json({ error: (err as Error).message });
   }
 }));
+
+// PRIVATE ROUTES
+// PRIVATE ROUTES - Require JWT
+router.use(requireJWT); // Apply JWT middleware to all subsequent routes
+
 
 
 // Health Check Endpoint (Authenticated)

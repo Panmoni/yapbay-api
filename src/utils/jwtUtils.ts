@@ -19,30 +19,30 @@ interface RequestLike {
  */
 export const getWalletAddressFromJWT = (req: RequestLike): string | undefined => {
   // Log the input user object for debugging
-  console.log('[getWalletAddressFromJWT] Input req.user object:', JSON.stringify(req.user, null, 2));
+  // console.log('[getWalletAddressFromJWT] Input req.user object:', JSON.stringify(req.user, null, 2));
 
   const userPayload = req.user;
   if (!userPayload) {
-      console.log('[getWalletAddressFromJWT] req.user is undefined or null.');
+      // console.log('[getWalletAddressFromJWT] req.user is undefined or null.');
       return undefined;
   }
 
   const credentials = userPayload.verified_credentials;
-  console.log('[getWalletAddressFromJWT] Credentials found on req.user:', JSON.stringify(credentials, null, 2));
+  // console.log('[getWalletAddressFromJWT] Credentials found on req.user:', JSON.stringify(credentials, null, 2));
 
   if (!Array.isArray(credentials)) {
-      console.log('[getWalletAddressFromJWT] verified_credentials is not an array or is missing.');
+      // console.log('[getWalletAddressFromJWT] verified_credentials is not an array or is missing.');
       return undefined;
   }
 
   const blockchainCred = credentials.find((cred: any) => cred && cred.format === 'blockchain');
-  console.log('[getWalletAddressFromJWT] Found blockchain credential:', JSON.stringify(blockchainCred, null, 2));
+  // console.log('[getWalletAddressFromJWT] Found blockchain credential:', JSON.stringify(blockchainCred, null, 2));
 
   if (!blockchainCred) {
-      console.log('[getWalletAddressFromJWT] No credential with format "blockchain" found.');
+      // console.log('[getWalletAddressFromJWT] No credential with format "blockchain" found.');
       return undefined;
   }
 
-  console.log('[getWalletAddressFromJWT] Returning address:', blockchainCred.address);
+  // console.log('[getWalletAddressFromJWT] Returning address:', blockchainCred.address);
   return blockchainCred.address;
 };

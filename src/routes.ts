@@ -350,7 +350,6 @@ router.get('/accounts/:id', withErrorHandling(async (req: Request, res: Response
   }
 }));
 
-
 // Update account info (restricted to owner)
 router.put('/accounts/:id', restrictToOwner('account', 'id'), withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
@@ -792,16 +791,152 @@ router.put('/trades/:id', withErrorHandling(async (req: Request, res: Response):
 }));
 
 // 4. Escrows Endpoints
-// Create escrow on Celo
-router.post('/escrows/create', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
-  const { trade_id, buyer, amount, sequential, sequential_escrow_address } = req.body;
+// router.post('/escrows/create', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+//   const { trade_id, buyer, amount, sequential, sequential_escrow_address } = req.body;
+//   const jwtWalletAddress = getWalletAddressFromJWT(req);
+  
+//   const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+//   if (!CONTRACT_ADDRESS) {
+//       logError('CONTRACT_ADDRESS environment variable not set', new Error('CONTRACT_ADDRESS not set'));
+//       res.status(500).json({ error: 'Server configuration error: Contract address not set' });
+//       return;
+//   }
+  
+//   if (!jwtWalletAddress) {
+//     res.status(403).json({ error: 'No wallet address in token' });
+//     return;
+//   }
+  
+//   if (!req.body.seller || jwtWalletAddress.toLowerCase() !== req.body.seller.toLowerCase()) {
+//     res.status(403).json({ error: 'Seller must match authenticated user and be provided' });
+//     return;
+//   }
+  
+//   if (!Number.isInteger(Number(trade_id))) {
+//     res.status(400).json({ error: 'trade_id must be an integer' });
+//     return;
+//   }
+  
+//   if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+//     res.status(400).json({ error: 'amount must be a positive number' });
+//     return;
+//   }
+
+//   try {
+//     if (!ethers.isAddress(buyer)) {
+//       res.status(400).json({ error: 'buyer must be a valid Ethereum address' });
+//       return;
+//     }
+
+//     if (sequential === true && !sequential_escrow_address) {
+//       res.status(400).json({ error: 'sequential_escrow_address must be provided when sequential is true' });
+//       return;
+//     }
+
+//     if (sequential_escrow_address && !ethers.isAddress(sequential_escrow_address)) {
+//       res.status(400).json({ error: 'sequential_escrow_address must be a valid Ethereum address' });
+//       return;
+//     }
+
+//     const tradeCheck = await query('SELECT id FROM trades WHERE id = $1', [trade_id]);
+//     if (tradeCheck.length === 0) {
+//       res.status(404).json({ error: 'Trade not found' });
+//       return;
+//     }
+
+//     const amountInUSDC = formatUSDC(amount);
+//     const contract = getSignedContract(); 
+    
+//     try {
+//       const tx = await contract.createEscrow(
+//         BigInt(trade_id),
+//         buyer,
+//         amountInUSDC,
+//         sequential || false,
+//         sequential_escrow_address || ethers.ZeroAddress
+//       );
+      
+//       const receipt = await tx.wait();
+      
+//       let escrowId: bigint | null = null;
+//       if (receipt && receipt.logs) {
+//         const escrowCreatedInterface = new ethers.Interface(YapBayEscrowABI.abi);
+//         for (const log of receipt.logs) {
+//            if (log.address.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
+//                try {
+//                    const parsedLog = escrowCreatedInterface.parseLog({
+//                        topics: log.topics as string[],
+//                        data: log.data
+//                    });
+                   
+//                    if (parsedLog && parsedLog.name === 'EscrowCreated') {
+//                        escrowId = parsedLog.args.escrowId;
+//                        break;
+//                    }
+//                } catch (e) {
+//                    // Ignore logs
+//                }
+//            }
+//         }
+//       }
+      
+//       if (!escrowId) {
+//         logError(`Failed to get escrow ID from transaction receipt for trade ${trade_id}`, { txHash: receipt?.hash });
+//         throw new Error('Failed to get escrow ID from transaction receipt');
+//       }
+      
+//       const escrowContractAddress = CONTRACT_ADDRESS; 
+//       await query(
+//         'UPDATE trades SET leg1_escrow_address = $1 WHERE id = $2',
+//         [escrowContractAddress, trade_id] 
+//       );
+      
+//       await query(
+//         'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+//         [
+//           trade_id,
+//           escrowContractAddress,
+//           req.body.seller,
+//           buyer,
+//           process.env.ARBITRATOR_ADDRESS,
+//           'USDC',
+//           amount,
+//           'CREATED',
+//           sequential || false
+//         ]
+//       );
+      
+//       res.json({
+//         escrowId: escrowId.toString(),
+//         txHash: receipt?.hash,
+//         blockNumber: receipt?.blockNumber
+//       });
+//     } catch (txError) {
+//       logError(`Transaction error during escrow creation for trade ${trade_id}`, txError as Error);
+//       res.status(500).json({
+//         error: (txError as Error).message,
+//         details: 'Error occurred during contract interaction'
+//       });
+//     }
+//   } catch (err) {
+//      logError(`Error in /escrows/create endpoint for trade ${trade_id}`, err as Error);
+//     res.status(500).json({
+//       error: (err as Error).message,
+//       details: 'Error occurred while creating escrow'
+//     });
+//   }
+// }));
+
+// Record confirmed escrow transaction (called by frontend after successful on-chain creation)
+router.post('/escrows/record', requireJWT, withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+  const { trade_id, transaction_hash, escrow_id, seller, buyer, amount, sequential, sequential_escrow_address } = req.body;
   const jwtWalletAddress = getWalletAddressFromJWT(req);
   
   const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
   if (!CONTRACT_ADDRESS) {
-      logError('CONTRACT_ADDRESS environment variable not set', new Error('CONTRACT_ADDRESS not set'));
-      res.status(500).json({ error: 'Server configuration error: Contract address not set' });
-      return;
+    logError('CONTRACT_ADDRESS environment variable not set', new Error('CONTRACT_ADDRESS not set'));
+    res.status(500).json({ error: 'Server configuration error: Contract address not set' });
+    return;
   }
   
   if (!jwtWalletAddress) {
@@ -809,13 +944,23 @@ router.post('/escrows/create', withErrorHandling(async (req: Request, res: Respo
     return;
   }
   
-  if (!req.body.seller || jwtWalletAddress.toLowerCase() !== req.body.seller.toLowerCase()) {
+  if (!seller || jwtWalletAddress.toLowerCase() !== seller.toLowerCase()) {
     res.status(403).json({ error: 'Seller must match authenticated user and be provided' });
+    return;
+  }
+  
+  if (!transaction_hash || !ethers.isHexString(transaction_hash)) {
+    res.status(400).json({ error: 'Valid transaction_hash must be provided' });
     return;
   }
   
   if (!Number.isInteger(Number(trade_id))) {
     res.status(400).json({ error: 'trade_id must be an integer' });
+    return;
+  }
+  
+  if (!escrow_id || !ethers.isHexString(escrow_id, 32)) {
+    res.status(400).json({ error: 'Valid escrow_id must be provided' });
     return;
   }
   
@@ -840,91 +985,128 @@ router.post('/escrows/create', withErrorHandling(async (req: Request, res: Respo
       return;
     }
 
+    // Verify the trade exists
     const tradeCheck = await query('SELECT id FROM trades WHERE id = $1', [trade_id]);
     if (tradeCheck.length === 0) {
       res.status(404).json({ error: 'Trade not found' });
       return;
     }
 
-    const amountInUSDC = formatUSDC(amount);
-    const contract = getSignedContract(); 
-    
+    // Verify the transaction on the blockchain
     try {
-      const tx = await contract.createEscrow(
-        BigInt(trade_id),
-        buyer,
-        amountInUSDC,
-        sequential || false,
-        sequential_escrow_address || ethers.ZeroAddress
-      );
+      const txReceipt = await provider.getTransactionReceipt(transaction_hash);
       
-      const receipt = await tx.wait();
+      if (!txReceipt || txReceipt.status !== 1) {
+        res.status(400).json({
+          error: 'Transaction not found or failed on the blockchain',
+          details: txReceipt ? `Status: ${txReceipt.status}` : 'Receipt not found'
+        });
+        return;
+      }
+
+      // Verify this is a transaction to our contract
+      if (txReceipt.to?.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()) {
+        res.status(400).json({
+          error: 'Transaction is not for the YapBay escrow contract',
+          details: `Transaction to: ${txReceipt.to}, expected: ${CONTRACT_ADDRESS}`
+        });
+        return;
+      }
+
+      // Parse logs to verify EscrowCreated event
+      let escrowCreatedEvent = false;
+      let verifiedEscrowId: string | null = null;
       
-      let escrowId: bigint | null = null;
-      if (receipt && receipt.logs) {
+      if (txReceipt.logs) {
         const escrowCreatedInterface = new ethers.Interface(YapBayEscrowABI.abi);
-        for (const log of receipt.logs) {
-           if (log.address.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
-               try {
-                   const parsedLog = escrowCreatedInterface.parseLog({
-                       topics: log.topics as string[],
-                       data: log.data
-                   });
-                   
-                   if (parsedLog && parsedLog.name === 'EscrowCreated') {
-                       escrowId = parsedLog.args.escrowId;
-                       break;
-                   }
-               } catch (e) {
-                   // Ignore logs
-               }
-           }
+        for (const log of txReceipt.logs) {
+          if (log.address.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
+            try {
+              const parsedLog = escrowCreatedInterface.parseLog({
+                topics: log.topics as string[],
+                data: log.data
+              });
+              
+              if (parsedLog && parsedLog.name === 'EscrowCreated') {
+                escrowCreatedEvent = true;
+                verifiedEscrowId = parsedLog.args.escrowId.toString();
+                
+                // Verify the escrow ID matches what was provided
+                if (verifiedEscrowId !== escrow_id) {
+                  res.status(400).json({
+                    error: 'Escrow ID in transaction does not match provided escrow_id',
+                    details: `Transaction escrow ID: ${verifiedEscrowId}, provided: ${escrow_id}`
+                  });
+                  return;
+                }
+                
+                // Verify the trade ID matches
+                if (parsedLog.args.tradeId.toString() !== trade_id.toString()) {
+                  res.status(400).json({
+                    error: 'Trade ID in transaction does not match provided trade_id',
+                    details: `Transaction trade ID: ${parsedLog.args.tradeId}, provided: ${trade_id}`
+                  });
+                  return;
+                }
+                
+                break;
+              }
+            } catch (e) {
+              // Ignore parsing errors for non-matching logs
+            }
+          }
         }
       }
       
-      if (!escrowId) {
-        logError(`Failed to get escrow ID from transaction receipt for trade ${trade_id}`, { txHash: receipt?.hash });
-        throw new Error('Failed to get escrow ID from transaction receipt');
+      if (!escrowCreatedEvent || !verifiedEscrowId) {
+        res.status(400).json({
+          error: 'Transaction does not contain a valid EscrowCreated event',
+          details: 'Could not find or parse the EscrowCreated event in transaction logs'
+        });
+        return;
       }
-      
-      const escrowContractAddress = CONTRACT_ADDRESS; 
+
+      // Update the trade with escrow information
       await query(
-        'UPDATE trades SET leg1_escrow_address = $1 WHERE id = $2',
-        [escrowContractAddress, trade_id] 
+        'UPDATE trades SET leg1_escrow_address = $1, leg1_state = $2 WHERE id = $3',
+        [CONTRACT_ADDRESS, 'FUNDED', trade_id]
       );
       
+      // Record the escrow in the database
       await query(
-        'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+        'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
         [
           trade_id,
-          escrowContractAddress,
-          req.body.seller,
+          CONTRACT_ADDRESS,
+          seller,
           buyer,
           process.env.ARBITRATOR_ADDRESS,
           'USDC',
           amount,
-          'CREATED',
-          sequential || false
+          'FUNDED',
+          sequential || false,
+          sequential_escrow_address || null
         ]
       );
       
       res.json({
-        escrowId: escrowId.toString(),
-        txHash: receipt?.hash,
-        blockNumber: receipt?.blockNumber
+        success: true,
+        escrowId: verifiedEscrowId,
+        txHash: transaction_hash,
+        blockNumber: txReceipt.blockNumber
       });
     } catch (txError) {
-      logError(`Transaction error during escrow creation for trade ${trade_id}`, txError as Error);
+      logError(`Transaction verification error for hash ${transaction_hash}`, txError as Error);
       res.status(500).json({
         error: (txError as Error).message,
-        details: 'Error occurred during contract interaction'
+        details: 'Error occurred during transaction verification'
       });
     }
   } catch (err) {
-     logError(`Error in /escrows/create endpoint for trade ${trade_id}`, err as Error);
+    logError(`Error in /escrows/record endpoint for trade ${trade_id}`, err as Error);
     res.status(500).json({
       error: (err as Error).message,
-      details: 'Error occurred while creating escrow'
+      details: 'Error occurred while recording escrow'
     });
   }
 }));

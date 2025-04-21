@@ -208,7 +208,7 @@ router.get('/offers', withErrorHandling(async (req: Request, res: Response): Pro
     // If authenticated and requesting own offers
     const walletAddress = getWalletAddressFromJWT(req);
     if (owner === 'me' && walletAddress) {
-      console.log(`[GET /offers] Applying owner filter for wallet: ${walletAddress}`);
+      // console.log(`[GET /offers] Applying owner filter for wallet: ${walletAddress}`);
       sql += ' AND creator_account_id IN (SELECT id FROM accounts WHERE LOWER(wallet_address) = LOWER($' + (params.length + 1) + '))';
       params.push(walletAddress);
     } else if (owner === 'me' && !walletAddress) {
@@ -287,7 +287,7 @@ router.post('/accounts', withErrorHandling(async (req: Request, res: Response): 
 // Get account details for authenticated user
 router.get('/accounts/me', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const walletAddress = getWalletAddressFromJWT(req);
-  console.log('Searching for account with wallet:', walletAddress);
+  // console.log('Searching for account with wallet:', walletAddress);
   if (!walletAddress) {
       res.status(404).json({ error: 'Wallet address not found in token' });
       return;

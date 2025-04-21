@@ -227,8 +227,6 @@ router.get('/offers', withErrorHandling(async (req: Request, res: Response): Pro
 // PRIVATE ROUTES - Require JWT
 router.use(requireJWT); // Apply JWT middleware to all subsequent routes
 
-
-
 // Health Check Endpoint (Authenticated)
 router.get('/health', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
   const walletAddress = getWalletAddressFromJWT(req);
@@ -336,6 +334,7 @@ router.get('/accounts/:id', withErrorHandling(async (req: Request, res: Response
       const publicProfile = {
         id: accountData.id,
         username: accountData.username,
+        wallet_address: accountData.wallet_address,
         profile_photo_url: accountData.profile_photo_url,
         available_from: accountData.available_from,
         available_to: accountData.available_to,

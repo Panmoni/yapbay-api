@@ -959,8 +959,9 @@ router.post('/escrows/record', requireJWT, withErrorHandling(async (req: Request
     return;
   }
   
-  if (!escrow_id || !ethers.isHexString(escrow_id, 32)) {
-    res.status(400).json({ error: 'Valid escrow_id must be provided' });
+  // Validate escrow_id is a valid integer
+  if (!escrow_id || isNaN(Number(escrow_id)) || Number(escrow_id) <= 0) {
+    res.status(400).json({ error: 'Valid escrow_id must be provided as a positive integer' });
     return;
   }
   
@@ -1029,13 +1030,23 @@ router.post('/escrows/record', requireJWT, withErrorHandling(async (req: Request
               
               if (parsedLog && parsedLog.name === 'EscrowCreated') {
                 escrowCreatedEvent = true;
-                verifiedEscrowId = parsedLog.args.escrowId.toString();
                 
-                // Verify the escrow ID matches what was provided
-                if (verifiedEscrowId !== escrow_id) {
+                // Get the numeric value of the escrow ID from the transaction
+                const txEscrowIdBigInt = parsedLog.args.escrowId;
+                verifiedEscrowId = txEscrowIdBigInt.toString();
+                
+                // Convert the provided escrow_id to a number for comparison
+                const providedEscrowIdNum = BigInt(escrow_id);
+                
+                console.log(`[DEBUG /escrows/record] Comparing Escrow IDs:`);
+                console.log(`  - Transaction Escrow ID (BigInt): ${txEscrowIdBigInt}`);
+                console.log(`  - Provided Escrow ID (BigInt): ${providedEscrowIdNum}`);
+                
+                // Compare the numeric values directly
+                if (txEscrowIdBigInt !== providedEscrowIdNum) {
                   res.status(400).json({
                     error: 'Escrow ID in transaction does not match provided escrow_id',
-                    details: `Transaction escrow ID: ${verifiedEscrowId}, provided: ${escrow_id}`
+                    details: `Transaction escrow ID: ${verifiedEscrowId} (integer), provided: ${escrow_id} (integer)`
                   });
                   return;
                 }

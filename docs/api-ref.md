@@ -88,7 +88,19 @@ curl -X PUT http://localhost:3011/trades/1 \
   "fiat_paid": true
 }' | jq '.'
 ## Escrows
-### Create Escrow
+### Record Escrow
+curl -X POST http://localhost:3011/escrows/record \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $(cat jwt.txt)" \
+  -d '{ 
+    "trade_id": 123, 
+    "transaction_hash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", 
+    "escrow_id": "1234567890123456789012345678901234567890123456789012345678901234", 
+    "seller": "0xYourWalletAddressHere", 
+    "buyer": "0x1234567890123456789012345678901234567890", 
+    "amount": 100, 
+    "sequential": false 
+  }'
 ### Release Escrow
 ### Fund Escrow
 ## Disputes

@@ -1141,12 +1141,12 @@ router.post('/escrows/record', requireJWT, withErrorHandling(async (req: Request
         return;
       }
 
-      // Update the trade with escrow information
+      // Update the trade with escrow information, including the on-chain escrow ID
       await query(
-        'UPDATE trades SET leg1_escrow_address = $1, leg1_state = $2 WHERE id = $3',
-        [CONTRACT_ADDRESS, 'FUNDED', trade_id]
+        'UPDATE trades SET leg1_escrow_address = $1, leg1_state = $2, leg1_escrow_onchain_id = $3 WHERE id = $4',
+        [CONTRACT_ADDRESS, 'FUNDED', verifiedEscrowId, trade_id]
       );
-      
+
       // Record the escrow in the database and get its ID
       const escrowInsertResult = await query(
         'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',

@@ -1,9 +1,8 @@
 # API REF
 
 ## Pending Tests
-- escrow accounts: create, fund, release
+- escrow accounts: fund, release
 - dispute actions
-- trade updates
 
 ### Update Trade State
 

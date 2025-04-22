@@ -1149,7 +1149,7 @@ router.post('/escrows/record', requireJWT, withErrorHandling(async (req: Request
       
       // Record the escrow in the database and get its ID
       const escrowInsertResult = await query(
-        'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
+        'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',
         [
           trade_id,
           CONTRACT_ADDRESS, // Using the main contract address as the escrow identifier for now
@@ -1160,7 +1160,8 @@ router.post('/escrows/record', requireJWT, withErrorHandling(async (req: Request
           amount,
           'FUNDED', // State after successful recording
           sequential || false,
-          sequential_escrow_address || null
+          sequential_escrow_address || null,
+          verifiedEscrowId // Store the blockchain escrow ID in the new column
         ]
       );
 

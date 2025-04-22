@@ -73,6 +73,7 @@ CREATE TABLE trades (
     leg1_cancelled_at TIMESTAMP WITH TIME ZONE,
     leg1_cancelled_by VARCHAR(42),
     leg1_dispute_id INTEGER,
+    leg1_escrow_onchain_id VARCHAR(42), -- The on-chain escrow ID (from the EscrowCreated event) for leg 1.
 
     -- Leg 2 (Sell Leg, optional)
     leg2_state VARCHAR(25) CHECK (leg2_state IN ('CREATED', 'FUNDED', 'FIAT_PAID', 'RELEASED', 'CANCELLED', 'DISPUTED', 'RESOLVED')),
@@ -90,7 +91,8 @@ CREATE TABLE trades (
     leg2_released_at TIMESTAMP WITH TIME ZONE,
     leg2_cancelled_at TIMESTAMP WITH TIME ZONE,
     leg2_cancelled_by VARCHAR(42),
-    leg2_dispute_id INTEGER
+    leg2_dispute_id INTEGER,
+    leg2_escrow_onchain_id VARCHAR(42) -- The on-chain escrow ID (from the EscrowCreated event) for leg 2.
 );
 
 -- 4. escrows: Tracks on-chain escrow state
@@ -179,7 +181,9 @@ CREATE INDEX idx_accounts_wallet_address ON accounts(wallet_address);
 CREATE INDEX idx_offers_creator_account_id ON offers(creator_account_id);
 CREATE INDEX idx_trades_overall_status ON trades(overall_status);
 CREATE INDEX idx_trades_leg1_escrow_address ON trades(leg1_escrow_address);
+CREATE INDEX idx_trades_leg1_escrow_onchain_id ON trades(leg1_escrow_onchain_id);
 CREATE INDEX idx_trades_leg2_escrow_address ON trades(leg2_escrow_address);
+CREATE INDEX idx_trades_leg2_escrow_onchain_id ON trades(leg2_escrow_onchain_id);
 CREATE INDEX idx_escrows_trade_id ON escrows(trade_id);
 CREATE INDEX idx_escrows_escrow_address ON escrows(escrow_address);
 CREATE INDEX idx_escrows_onchain_escrow_id ON escrows(onchain_escrow_id);

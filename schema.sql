@@ -64,7 +64,7 @@ CREATE TABLE trades (
     leg1_crypto_amount DECIMAL(15,6) NOT NULL,
     leg1_fiat_amount DECIMAL(15,2),
     leg1_fiat_currency VARCHAR(3) NOT NULL,
-    leg1_escrow_address VARCHAR(42) UNIQUE,
+    leg1_escrow_address VARCHAR(42), -- Not unique as all escrows use the same contract address
     leg1_created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     leg1_escrow_deposit_deadline TIMESTAMP WITH TIME ZONE,
     leg1_fiat_payment_deadline TIMESTAMP WITH TIME ZONE,
@@ -82,7 +82,7 @@ CREATE TABLE trades (
     leg2_crypto_amount DECIMAL(15,6),
     leg2_fiat_amount DECIMAL(15,2),
     leg2_fiat_currency VARCHAR(3),
-    leg2_escrow_address VARCHAR(42) UNIQUE,
+    leg2_escrow_address VARCHAR(42), -- Not unique as all escrows use the same contract address
     leg2_created_at TIMESTAMP WITH TIME ZONE,
     leg2_escrow_deposit_deadline TIMESTAMP WITH TIME ZONE,
     leg2_fiat_payment_deadline TIMESTAMP WITH TIME ZONE,
@@ -97,7 +97,8 @@ CREATE TABLE trades (
 CREATE TABLE escrows (
     id SERIAL PRIMARY KEY,
     trade_id INTEGER NOT NULL REFERENCES trades(id),
-    escrow_address VARCHAR(42) UNIQUE NOT NULL, -- Celo contract address
+    escrow_address VARCHAR(42) NOT NULL, -- Celo contract address (not unique as all escrows use the same contract)
+    onchain_escrow_id VARCHAR(42), -- The escrow ID from the blockchain, which is different from the database ID
     seller_address VARCHAR(42) NOT NULL,
     buyer_address VARCHAR(42) NOT NULL,
     arbitrator_address VARCHAR(42) NOT NULL,
@@ -170,7 +171,8 @@ ALTER TABLE trades
     ADD CONSTRAINT fk_leg2_dispute FOREIGN KEY (leg2_dispute_id) REFERENCES disputes(id);
 
 ALTER TABLE escrows
-    ADD CONSTRAINT fk_dispute FOREIGN KEY (dispute_id) REFERENCES disputes(id);
+    ADD CONSTRAINT fk_dispute FOREIGN KEY (dispute_id) REFERENCES disputes(id),
+    ADD CONSTRAINT escrows_trade_id_escrow_id_unique UNIQUE (trade_id, escrow_id);
 
 -- Indexes for performance
 CREATE INDEX idx_accounts_wallet_address ON accounts(wallet_address);
@@ -180,6 +182,7 @@ CREATE INDEX idx_trades_leg1_escrow_address ON trades(leg1_escrow_address);
 CREATE INDEX idx_trades_leg2_escrow_address ON trades(leg2_escrow_address);
 CREATE INDEX idx_escrows_trade_id ON escrows(trade_id);
 CREATE INDEX idx_escrows_escrow_address ON escrows(escrow_address);
+CREATE INDEX idx_escrows_onchain_escrow_id ON escrows(onchain_escrow_id);
 CREATE INDEX idx_escrows_state ON escrows(state);
 CREATE INDEX idx_disputes_escrow_id ON disputes(escrow_id);
 CREATE INDEX idx_disputes_trade_id ON disputes(trade_id);

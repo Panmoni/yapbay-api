@@ -1,5 +1,5 @@
 import express, { Request as ExpressRequest, Response, Router, NextFunction } from 'express';
-import { query } from './db';
+import { query, recordTransaction, TransactionStatus, TransactionType } from './db'; // Added recordTransaction and types
 import { provider, getSigner, getContract, getSignedContract, formatUSDC, parseUSDC } from './celo';
 import { requestLogger, logError } from './logger';
 import jwt, { JwtPayload } from 'jsonwebtoken';
@@ -1083,30 +1083,65 @@ router.post('/escrows/record', requireJWT, withErrorHandling(async (req: Request
         [CONTRACT_ADDRESS, 'FUNDED', trade_id]
       );
       
-      // Record the escrow in the database
-      await query(
-        'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
+      // Record the escrow in the database and get its ID
+      const escrowInsertResult = await query(
+        'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
         [
           trade_id,
-          CONTRACT_ADDRESS,
+          CONTRACT_ADDRESS, // Using the main contract address as the escrow identifier for now
           seller,
           buyer,
-          process.env.ARBITRATOR_ADDRESS,
-          'USDC',
+          process.env.ARBITRATOR_ADDRESS, // Assuming a fixed arbitrator for now
+          'USDC', // Assuming USDC
           amount,
-          'FUNDED',
+          'FUNDED', // State after successful recording
           sequential || false,
           sequential_escrow_address || null
         ]
       );
-      
+
+      if (escrowInsertResult.length === 0 || !escrowInsertResult[0].id) {
+        logError(`Failed to insert escrow record for trade ${trade_id} and tx ${transaction_hash}`, new Error('Escrow insertion failed to return ID'));
+        // Don't record transaction if escrow insert failed
+        res.status(500).json({ error: 'Failed to record escrow in database' });
+        return; // Stop execution
+      }
+
+      const escrowDbId = escrowInsertResult[0].id;
+
+      // Record the successful blockchain transaction
+      await recordTransaction({
+        transaction_hash: txReceipt.hash,
+        status: 'SUCCESS',
+        type: 'CREATE_ESCROW', // This endpoint confirms creation
+        block_number: txReceipt.blockNumber,
+        sender_address: txReceipt.from, // The address that sent the tx (seller)
+        receiver_or_contract_address: txReceipt.to, // The contract address
+        gas_used: txReceipt.gasUsed,
+        related_trade_id: trade_id,
+        related_escrow_db_id: escrowDbId, // Link to the DB escrow record
+        error_message: null
+      });
+
       res.json({
         success: true,
-        escrowId: verifiedEscrowId,
+        escrowId: verifiedEscrowId, // The blockchain escrow ID (uint256 as string)
+        escrowDbId: escrowDbId, // The database primary key for the escrow record
         txHash: transaction_hash,
         blockNumber: txReceipt.blockNumber
       });
     } catch (txError) {
+       // Attempt to record the FAILED transaction if verification/parsing failed
+       await recordTransaction({
+         transaction_hash: transaction_hash, // Use the hash we have
+         status: 'FAILED',
+         type: 'CREATE_ESCROW',
+         sender_address: jwtWalletAddress, // Best guess for sender
+         receiver_or_contract_address: CONTRACT_ADDRESS,
+         related_trade_id: trade_id,
+         error_message: (txError as Error).message,
+         // Other fields might be null or unknown here
+       });
       logError(`Transaction verification error for hash ${transaction_hash}`, txError as Error);
       res.status(500).json({
         error: (txError as Error).message,

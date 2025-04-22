@@ -535,6 +535,7 @@ router.delete('/offers/:id', restrictToOwner('offer', 'id'), withErrorHandling(a
 router.post(
   "/trades",
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    console.log("POST /trades - Request body:", JSON.stringify(req.body));
     const {
       leg1_offer_id,
       leg2_offer_id,
@@ -545,7 +546,16 @@ router.post(
       from_bank,
       destination_bank,
     } = req.body;
+    console.log("Extracted values:", {
+      leg1_offer_id,
+      leg1_crypto_amount,
+      leg1_fiat_amount,
+      from_fiat_currency,
+      destination_fiat_currency
+    });
+    
     const jwtWalletAddress = getWalletAddressFromJWT(req);
+    console.log("JWT wallet address:", jwtWalletAddress);
     if (!jwtWalletAddress) {
       res.status(403).json({ error: "No wallet address in token" });
       return;
@@ -554,12 +564,24 @@ router.post(
     const leg1Offer = await query("SELECT * FROM offers WHERE id = $1", [
       leg1_offer_id,
     ]);
+    console.log("Leg1 offer query result:", leg1Offer.length > 0 ? JSON.stringify(leg1Offer[0]) : "Not found");
     if (leg1Offer.length === 0) {
       res.status(404).json({ error: "Leg 1 offer not found" });
       return;
     }
 
-    if (leg1Offer[0].total_available_amount < leg1Offer[0].min_amount) {
+    // Convert string values to numbers for proper comparison
+    const totalAvailable = parseFloat(leg1Offer[0].total_available_amount);
+    const offerMinAmount = parseFloat(leg1Offer[0].min_amount);
+    
+    console.log("Comparing values:", {
+      totalAvailable,
+      offerMinAmount,
+      comparison: totalAvailable < offerMinAmount
+    });
+    
+    if (totalAvailable < offerMinAmount) {
+      console.log("Offer no longer available. total_available_amount:", totalAvailable, "min_amount:", offerMinAmount);
       res.status(400).json({ error: 'Offer no longer available' });
       return;
     }
@@ -568,10 +590,14 @@ router.post(
       "SELECT id, wallet_address FROM accounts WHERE id = $1",
       [leg1Offer[0].creator_account_id]
     );
+    console.log("Creator account:", creatorAccount.length > 0 ? JSON.stringify(creatorAccount[0]) : "Not found");
+    
     const buyerAccount = await query(
       "SELECT id FROM accounts WHERE wallet_address = $1",
       [jwtWalletAddress]
     );
+    console.log("Buyer account:", buyerAccount.length > 0 ? JSON.stringify(buyerAccount[0]) : "Not found");
+    
     if (buyerAccount.length === 0) {
       res.status(403).json({ error: "Buyer account not found" });
       return;
@@ -581,6 +607,14 @@ router.post(
     const newTotalAvailable = parseFloat(leg1Offer[0].total_available_amount) - amountToSubtract;
     const maxAmount = parseFloat(leg1Offer[0].max_amount);
     const minAmount = parseFloat(leg1Offer[0].min_amount);
+    
+    console.log("Amount calculations:", {
+      amountToSubtract,
+      newTotalAvailable,
+      maxAmount,
+      minAmount,
+      total_available_amount: parseFloat(leg1Offer[0].total_available_amount)
+    });
 
     if (newTotalAvailable < 0) {
       res.status(400).json({ error: 'Insufficient available amount for this trade' });
@@ -595,33 +629,63 @@ router.post(
       ? buyerAccount[0].id
       : creatorAccount[0].id;
     
+    console.log("Trade roles:", {
+      isSeller,
+      leg1SellerAccountId,
+      leg1BuyerAccountId,
+      offer_type: leg1Offer[0].offer_type
+    });
+    
     if (leg1SellerAccountId === leg1BuyerAccountId) {
       res.status(400).json({ error: 'Cannot create a trade with your own offer' });
       return;
     }
 
-    const result = await query(
-      `INSERT INTO trades (
-      leg1_offer_id, leg2_offer_id, overall_status, from_fiat_currency, destination_fiat_currency, from_bank, destination_bank,
-      leg1_state, leg1_seller_account_id, leg1_buyer_account_id, leg1_crypto_token, leg1_crypto_amount, leg1_fiat_currency, leg1_fiat_amount
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
-      [
+    // Declare result variable outside the try block so it's accessible in the scope
+    let result;
+    
+    try {
+      console.log("Attempting to insert trade with params:", {
         leg1_offer_id,
-        leg2_offer_id || null,
-        "IN_PROGRESS",
-        from_fiat_currency || leg1Offer[0].fiat_currency,
-        destination_fiat_currency || leg1Offer[0].fiat_currency,
-        from_bank || null,
-        destination_bank || null,
-        "CREATED",
+        leg2_offer_id: leg2_offer_id || null,
+        from_fiat_currency: from_fiat_currency || leg1Offer[0].fiat_currency,
+        destination_fiat_currency: destination_fiat_currency || leg1Offer[0].fiat_currency,
         leg1SellerAccountId,
         leg1BuyerAccountId,
-        leg1Offer[0].token,
-        leg1_crypto_amount || leg1Offer[0].min_amount,
-        leg1Offer[0].fiat_currency,
-        leg1_fiat_amount || null,
-      ]
-    );
+        token: leg1Offer[0].token,
+        leg1_crypto_amount: leg1_crypto_amount || leg1Offer[0].min_amount,
+        leg1_fiat_currency: leg1Offer[0].fiat_currency,
+        leg1_fiat_amount: leg1_fiat_amount || null
+      });
+      
+      result = await query(
+        `INSERT INTO trades (
+        leg1_offer_id, leg2_offer_id, overall_status, from_fiat_currency, destination_fiat_currency, from_bank, destination_bank,
+        leg1_state, leg1_seller_account_id, leg1_buyer_account_id, leg1_crypto_token, leg1_crypto_amount, leg1_fiat_currency, leg1_fiat_amount
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+        [
+          leg1_offer_id,
+          leg2_offer_id || null,
+          "IN_PROGRESS",
+          from_fiat_currency || leg1Offer[0].fiat_currency,
+          destination_fiat_currency || leg1Offer[0].fiat_currency,
+          from_bank || null,
+          destination_bank || null,
+          "CREATED",
+          leg1SellerAccountId,
+          leg1BuyerAccountId,
+          leg1Offer[0].token,
+          leg1_crypto_amount || leg1Offer[0].min_amount,
+          leg1Offer[0].fiat_currency,
+          leg1_fiat_amount || null,
+        ]
+      );
+      
+      console.log("Trade created successfully:", result[0]);
+    } catch (error) {
+      console.error("Error creating trade:", error);
+      throw error;
+    }
 
     if (newTotalAvailable < maxAmount) {
       if (newTotalAvailable < minAmount) {

@@ -1,11 +1,10 @@
 # API REF
 
 ## Pending Tests
-- escrow accounts: fund, release
+- escrow accounts: release
 - dispute actions
 
 ### Update Trade State
-
 ## Users
 User 1 0xDD304336Cf878dF7d2647435D5f57C2345B140C1
 User 2 0x14140b0dbC4736124ea9F5230D851f62F99b0ac5
@@ -100,6 +99,4 @@ curl -X POST http://localhost:3011/escrows/record \
     "amount": 100, 
     "sequential": false 
   }'
-### Release Escrow
-### Fund Escrow
 ## Disputes

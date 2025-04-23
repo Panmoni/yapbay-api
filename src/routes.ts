@@ -661,8 +661,12 @@ router.post(
       result = await query(
         `INSERT INTO trades (
         leg1_offer_id, leg2_offer_id, overall_status, from_fiat_currency, destination_fiat_currency, from_bank, destination_bank,
-        leg1_state, leg1_seller_account_id, leg1_buyer_account_id, leg1_crypto_token, leg1_crypto_amount, leg1_fiat_currency, leg1_fiat_amount
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+        leg1_state, leg1_seller_account_id, leg1_buyer_account_id, leg1_crypto_token, leg1_crypto_amount, leg1_fiat_currency, leg1_fiat_amount,
+        leg1_escrow_deposit_deadline, leg1_fiat_payment_deadline
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+        NOW() + $15::interval, NOW() + $16::interval
+      ) RETURNING id`,
         [
           leg1_offer_id,
           leg2_offer_id || null,
@@ -678,6 +682,8 @@ router.post(
           leg1_crypto_amount || leg1Offer[0].min_amount,
           leg1Offer[0].fiat_currency,
           leg1_fiat_amount || null,
+          leg1Offer[0].escrow_deposit_time_limit, // $15
+          leg1Offer[0].fiat_payment_time_limit   // $16
         ]
       );
       

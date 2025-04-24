@@ -561,14 +561,51 @@ router.delete(
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     try {
-      const result = await query('DELETE FROM offers WHERE id = $1 RETURNING id', [id]);
-      if (result.length === 0) {
+      // First check if the offer exists and is owned by the caller
+      const offerCheck = await query('SELECT id FROM offers WHERE id = $1', [id]);
+      if (offerCheck.length === 0) {
         res.status(404).json({ error: 'Offer not found' });
         return;
       }
+
+      // Check for active trades referencing this offer
+      const activeTrades = await query(
+        "SELECT id FROM trades WHERE leg1_offer_id = $1 AND overall_status NOT IN ('COMPLETED', 'CANCELLED')",
+        [id]
+      );
+
+      if (activeTrades.length > 0) {
+        res.status(400).json({
+          error: `Cannot delete - ${activeTrades.length} active trades exist`,
+          active_trades: activeTrades.length,
+        });
+        return;
+      }
+
+      // Proceed with deletion
+      const result = await query('DELETE FROM offers WHERE id = $1 RETURNING id', [id]);
+
+      if (result.length === 0) {
+        res.status(500).json({ error: 'Unexpected error deleting offer' });
+        return;
+      }
+
       res.json({ message: 'Offer deleted' });
     } catch (err) {
-      res.status(500).json({ error: (err as Error).message });
+      const error = err as Error & { code?: string };
+
+      if (error.code === '23503') {
+        // Foreign key violation
+        res.status(400).json({
+          error: 'Cannot delete offer - it is referenced by other records',
+          details: error.message,
+        });
+      } else {
+        res.status(500).json({
+          error: 'Internal server error',
+          details: error.message,
+        });
+      }
     }
   })
 );

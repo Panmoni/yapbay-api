@@ -8,6 +8,7 @@ import axios from 'axios';
 import { ethers } from 'ethers';
 import YapBayEscrowABI from './contract/YapBayEscrow.json'; // Import ABI
 import { getWalletAddressFromJWT, CustomJwtPayload } from './utils/jwtUtils'; // Import from new util file
+import bcrypt from 'bcrypt';
 
 // Extend Express Request interface
 interface Request extends ExpressRequest {
@@ -235,6 +236,30 @@ router.get(
 );
 
 // PRIVATE ROUTES
+// TODO: Migrate admin credentials to a secure admin user table, add MFA, rate-limiting, and proper audit logging instead of env-based auth.
+router.post('/admin/login', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    res.status(400).json({ error: 'Missing username or password' });
+    return;
+  }
+  if (username !== process.env.ADMIN_USERNAME) {
+    res.status(401).json({ error: 'Invalid credentials' });
+    return;
+  }
+  const passwordMatch = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH!);
+  if (!passwordMatch) {
+    res.status(401).json({ error: 'Invalid credentials' });
+    return;
+  }
+  const token = jwt.sign(
+    { sub: username, admin: true },
+    process.env.JWT_SECRET!,
+    { expiresIn: '1h' }
+  );
+  res.json({ token });
+}));
+
 // PRIVATE ROUTES - Require JWT
 router.use(requireJWT); // Apply JWT middleware to all subsequent routes
 
@@ -851,8 +876,8 @@ router.get(
 
     if (!requesterWalletAddress) {
       // Should be caught by requireJWT, but handle defensively
-      res.status(401).json({ error: 'Authentication required to view trade details' }); // Removed return
-      return; // Added return to satisfy void promise
+      res.status(401).json({ error: 'Authentication required to view trade details' });
+      return;
     }
 
     try {
@@ -882,9 +907,9 @@ router.get(
         logError(
           `Trade ${id} has no valid participant account IDs.`,
           new Error('Missing participant account IDs in trade data')
-        ); // Added Error object
-        res.status(500).json({ error: 'Internal server error processing trade participants' }); // Removed return
-        return; // Added return
+        );
+        res.status(500).json({ error: 'Internal server error processing trade participants' });
+        return;
       }
 
       // Fetch wallet addresses for all participants in one query

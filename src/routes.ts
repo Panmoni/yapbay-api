@@ -9,6 +9,8 @@ import { ethers } from 'ethers';
 import YapBayEscrowABI from './contract/YapBayEscrow.json'; // Import ABI
 import { getWalletAddressFromJWT, CustomJwtPayload, signJwt } from './utils/jwtUtils'; // Import from new util file
 import bcrypt from 'bcrypt';
+import adminRouter from './adminRoutes';
+import { withErrorHandling } from './middleware/errorHandler';
 
 // Extend Express Request interface
 interface Request extends ExpressRequest {
@@ -85,23 +87,6 @@ const requireAdmin = (req: Request, res: Response, next: NextFunction): void => 
   next();
 };
 
-const withErrorHandling = (handler: (req: Request, res: Response) => Promise<void>) => {
-  return async (req: Request, res: Response) => {
-    try {
-      await handler(req, res);
-    } catch (err) {
-      const error = err as Error & { code?: string };
-      logError(`Route ${req.method} ${req.path} failed`, error);
-      if (error.code === '23505') {
-        // PostgreSQL duplicate key error
-        res.status(409).json({ error: 'Resource already exists with that key' });
-      } else {
-        res.status(500).json({ error: error.message || 'Internal server error' });
-      }
-    }
-  };
-};
-
 // Middleware to check ownership
 const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: string) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -121,7 +106,7 @@ const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: string)
         return;
       }
       const ownerField =
-        resourceType === 'account' ? result[0].wallet_address : result[0].creator_account_id;
+        resourceType === 'offer' ? result[0].creator_account_id : result[0].wallet_address;
 
       let ownerWalletAddress: string;
       if (resourceType === 'offer') {
@@ -282,8 +267,8 @@ router.post(
 // PRIVATE ROUTES - Require JWT
 router.use(requireJWT); // Apply JWT middleware to all subsequent routes
 
-// PRIVATE ROUTES - Admin-only guard
-router.use('/admin', requireAdmin);
+// PRIVATE ROUTES - Admin-only guard and mount admin routes
+router.use('/admin', requireAdmin, adminRouter);
 
 // Health Check Endpoint (Authenticated)
 router.get(

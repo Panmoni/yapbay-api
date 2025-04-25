@@ -78,17 +78,20 @@ export function startEventListener() {
               'UPDATE escrows SET state = $1, deposit_deadline = $2, fiat_deadline = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
               ['CREATED', depositDate, fiatDate, existing[0].id]
             );
+            console.log(`EscrowCreated: Updated escrow id=${existing[0].id} deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`);
           } else {
             await query(
               'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
               [tradeId, CONTRACT_ADDRESS, seller, buyer, arbitrator, 'USDC', amount, 'CREATED', sequential, seqAddr, escrowId, depositDate, fiatDate]
             );
+            console.log(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`);
           }
           // Update trade leg state
           await query(
             'UPDATE trades SET leg1_state = $1, leg1_escrow_onchain_id = $2 WHERE id = $3 AND leg1_state <> $1',
             ['CREATED', escrowId, tradeId]
           );
+          console.log(`EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`);
           break;
         }
         case 'EscrowFunded': {
@@ -97,10 +100,12 @@ export function startEventListener() {
             'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
             ['FUNDED', escrowId]
           );
+          console.log(`EscrowFunded: Updated escrow onchainId=${escrowId} state=FUNDED`);
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['FUNDED', escrowId]
           );
+          console.log(`EscrowFunded: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
           break;
         }
         case 'EscrowReleased': {
@@ -109,10 +114,12 @@ export function startEventListener() {
             'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
             ['RELEASED', escrowId]
           );
+          console.log(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['RELEASED', escrowId]
           );
+          console.log(`EscrowReleased: Updated trade leg1_state=RELEASED for escrowId=${escrowId}`);
           break;
         }
         case 'EscrowCancelled': {
@@ -121,10 +128,12 @@ export function startEventListener() {
             'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
             ['CANCELLED', escrowId]
           );
+          console.log(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED`);
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['CANCELLED', escrowId]
           );
+          console.log(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
           break;
         }
         default:

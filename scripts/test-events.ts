@@ -11,7 +11,7 @@ const persist = process.argv.includes('--persist');
 
 const main = async () => {
   const contract = getContract(provider);
-  const address = process.env.CONTRACT_ADDRESS!;
+  // const address = process.env.CONTRACT_ADDRESS!;
   const fromBlock = process.env.FROM_BLOCK ? Number(process.env.FROM_BLOCK) : 0;
   console.log(`Fetching events from block ${fromBlock} to latest...`);
 

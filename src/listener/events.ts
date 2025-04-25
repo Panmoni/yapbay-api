@@ -2,12 +2,22 @@ import * as dotenv from 'dotenv';
 import { wsProvider, getContract } from '../celo';
 import { query } from '../db';
 import type { LogDescription, ParamType } from 'ethers';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 if (!CONTRACT_ADDRESS) {
   throw new Error('CONTRACT_ADDRESS not set in environment variables');
+}
+
+const logFilePath = path.join(process.cwd(), 'events.log');
+const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
+
+function fileLog(message: string) {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  logStream.write(line);
 }
 
 // Typed representation of chain log with necessary fields
@@ -22,6 +32,7 @@ interface ContractLog {
 export function startEventListener() {
   const contract = getContract(wsProvider);
   console.log('Starting contract event listener for', CONTRACT_ADDRESS);
+  fileLog(`Starting contract event listener for ${CONTRACT_ADDRESS}`);
 
   // Listen to all logs from this contract
   const filter = { address: CONTRACT_ADDRESS };
@@ -52,6 +63,7 @@ export function startEventListener() {
 
       await query(insertSql, params);
       console.log(`Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${log.logIndex}`);
+      fileLog(`Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${log.logIndex}`);
 
       // Sync normalized escrow & trade state
       switch (parsed.name) {
@@ -79,12 +91,14 @@ export function startEventListener() {
               ['CREATED', depositDate, fiatDate, existing[0].id]
             );
             console.log(`EscrowCreated: Updated escrow id=${existing[0].id} deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`);
+            fileLog(`EscrowCreated: Updated escrow id=${existing[0].id} deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`);
           } else {
             await query(
               'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
               [tradeId, CONTRACT_ADDRESS, seller, buyer, arbitrator, 'USDC', amount, 'CREATED', sequential, seqAddr, escrowId, depositDate, fiatDate]
             );
             console.log(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`);
+            fileLog(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`);
           }
           // Update trade leg state
           await query(
@@ -92,6 +106,7 @@ export function startEventListener() {
             ['CREATED', escrowId, tradeId]
           );
           console.log(`EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`);
+          fileLog(`EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`);
           break;
         }
         case 'EscrowFunded': {
@@ -101,11 +116,13 @@ export function startEventListener() {
             ['FUNDED', escrowId]
           );
           console.log(`EscrowFunded: Updated escrow onchainId=${escrowId} state=FUNDED`);
+          fileLog(`EscrowFunded: Updated escrow onchainId=${escrowId} state=FUNDED`);
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['FUNDED', escrowId]
           );
           console.log(`EscrowFunded: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
+          fileLog(`EscrowFunded: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
           break;
         }
         case 'EscrowReleased': {
@@ -115,11 +132,13 @@ export function startEventListener() {
             ['RELEASED', escrowId]
           );
           console.log(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
+          fileLog(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['RELEASED', escrowId]
           );
           console.log(`EscrowReleased: Updated trade leg1_state=RELEASED for escrowId=${escrowId}`);
+          fileLog(`EscrowReleased: Updated trade leg1_state=RELEASED for escrowId=${escrowId}`);
           break;
         }
         case 'EscrowCancelled': {
@@ -129,11 +148,13 @@ export function startEventListener() {
             ['CANCELLED', escrowId]
           );
           console.log(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED`);
+          fileLog(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED`);
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['CANCELLED', escrowId]
           );
           console.log(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
+          fileLog(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
           break;
         }
         default:
@@ -141,6 +162,7 @@ export function startEventListener() {
       }
     } catch (err) {
       console.error('Error handling log:', err);
+      fileLog(`Error handling log: ${err}`);
     }
   });
 }

@@ -7,3 +7,4 @@ dist/
 jwt.txt
 jwt2.txt
 api.log
+events.log

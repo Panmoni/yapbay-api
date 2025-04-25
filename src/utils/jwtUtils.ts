@@ -1,4 +1,4 @@
-import { JwtPayload } from 'jsonwebtoken';
+import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
 
 // Define a more flexible type combining JwtPayload and our custom structure
 export interface CustomJwtPayload extends JwtPayload {
@@ -54,4 +54,18 @@ export const getWalletAddressFromJWT = (req: RequestLike): string | undefined =>
 
   // console.log('[getWalletAddressFromJWT] Returning address:', blockchainCred.address);
   return blockchainCred.address;
+};
+
+/**
+ * Sign a JWT using HS256 algorithm.
+ * @param payload - The JWT payload including sub and role claims.
+ * @param options - Optional SignOptions to override defaults.
+ * @returns A signed JWT string.
+ */
+export const signJwt = (payload: CustomJwtPayload, options?: SignOptions): string => {
+  return jwt.sign(payload, process.env.JWT_SECRET!, {
+    algorithm: 'HS256',
+    expiresIn: '1h',
+    ...options,
+  });
 };

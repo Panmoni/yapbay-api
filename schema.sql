@@ -24,6 +24,7 @@ CREATE TABLE accounts (
     available_from TIME,
     available_to TIME,
     timezone VARCHAR(50),
+    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('user','admin')),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

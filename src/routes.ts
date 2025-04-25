@@ -7,7 +7,7 @@ import jwksClient from 'jwks-rsa';
 import axios from 'axios';
 import { ethers } from 'ethers';
 import YapBayEscrowABI from './contract/YapBayEscrow.json'; // Import ABI
-import { getWalletAddressFromJWT, CustomJwtPayload } from './utils/jwtUtils'; // Import from new util file
+import { getWalletAddressFromJWT, CustomJwtPayload, signJwt } from './utils/jwtUtils'; // Import from new util file
 import bcrypt from 'bcrypt';
 
 // Extend Express Request interface
@@ -55,14 +55,34 @@ const requireJWT = (req: Request, res: Response, next: NextFunction): void => {
     res.status(401).json({ error: 'No token provided' });
     return;
   }
-  jwt.verify(token, getKey, { algorithms: ['RS256'] }, (err, decoded) => {
+  const decodedHeader = jwt.decode(token, { complete: true });
+  if (!decodedHeader || typeof decodedHeader === 'string') {
+    res.status(401).json({ error: 'Invalid token format' });
+    return;
+  }
+  const alg = decodedHeader.header.alg;
+  const verifier =
+    alg === 'HS256'
+      ? (cb: jwt.VerifyCallback) =>
+          jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }, cb)
+      : (cb: jwt.VerifyCallback) => jwt.verify(token, getKey, { algorithms: ['RS256'] }, cb);
+  verifier((err, decoded) => {
     if (err) {
       res.status(401).json({ error: 'Invalid token' });
       return;
     }
-    req.user = decoded as CustomJwtPayload; // Use the imported custom type
+    req.user = decoded as CustomJwtPayload;
     next();
   });
+};
+
+// Admin-only guard
+const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
+  if (req.user?.role !== 'admin') {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  next();
 };
 
 const withErrorHandling = (handler: (req: Request, res: Response) => Promise<void>) => {
@@ -237,31 +257,33 @@ router.get(
 
 // PRIVATE ROUTES
 // TODO: Migrate admin credentials to a secure admin user table, add MFA, rate-limiting, and proper audit logging instead of env-based auth.
-router.post('/admin/login', withErrorHandling(async (req: Request, res: Response): Promise<void> => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    res.status(400).json({ error: 'Missing username or password' });
-    return;
-  }
-  if (username !== process.env.ADMIN_USERNAME) {
-    res.status(401).json({ error: 'Invalid credentials' });
-    return;
-  }
-  const passwordMatch = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH!);
-  if (!passwordMatch) {
-    res.status(401).json({ error: 'Invalid credentials' });
-    return;
-  }
-  const token = jwt.sign(
-    { sub: username, admin: true },
-    process.env.JWT_SECRET!,
-    { expiresIn: '1h' }
-  );
-  res.json({ token });
-}));
+router.post(
+  '/admin/login',
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      res.status(400).json({ error: 'Missing username or password' });
+      return;
+    }
+    if (username !== process.env.ADMIN_USERNAME) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
+    }
+    const passwordMatch = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH!);
+    if (!passwordMatch) {
+      res.status(401).json({ error: 'Invalid credentials' });
+      return;
+    }
+    const token = signJwt({ sub: username, role: 'admin' } as CustomJwtPayload);
+    res.json({ token });
+  })
+);
 
 // PRIVATE ROUTES - Require JWT
 router.use(requireJWT); // Apply JWT middleware to all subsequent routes
+
+// PRIVATE ROUTES - Admin-only guard
+router.use('/admin', requireAdmin);
 
 // Health Check Endpoint (Authenticated)
 router.get(
@@ -369,7 +391,6 @@ router.get(
         res.status(404).json({ error: 'Account not found' });
         return;
       }
-
       const accountData = result[0];
 
       // Check if the requester is the owner of the account

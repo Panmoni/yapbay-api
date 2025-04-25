@@ -1,5 +1,5 @@
 import * as dotenv from 'dotenv';
-import { provider, getContract } from '../celo';
+import { wsProvider, getContract } from '../celo';
 import { query } from '../db';
 import type { LogDescription, ParamType } from 'ethers';
 
@@ -20,13 +20,13 @@ interface ContractLog {
 }
 
 export function startEventListener() {
-  const contract = getContract(provider);
+  const contract = getContract(wsProvider);
   console.log('Starting contract event listener for', CONTRACT_ADDRESS);
 
   // Listen to all logs from this contract
   const filter = { address: CONTRACT_ADDRESS };
 
-  provider.on(filter, async (log: ContractLog) => {
+  wsProvider.on(filter, async (log: ContractLog) => {
     try {
       const parsed = contract.interface.parseLog(log) as LogDescription;
       if (!parsed) return;

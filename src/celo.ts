@@ -23,6 +23,8 @@ const celoAlfajoresNetwork = {
 
 // Set up provider with explicit network details
 const provider = new ethers.JsonRpcProvider(CELO_RPC_URL, celoAlfajoresNetwork);
+const CELO_WS_URL = process.env.CELO_WS_URL || CELO_RPC_URL.replace(/^https?/, 'wss') + '/ws';
+export const wsProvider = new ethers.WebSocketProvider(CELO_WS_URL, celoAlfajoresNetwork);
 
 // Set up signer if private key is available
 const getSigner = () => {

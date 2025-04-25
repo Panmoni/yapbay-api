@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS escrows CASCADE;
 DROP TABLE IF EXISTS trades CASCADE;
 DROP TABLE IF EXISTS offers CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
+DROP TABLE IF EXISTS contract_events CASCADE;
 
 -- 1. accounts: User profiles and wallet info
 CREATE TABLE accounts (
@@ -167,6 +168,20 @@ CREATE TABLE dispute_resolutions (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 8. contract_events: captures blockchain events
+CREATE TABLE contract_events (
+    id SERIAL PRIMARY KEY,
+    event_name VARCHAR(100) NOT NULL,
+    block_number BIGINT NOT NULL,
+    transaction_hash VARCHAR(66) NOT NULL,
+    log_index INTEGER NOT NULL,
+    args JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE contract_events
+    ADD CONSTRAINT contract_events_unique_tx_log UNIQUE (transaction_hash, log_index);
+
 -- Foreign key constraints
 ALTER TABLE trades
     ADD CONSTRAINT fk_leg1_dispute FOREIGN KEY (leg1_dispute_id) REFERENCES disputes(id),
@@ -192,6 +207,9 @@ CREATE INDEX idx_disputes_escrow_id ON disputes(escrow_id);
 CREATE INDEX idx_disputes_trade_id ON disputes(trade_id);
 CREATE INDEX idx_dispute_evidence_dispute_id ON dispute_evidence(dispute_id);
 CREATE INDEX idx_dispute_resolutions_dispute_id ON dispute_resolutions(dispute_id);
+CREATE INDEX idx_contract_events_name ON contract_events(event_name);
+CREATE INDEX idx_contract_events_block_number ON contract_events(block_number);
+CREATE INDEX idx_contract_events_tx_hash ON contract_events(transaction_hash);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -235,5 +253,10 @@ CREATE TRIGGER update_dispute_evidence_updated_at
 
 CREATE TRIGGER update_dispute_resolutions_updated_at
     BEFORE UPDATE ON dispute_resolutions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_contract_events_updated_at
+    BEFORE UPDATE ON contract_events
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();

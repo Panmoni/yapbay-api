@@ -2,10 +2,6 @@
 
 - refactor routes.ts 1248 lines
 
-- auto cancel
-
-log just for event listener
-
 ## admin dash
 
 Create an Admin Login Endpoint:

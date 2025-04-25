@@ -37,6 +37,11 @@ export async function expireDeadlines(): Promise<void> {
            WHERE id = $1`,
           [id]
         );
+        // record audit of auto-cancel
+        await client.query(
+          'INSERT INTO trade_cancellations (trade_id, actor, deadline_field) VALUES ($1, $2, $3)',
+          [id, 'system', deadlineField]
+        );
         console.log(
           `[AutoCancel] Trade ${id}: '${deadlineField}' (${(deadline as Date).toISOString()}) passed; marking overall and ${stateField} CANCELLED.`
         );

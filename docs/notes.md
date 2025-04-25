@@ -1,11 +1,5 @@
 # YapBay API Notes
 
-## auto cancel
-
-Database-side enforcement
-• Add a trigger that on any state‐update checks NEW.legX_deadline > NOW() (rejects bad writes).
-• Keeps API+cron in sync even if someone manual‐updates the DB.
-
 ## admin dash
 
 Create an Admin Login Endpoint:
@@ -15,6 +9,6 @@ Accept username and password (e.g., hardcoded or stored in a secure database for
 Return a JWT token with a claim like admin: true.
 Store credentials securely (e.g., hashed passwords in a database or environment variables).
 
-## Refactor
+## Refactor Routes
 
-- refactor routes.ts 1248 lines, maybe use new middleware and services directories.
+maybe use new middleware and services directories.

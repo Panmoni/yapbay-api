@@ -323,3 +323,33 @@ CREATE TRIGGER update_trade_cancellations_updated_at
     BEFORE UPDATE ON trade_cancellations
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- 10. enforce trade deadlines: block state updates past deadlines
+CREATE OR REPLACE FUNCTION enforce_trade_deadlines()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.overall_status != 'CANCELLED' THEN
+    IF NEW.leg1_escrow_deposit_deadline IS NOT NULL
+       AND NEW.leg1_escrow_deposit_deadline <= NOW() THEN
+      RAISE EXCEPTION 'Leg1 escrow deposit deadline (% ) passed', NEW.leg1_escrow_deposit_deadline;
+    END IF;
+    IF NEW.leg1_fiat_payment_deadline IS NOT NULL
+       AND NEW.leg1_fiat_payment_deadline <= NOW() THEN
+      RAISE EXCEPTION 'Leg1 fiat payment deadline (% ) passed', NEW.leg1_fiat_payment_deadline;
+    END IF;
+    IF NEW.leg2_escrow_deposit_deadline IS NOT NULL
+       AND NEW.leg2_escrow_deposit_deadline <= NOW() THEN
+      RAISE EXCEPTION 'Leg2 escrow deposit deadline (% ) passed', NEW.leg2_escrow_deposit_deadline;
+    END IF;
+    IF NEW.leg2_fiat_payment_deadline IS NOT NULL
+       AND NEW.leg2_fiat_payment_deadline <= NOW() THEN
+      RAISE EXCEPTION 'Leg2 fiat payment deadline (% ) passed', NEW.leg2_fiat_payment_deadline;
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER enforce_trade_deadlines
+  BEFORE UPDATE ON trades
+  FOR EACH ROW EXECUTE FUNCTION enforce_trade_deadlines();

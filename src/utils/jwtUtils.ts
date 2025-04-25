@@ -1,4 +1,3 @@
-import { Request as ExpressRequest } from 'express';
 import { JwtPayload } from 'jsonwebtoken';
 
 // Define a more flexible type combining JwtPayload and our custom structure
@@ -9,7 +8,7 @@ export interface CustomJwtPayload extends JwtPayload {
 // Define a minimal Request-like interface for the function signature
 // This avoids importing the full Express Request type if not needed directly
 interface RequestLike {
-    user?: CustomJwtPayload;
+  user?: CustomJwtPayload;
 }
 
 /**
@@ -23,24 +22,24 @@ export const getWalletAddressFromJWT = (req: RequestLike): string | undefined =>
 
   const userPayload = req.user;
   if (!userPayload) {
-      // console.log('[getWalletAddressFromJWT] req.user is undefined or null.');
-      return undefined;
+    // console.log('[getWalletAddressFromJWT] req.user is undefined or null.');
+    return undefined;
   }
 
   const credentials = userPayload.verified_credentials;
   // console.log('[getWalletAddressFromJWT] Credentials found on req.user:', JSON.stringify(credentials, null, 2));
 
   if (!Array.isArray(credentials)) {
-      // console.log('[getWalletAddressFromJWT] verified_credentials is not an array or is missing.');
-      return undefined;
+    // console.log('[getWalletAddressFromJWT] verified_credentials is not an array or is missing.');
+    return undefined;
   }
 
   const blockchainCred = credentials.find((cred: any) => cred && cred.format === 'blockchain');
   // console.log('[getWalletAddressFromJWT] Found blockchain credential:', JSON.stringify(blockchainCred, null, 2));
 
   if (!blockchainCred) {
-      // console.log('[getWalletAddressFromJWT] No credential with format "blockchain" found.');
-      return undefined;
+    // console.log('[getWalletAddressFromJWT] No credential with format "blockchain" found.');
+    return undefined;
   }
 
   // console.log('[getWalletAddressFromJWT] Returning address:', blockchainCred.address);

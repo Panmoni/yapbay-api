@@ -1,8 +1,8 @@
 import express, { Request as ExpressRequest, Response, Router, NextFunction } from 'express';
-import { query, recordTransaction, TransactionStatus, TransactionType } from './db'; // Added recordTransaction and types
-import { provider, getSigner, getContract, getSignedContract, formatUSDC, parseUSDC } from './celo';
+import { query, recordTransaction } from './db';
+import { provider } from './celo';
 import { requestLogger, logError } from './logger';
-import jwt, { JwtPayload } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import axios from 'axios';
 import { ethers } from 'ethers';
@@ -1278,7 +1278,8 @@ router.post(
                   break;
                 }
               } catch (e) {
-                // Ignore parsing errors for non-matching logs
+                logError('Error parsing transaction log', e);
+                // Continue despite parsing errors for non-matching logs
               }
             }
           }

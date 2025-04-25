@@ -8,6 +8,7 @@
   "scripts": {
     "test": "mocha -r ts-node/register 'src/tests/**/*.test.ts'",
     "test:blockchain": "mocha -r ts-node/register 'src/tests/blockchain.test.ts'",
+    "test:deadline": "ts-node scripts/test-deadline.ts",
     "test:connection": "ts-node scripts/test-connection.ts",
     "start": "ts-node src/server.ts",
     "start:dev": "nodemon --exec 'ts-node --project tsconfig.json --files' src/server.ts",

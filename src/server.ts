@@ -4,7 +4,9 @@ import cors from 'cors';
 import routes from './routes';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { startEventListener } from './listener/events';
 dotenv.config();
+startEventListener();
 
 const app = express();
 

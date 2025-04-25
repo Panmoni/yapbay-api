@@ -13,7 +13,8 @@
     "start:dev": "nodemon --exec 'ts-node --project tsconfig.json --files' src/server.ts",
     "build": "tsc",
     "serve": "node dist/server.js",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "test-events": "ts-node scripts/test-events.ts"
   },
   "author": "",
   "license": "MIT",

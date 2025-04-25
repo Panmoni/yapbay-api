@@ -161,7 +161,12 @@ router.get(
 
       res.json({ status: 'success', data: { USDC: prices } });
     } catch (err) {
-      const error = err as Error & { response?: { status: number; data: any } };
+      const error = err as Error & {
+        response?: {
+          status: number;
+          data: { message?: string; [key: string]: unknown };
+        };
+      };
       logError('Failed to fetch prices', error);
       res.status(error.response?.status || 500).json({
         error: error.response?.data?.message || error.message || 'Failed to fetch prices',
@@ -508,7 +513,7 @@ router.put(
         token,
       } = req.body;
 
-      const formatTimeLimit = (limit: any) => {
+      const formatTimeLimit = (limit: undefined | null | string | { minutes: number }) => {
         if (!limit) return null;
         if (typeof limit === 'string') return limit;
         if (limit.minutes) return `${limit.minutes} minutes`;
@@ -955,7 +960,7 @@ router.put(
     }
 
     const updateFields: string[] = [];
-    const updateParams: any[] = [];
+    const updateParams: unknown[] = [];
     let paramIndex = 1;
 
     if (leg1_state !== undefined) {

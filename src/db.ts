@@ -7,7 +7,7 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
-export async function query(text: string, params?: any[]) {
+export async function query(text: string, params?: unknown[]) {
   const client = await pool.connect();
   try {
     const res = await client.query(text, params);
@@ -68,8 +68,10 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
   } = data;
 
   // Convert BigInts to strings if necessary for DB insertion
-  const blockNumberStr = block_number !== null && block_number !== undefined ? BigInt(block_number).toString() : null;
-  const gasUsedStr = gas_used !== null && gas_used !== undefined ? BigInt(gas_used).toString() : null;
+  const blockNumberStr =
+    block_number !== null && block_number !== undefined ? BigInt(block_number).toString() : null;
+  const gasUsedStr =
+    gas_used !== null && gas_used !== undefined ? BigInt(gas_used).toString() : null;
 
   const sql = `
     INSERT INTO transactions (
@@ -89,9 +91,16 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
   `;
 
   const params = [
-    transaction_hash, status, type, blockNumberStr, sender_address,
-    receiver_or_contract_address, gasUsedStr, error_message,
-    related_trade_id, related_escrow_db_id
+    transaction_hash,
+    status,
+    type,
+    blockNumberStr,
+    sender_address,
+    receiver_or_contract_address,
+    gasUsedStr,
+    error_message,
+    related_trade_id,
+    related_escrow_db_id,
   ];
 
   try {
@@ -100,28 +109,42 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
       console.log(`[DB] Recorded/Updated transaction ${transaction_hash} with ID: ${result[0].id}`);
       return result[0].id;
     }
-     // If ON CONFLICT DO UPDATE happened but didn't return ID (less common)
-     // Try fetching the ID based on the hash
-     const fetchResult = await query('SELECT id FROM transactions WHERE transaction_hash = $1', [transaction_hash]);
-     if (fetchResult.length > 0) {
-        console.log(`[DB] Fetched existing transaction ${transaction_hash} with ID: ${fetchResult[0].id} after ON CONFLICT`);
-        return fetchResult[0].id;
-     }
-     logError(`Transaction ${transaction_hash} recorded via ON CONFLICT but failed to return/fetch ID.`, new Error('Failed to retrieve ID after ON CONFLICT'));
-     return null;
+    // If ON CONFLICT DO UPDATE happened but didn't return ID (less common)
+    // Try fetching the ID based on the hash
+    const fetchResult = await query('SELECT id FROM transactions WHERE transaction_hash = $1', [
+      transaction_hash,
+    ]);
+    if (fetchResult.length > 0) {
+      console.log(
+        `[DB] Fetched existing transaction ${transaction_hash} with ID: ${fetchResult[0].id} after ON CONFLICT`
+      );
+      return fetchResult[0].id;
+    }
+    logError(
+      `Transaction ${transaction_hash} recorded via ON CONFLICT but failed to return/fetch ID.`,
+      new Error('Failed to retrieve ID after ON CONFLICT')
+    );
+    return null;
   } catch (err) {
     logError(`Failed to record transaction ${transaction_hash}`, err as Error);
     // Attempt to fetch ID even on error, in case it was a conflict handled gracefully
-     try {
-        const fetchResult = await query('SELECT id FROM transactions WHERE transaction_hash = $1', [transaction_hash]);
-        if (fetchResult.length > 0) {
-            console.log(`[DB] Fetched existing transaction ${transaction_hash} with ID: ${fetchResult[0].id} after recording error.`);
-            return fetchResult[0].id;
-        }
-        return null; // Indicate failure
-     } catch (fetchErr) {
-        logError(`Failed to fetch transaction ID after recording error for ${transaction_hash}`, fetchErr as Error);
-        return null; // Indicate failure
-     }
+    try {
+      const fetchResult = await query('SELECT id FROM transactions WHERE transaction_hash = $1', [
+        transaction_hash,
+      ]);
+      if (fetchResult.length > 0) {
+        console.log(
+          `[DB] Fetched existing transaction ${transaction_hash} with ID: ${fetchResult[0].id} after recording error.`
+        );
+        return fetchResult[0].id;
+      }
+      return null; // Indicate failure
+    } catch (fetchErr) {
+      logError(
+        `Failed to fetch transaction ID after recording error for ${transaction_hash}`,
+        fetchErr as Error
+      );
+      return null; // Indicate failure
+    }
   }
 };

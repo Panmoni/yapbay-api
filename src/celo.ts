@@ -7,7 +7,8 @@ dotenv.config();
 
 // Environment variables
 const CELO_RPC_URL = process.env.CELO_RPC_URL || 'https://alfajores-forno.celo-testnet.org';
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || '0xC8BFB8a31fFbAF5c85bD97a1728aC43418B5871C';
+const CONTRACT_ADDRESS =
+  process.env.CONTRACT_ADDRESS || '0xC8BFB8a31fFbAF5c85bD97a1728aC43418B5871C';
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 if (!PRIVATE_KEY) {
@@ -16,9 +17,8 @@ if (!PRIVATE_KEY) {
 
 // Define Celo Alfajores network details
 const celoAlfajoresNetwork = {
-    name: "celo-alfajores",
-    chainId: 44787,
-    _defaultProvider: (providers: any) => new providers.JsonRpcProvider(CELO_RPC_URL)
+  name: 'celo-alfajores',
+  chainId: 44787,
 };
 
 // Set up provider with explicit network details
@@ -57,11 +57,4 @@ const parseUSDC = (amount: bigint): number => {
   return Number(ethers.formatUnits(amount, 6));
 };
 
-export {
-  provider,
-  getSigner,
-  getContract,
-  getSignedContract,
-  formatUSDC,
-  parseUSDC
-};
+export { provider, getSigner, getContract, getSignedContract, formatUSDC, parseUSDC };

@@ -3,6 +3,8 @@ DROP TABLE IF EXISTS dispute_resolutions CASCADE;
 DROP TABLE IF EXISTS dispute_evidence CASCADE;
 DROP TABLE IF EXISTS disputes CASCADE;
 DROP TABLE IF EXISTS escrows CASCADE;
+DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS trade_cancellations CASCADE;
 DROP TABLE IF EXISTS trades CASCADE;
 DROP TABLE IF EXISTS offers CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
@@ -151,6 +153,48 @@ CREATE TABLE dispute_evidence (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 6. transactions: on-chain transaction log
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_status') THEN
+        CREATE TYPE transaction_status AS ENUM ('PENDING', 'SUCCESS', 'FAILED');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'transaction_type') THEN
+        CREATE TYPE transaction_type AS ENUM (
+            'CREATE_ESCROW',
+            'FUND_ESCROW',
+            'RELEASE_ESCROW',
+            'CANCEL_ESCROW',
+            'MARK_FIAT_PAID',
+            'OPEN_DISPUTE',
+            'RESPOND_DISPUTE',
+            'RESOLVE_DISPUTE',
+            'OTHER'
+        );
+    END IF;
+END$$;
+
+CREATE TABLE transactions (
+    id BIGSERIAL PRIMARY KEY,
+    transaction_hash VARCHAR(66) UNIQUE NOT NULL,
+    status transaction_status NOT NULL DEFAULT 'PENDING',
+    type transaction_type NOT NULL,
+    block_number BIGINT,
+    sender_address VARCHAR(42),
+    receiver_or_contract_address VARCHAR(42),
+    gas_used DECIMAL(20,0),
+    error_message TEXT,
+    related_trade_id INTEGER REFERENCES trades(id) ON DELETE SET NULL,
+    related_escrow_db_id INTEGER REFERENCES escrows(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_transactions_status ON transactions(status);
+CREATE INDEX idx_transactions_type ON transactions(type);
+CREATE INDEX idx_transactions_trade_id ON transactions(related_trade_id);
+CREATE INDEX idx_transactions_escrow_db_id ON transactions(related_escrow_db_id);
+CREATE INDEX idx_transactions_hash ON transactions(transaction_hash);
+
 -- 7. dispute_resolutions: Logs arbitration outcomes
 CREATE TABLE dispute_resolutions (
     id SERIAL PRIMARY KEY,
@@ -179,8 +223,20 @@ CREATE TABLE contract_events (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE contract_events
-    ADD CONSTRAINT contract_events_unique_tx_log UNIQUE (transaction_hash, log_index);
+CREATE INDEX idx_contract_events_name ON contract_events(event_name);
+CREATE INDEX idx_contract_events_block_number ON contract_events(block_number);
+CREATE INDEX idx_contract_events_tx_hash ON contract_events(transaction_hash);
+
+-- 9. trade_cancellations: audit trail for auto-cancels
+CREATE TABLE trade_cancellations (
+    id SERIAL PRIMARY KEY,
+    trade_id INTEGER NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
+    actor VARCHAR(50) NOT NULL,
+    deadline_field VARCHAR(64) NOT NULL,
+    cancelled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_trade_cancellations_trade_id ON trade_cancellations(trade_id);
 
 -- Foreign key constraints
 ALTER TABLE trades
@@ -207,9 +263,6 @@ CREATE INDEX idx_disputes_escrow_id ON disputes(escrow_id);
 CREATE INDEX idx_disputes_trade_id ON disputes(trade_id);
 CREATE INDEX idx_dispute_evidence_dispute_id ON dispute_evidence(dispute_id);
 CREATE INDEX idx_dispute_resolutions_dispute_id ON dispute_resolutions(dispute_id);
-CREATE INDEX idx_contract_events_name ON contract_events(event_name);
-CREATE INDEX idx_contract_events_block_number ON contract_events(block_number);
-CREATE INDEX idx_contract_events_tx_hash ON contract_events(transaction_hash);
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -258,5 +311,15 @@ CREATE TRIGGER update_dispute_resolutions_updated_at
 
 CREATE TRIGGER update_contract_events_updated_at
     BEFORE UPDATE ON contract_events
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_transactions_updated_at
+    BEFORE UPDATE ON transactions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_trade_cancellations_updated_at
+    BEFORE UPDATE ON trade_cancellations
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();

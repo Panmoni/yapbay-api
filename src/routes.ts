@@ -141,6 +141,7 @@ const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: string)
 
 // PUBLIC ROUTES
 // TODO: rate limiting or otherwise locking it down
+// /prices
 router.get(
   '/prices',
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
@@ -181,6 +182,7 @@ router.get(
   })
 );
 // Get offer details (publicly accessible)
+// /offers/:id
 router.get(
   '/offers/:id',
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
@@ -199,6 +201,7 @@ router.get(
 );
 
 // List offers (publicly accessible but can filter by owner if authenticated)
+// /offers
 router.get(
   '/offers',
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
@@ -242,6 +245,7 @@ router.get(
 
 // PRIVATE ROUTES
 // TODO: Migrate admin credentials to a secure admin user table, add MFA, rate-limiting, and proper audit logging instead of env-based auth.
+// /admin/login
 router.post(
   '/admin/login',
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
@@ -307,6 +311,7 @@ router.get(
 
 // 1. Accounts Endpoints
 // Create a new account
+// /accounts
 router.post(
   '/accounts',
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
@@ -335,6 +340,7 @@ router.post(
 );
 
 // Get account details for authenticated user
+// /accounts/me
 router.get(
   '/accounts/me',
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
@@ -391,6 +397,8 @@ router.get(
           id: accountData.id,
           username: accountData.username,
           wallet_address: accountData.wallet_address,
+          telegram_username: accountData.telegram_username,
+          telegram_id: accountData.telegram_id,
           profile_photo_url: accountData.profile_photo_url,
           available_from: accountData.available_from,
           available_to: accountData.available_to,

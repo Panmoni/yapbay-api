@@ -4,6 +4,8 @@
 
 maybe use new middleware and services directories.
 
+still got admin login in main routes
+
 ## Setup
 
 <!-- tail -f api.log

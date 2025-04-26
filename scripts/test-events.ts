@@ -4,7 +4,7 @@
 
 import * as dotenv from 'dotenv';
 import { provider, getContract } from '../src/celo';
-import { query } from '../src/db';
+import { query, recordTransaction } from '../src/db';
 
 dotenv.config();
 // DB insert only when --persist flag is provided
@@ -67,13 +67,28 @@ const main = async () => {
       const tradeIdValue = evt.args.tradeId !== undefined
         ? Number(evt.args.tradeId.toString())
         : null;
+      const transactionId = await recordTransaction({
+        transaction_hash: evt.transactionHash,
+        status: 'SUCCESS',
+        type: 'OTHER',
+        block_number: evt.blockNumber,
+        related_trade_id: tradeIdValue,
+      });
       const insertSql = `
         INSERT INTO contract_events
-          (event_name, block_number, transaction_hash, log_index, args, trade_id)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+          (event_name, block_number, transaction_hash, log_index, args, trade_id, transaction_id)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
         ON CONFLICT DO NOTHING;
       `;
-      await query(insertSql, [name, evt.blockNumber, evt.transactionHash, logIndex, JSON.stringify(argsObj), tradeIdValue]);
+      await query(insertSql, [
+        name,
+        evt.blockNumber,
+        evt.transactionHash,
+        logIndex,
+        JSON.stringify(argsObj),
+        tradeIdValue,
+        transactionId,
+      ]);
       console.log(`Inserted event ${name} tx=${evt.transactionHash} logIndex=${logIndex} trade=${tradeIdValue}`);
     }
   }

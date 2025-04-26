@@ -15,7 +15,8 @@
     "build": "tsc",
     "serve": "node dist/server.js",
     "lint": "eslint . --ext .ts",
-    "test-events": "ts-node scripts/test-events.ts"
+    "test-events": "ts-node scripts/test-events.ts",
+    "list-active-trades": "ts-node scripts/list-active-trades.ts"
   },
   "author": "",
   "license": "MIT",

@@ -3,8 +3,13 @@
 
 import { query } from '../src/db';
 
+// States where a trade should not be cancelled, regardless of deadline
+const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
+
 interface TradeDeadline {
   id: number;
+  leg1_state: string;
+  leg2_state: string;
   leg1_escrow_deposit_deadline: Date | null;
   leg1_fiat_payment_deadline: Date | null;
   leg2_escrow_deposit_deadline: Date | null;
@@ -24,9 +29,15 @@ function formatDuration(ms: number): string {
   return parts.length ? parts.join(' ') : '0s';
 }
 
+function isUncancelable(trade: TradeDeadline): boolean {
+  return UNCANCELABLE_STATES.includes(trade.leg1_state) || UNCANCELABLE_STATES.includes(trade.leg2_state);
+}
+
 (async () => {
   const rows: TradeDeadline[] = await query(
     `SELECT id,
+      leg1_state,
+      leg2_state,
       leg1_escrow_deposit_deadline,
       leg1_fiat_payment_deadline,
       leg2_escrow_deposit_deadline,
@@ -57,11 +68,16 @@ function formatDuration(ms: number): string {
       upcoming.sort((a, b) => a.date.getTime() - b.date.getTime());
       const next = upcoming[0];
       const diff = next.date.getTime() - now.getTime();
+      const uncancelable = isUncancelable(t);
       return {
         TradeID: t.id,
+        Leg1State: t.leg1_state,
+        Leg2State: t.leg2_state || 'N/A',
         DeadlineField: next.field,
         Deadline: next.date.toISOString(),
         Remaining: formatDuration(diff),
+        Uncancelable: uncancelable,
+        CanAutoCancel: !uncancelable
       };
     })
     .filter(x => x != null) as Array<Record<string, unknown>>;

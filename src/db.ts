@@ -34,7 +34,7 @@ export type TransactionType =
   | 'RESOLVE_DISPUTE'
   | 'OTHER';
 
-interface TransactionData {
+export interface TransactionData {
   transaction_hash: string;
   status: TransactionStatus;
   type: TransactionType;

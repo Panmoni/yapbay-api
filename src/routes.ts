@@ -11,6 +11,7 @@ import { getWalletAddressFromJWT, CustomJwtPayload, signJwt } from './utils/jwtU
 import bcrypt from 'bcrypt';
 import adminRouter from './adminRoutes';
 import { withErrorHandling } from './middleware/errorHandler';
+import transactionRouter from './transactionRoutes';
 
 // Extend Express Request interface
 interface Request extends ExpressRequest {
@@ -273,6 +274,9 @@ router.use(requireJWT); // Apply JWT middleware to all subsequent routes
 
 // PRIVATE ROUTES - Admin-only guard and mount admin routes
 router.use('/admin', requireAdmin, adminRouter);
+
+// Mount transaction routes
+router.use('/transactions', transactionRouter);
 
 // Health Check Endpoint (Authenticated)
 router.get(

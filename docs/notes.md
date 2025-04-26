@@ -8,10 +8,6 @@ if the escrow is funded but mrk fiat paid fails, can't cancel if it has a balanc
 
 cancel trade on-chain?
 
-## events table
-
-contract events table needs more data and to have the trade_id field in there
-
 ## record all txs
 
 Need a route to record follow on transactions

@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 import { wsProvider, getContract } from '../celo';
-import { query } from '../db';
+import { query, recordTransaction } from '../db';
 import type { LogDescription, ParamType } from 'ethers';
 import fs from 'fs';
 import path from 'path';
@@ -27,12 +27,6 @@ interface ContractLog {
   logIndex: number;
   topics: string[];
   data: string;
-}
-
-async function lookupTransactionId(transactionHash: string) {
-  // TO DO: implement the logic to fetch the transaction id
-  // For now, just return the transaction hash
-  return transactionHash;
 }
 
 export function startEventListener() {
@@ -71,6 +65,14 @@ export function startEventListener() {
         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
         ON CONFLICT DO NOTHING;
       `;
+      // Record the transaction and get its DB ID
+      const transactionId = await recordTransaction({
+        transaction_hash: log.transactionHash,
+        status: 'SUCCESS',
+        type: 'OTHER',
+        block_number: log.blockNumber,
+        related_trade_id: tradeIdValue,
+      });
       const params = [
         parsed.name,
         log.blockNumber,
@@ -78,7 +80,7 @@ export function startEventListener() {
         log.logIndex,
         JSON.stringify(argsObj),
         tradeIdValue,
-        await lookupTransactionId(log.transactionHash)
+        transactionId,
       ];
 
       await query(insertSql, params);

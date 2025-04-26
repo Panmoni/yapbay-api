@@ -2,6 +2,8 @@
 
 ## auto cancel must not happen if mark fiat is paid
 
+cancel trade on-chain?
+
 ## events table
 
 contract events table needs more data and to have the trade_id field in there

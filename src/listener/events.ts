@@ -52,13 +52,17 @@ export function startEventListener() {
       // Build args object
       const argsObj: Record<string, unknown> = {};
       parsed.fragment.inputs.forEach((input: ParamType, idx: number) => {
-        argsObj[input.name] = parsed.args[idx];
+        const raw = parsed.args[idx];
+        argsObj[input.name] = typeof raw === 'bigint' ? raw.toString() : raw;
       });
+      const tradeIdValue = parsed.args.tradeId !== undefined
+        ? Number(parsed.args.tradeId.toString())
+        : null;
 
       const insertSql = `
         INSERT INTO contract_events
-          (event_name, block_number, transaction_hash, log_index, args)
-        VALUES ($1, $2, $3, $4, $5)
+          (event_name, block_number, transaction_hash, log_index, args, trade_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT DO NOTHING;
       `;
       const params = [
@@ -66,7 +70,8 @@ export function startEventListener() {
         log.blockNumber,
         log.transactionHash,
         log.logIndex,
-        argsObj
+        argsObj,
+        tradeIdValue
       ];
 
       await query(insertSql, params);

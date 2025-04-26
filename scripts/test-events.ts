@@ -1,5 +1,6 @@
 // npx ts-node scripts/test-events.ts
 // npx ts-node --transpile-only scripts/test-events.ts
+// npm run test-events -- --persist to grab history
 
 import * as dotenv from 'dotenv';
 import { provider, getContract } from '../src/celo';
@@ -19,7 +20,7 @@ const main = async () => {
   const logs = await provider.getLogs({
     address: process.env.CONTRACT_ADDRESS!,
     fromBlock,
-    toBlock: 'latest'
+    toBlock: 'latest',
   });
   console.log(`Found ${logs.length} logs`);
   const evts = logs.map(log => {
@@ -31,7 +32,7 @@ const main = async () => {
       blockNumber: log.blockNumber,
       transactionHash: log.transactionHash,
       data: log.data,
-      topics: log.topics
+      topics: log.topics,
     };
   });
 
@@ -61,17 +62,19 @@ const main = async () => {
       const argsObj: Record<string, unknown> = {};
       evt.fragment.inputs.forEach((input: any, idx: number) => {
         const rawVal = evt.args[idx];
-        // convert BigInt to string for JSONB
         argsObj[input.name] = typeof rawVal === 'bigint' ? rawVal.toString() : rawVal;
       });
+      const tradeIdValue = evt.args.tradeId !== undefined
+        ? Number(evt.args.tradeId.toString())
+        : null;
       const insertSql = `
         INSERT INTO contract_events
-          (event_name, block_number, transaction_hash, log_index, args)
-        VALUES ($1, $2, $3, $4, $5)
+          (event_name, block_number, transaction_hash, log_index, args, trade_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT DO NOTHING;
       `;
-      await query(insertSql, [name, evt.blockNumber, evt.transactionHash, logIndex, argsObj]);
-      console.log(`Inserted event ${name} tx=${evt.transactionHash} logIndex=${logIndex}`);
+      await query(insertSql, [name, evt.blockNumber, evt.transactionHash, logIndex, argsObj, tradeIdValue]);
+      console.log(`Inserted event ${name} tx=${evt.transactionHash} logIndex=${logIndex} trade=${tradeIdValue}`);
     }
   }
 };

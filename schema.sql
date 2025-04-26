@@ -222,6 +222,7 @@ CREATE TABLE contract_events (
     log_index INTEGER NOT NULL,
     args JSONB NOT NULL,
     trade_id BIGINT,
+    transaction_id BIGINT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

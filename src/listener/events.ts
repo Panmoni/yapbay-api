@@ -70,8 +70,8 @@ export function startEventListener() {
       ];
 
       await query(insertSql, params);
-      console.log(`Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${log.logIndex}`);
-      fileLog(`Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${log.logIndex}`);
+      console.log(`Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${log.logIndex} args=${JSON.stringify(argsObj)}`);
+      fileLog(`Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${log.logIndex} args=${JSON.stringify(argsObj)}`);
 
       // Sync normalized escrow & trade state
       switch (parsed.name) {

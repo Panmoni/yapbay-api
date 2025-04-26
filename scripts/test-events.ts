@@ -70,10 +70,10 @@ const main = async () => {
       const insertSql = `
         INSERT INTO contract_events
           (event_name, block_number, transaction_hash, log_index, args, trade_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6)
         ON CONFLICT DO NOTHING;
       `;
-      await query(insertSql, [name, evt.blockNumber, evt.transactionHash, logIndex, argsObj, tradeIdValue]);
+      await query(insertSql, [name, evt.blockNumber, evt.transactionHash, logIndex, JSON.stringify(argsObj), tradeIdValue]);
       console.log(`Inserted event ${name} tx=${evt.transactionHash} logIndex=${logIndex} trade=${tradeIdValue}`);
     }
   }

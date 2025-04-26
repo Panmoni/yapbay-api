@@ -29,6 +29,12 @@ interface ContractLog {
   data: string;
 }
 
+async function lookupTransactionId(transactionHash: string) {
+  // TO DO: implement the logic to fetch the transaction id
+  // For now, just return the transaction hash
+  return transactionHash;
+}
+
 export function startEventListener() {
   const contract = getContract(wsProvider);
   console.log('Starting contract event listener for', CONTRACT_ADDRESS);
@@ -61,8 +67,8 @@ export function startEventListener() {
 
       const insertSql = `
         INSERT INTO contract_events
-          (event_name, block_number, transaction_hash, log_index, args, trade_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
+          (event_name, block_number, transaction_hash, log_index, args, trade_id, transaction_id)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
         ON CONFLICT DO NOTHING;
       `;
       const params = [
@@ -70,8 +76,9 @@ export function startEventListener() {
         log.blockNumber,
         log.transactionHash,
         log.logIndex,
-        argsObj,
-        tradeIdValue
+        JSON.stringify(argsObj),
+        tradeIdValue,
+        await lookupTransactionId(log.transactionHash)
       ];
 
       await query(insertSql, params);

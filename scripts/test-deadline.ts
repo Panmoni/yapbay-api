@@ -36,6 +36,9 @@ const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
     }
 
     // Test 2: Test auto-cancellation respects uncancelable states
+    console.log('Starting Test 2: Auto-cancellation test');
+    
+    // We need to COMMIT the trades to the database for expireDeadlines to see them
     await client.query('BEGIN');
     
     // Insert a trade with expired deadline in CREATED state (should be cancelled)
@@ -48,6 +51,7 @@ const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
       ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past]
     );
     const cancelableId = cancelableRes.rows[0].id;
+    console.log(`Created cancelable trade with ID: ${cancelableId}`);
     
     // Insert a trade with expired deadline in FIAT_PAID state (should NOT be cancelled)
     const uncancelableRes = await client.query(
@@ -59,19 +63,32 @@ const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
       ['IN_PROGRESS', 'USD', 'USD', 'FIAT_PAID', 1.0, 'USD', past]
     );
     const uncancelableId = uncancelableRes.rows[0].id;
+    console.log(`Created uncancelable trade with ID: ${uncancelableId}`);
+    
+    // IMPORTANT: We need to commit these trades for the expireDeadlines function to see them
+    await client.query('COMMIT');
+    console.log('Committed trades to database');
     
     // Run the expireDeadlines function
+    console.log('Running expireDeadlines function...');
     await expireDeadlines();
+    console.log('expireDeadlines function completed');
+    
+    // Start a new transaction for checking results
+    await client.query('BEGIN');
     
     // Check results
     const cancelableResult = await client.query(
       'SELECT overall_status, leg1_state FROM trades WHERE id = $1',
       [cancelableId]
     );
+    console.log(`Cancelable trade state: ${JSON.stringify(cancelableResult.rows[0])}`);
+    
     const uncancelableResult = await client.query(
       'SELECT overall_status, leg1_state FROM trades WHERE id = $1',
       [uncancelableId]
     );
+    console.log(`Uncancelable trade state: ${JSON.stringify(uncancelableResult.rows[0])}`);
     
     if (cancelableResult.rows[0].overall_status === 'CANCELLED' && 
         cancelableResult.rows[0].leg1_state === 'CANCELLED') {
@@ -91,7 +108,10 @@ const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
       process.exit(1);
     }
     
-    await client.query('ROLLBACK');
+    // Clean up the test trades
+    await client.query('DELETE FROM trades WHERE id IN ($1, $2)', [cancelableId, uncancelableId]);
+    await client.query('COMMIT');
+    
     console.log('✅ All tests passed!');
     process.exit(0);
   } catch (err: any) {

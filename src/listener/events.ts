@@ -165,6 +165,80 @@ export function startEventListener() {
           fileLog(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
           break;
         }
+        case 'FundsDeposited': {
+          const escrowId = parsed.args.escrowId.toString();
+          const timestamp = Number(parsed.args.timestamp.toString());
+          const counter = Number(parsed.args.counter.toString());
+          // mark fiat paid on escrow
+          await query(
+            'UPDATE escrows SET fiat_paid = TRUE, counter = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND (fiat_paid = FALSE OR counter <> $1)',
+            [counter, escrowId]
+          );
+          console.log(`FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`);
+          fileLog(`FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`);
+          // update trade legs fiat paid
+          await query(
+            'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
+            ['FIAT_PAID', timestamp, escrowId]
+          );
+          console.log(`FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`);
+          fileLog(`FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`);
+          await query(
+            'UPDATE trades SET leg2_state = $1, leg2_fiat_paid_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
+            ['FIAT_PAID', timestamp, escrowId]
+          );
+          console.log(`FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`);
+          fileLog(`FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`);
+          break;
+        }
+        case 'DisputeOpened': {
+          const escrowId = parsed.args.escrowId.toString();
+          // mark escrow disputed
+          await query(
+            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
+            ['DISPUTED', escrowId]
+          );
+          console.log(`DisputeOpened: Updated escrow onchainId=${escrowId} state=DISPUTED`);
+          fileLog(`DisputeOpened: Updated escrow onchainId=${escrowId} state=DISPUTED`);
+          // update trade legs disputed
+          await query(
+            'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
+            ['DISPUTED', escrowId]
+          );
+          console.log(`DisputeOpened: Updated trade leg1_state=DISPUTED for escrowId=${escrowId}`);
+          fileLog(`DisputeOpened: Updated trade leg1_state=DISPUTED for escrowId=${escrowId}`);
+          await query(
+            'UPDATE trades SET leg2_state = $1 WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
+            ['DISPUTED', escrowId]
+          );
+          console.log(`DisputeOpened: Updated trade leg2_state=DISPUTED for escrowId=${escrowId}`);
+          fileLog(`DisputeOpened: Updated trade leg2_state=DISPUTED for escrowId=${escrowId}`);
+          break;
+        }
+        case 'DisputeResponse': {
+          const escrowId = parsed.args.escrowId.toString();
+          // mark escrow resolved
+          await query(
+            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
+            ['RESOLVED', escrowId]
+          );
+          console.log(`DisputeResponse: Updated escrow onchainId=${escrowId} state=RESOLVED`);
+          fileLog(`DisputeResponse: Updated escrow onchainId=${escrowId} state=RESOLVED`);
+          // update trade legs resolved
+          await query(
+            'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
+            ['RESOLVED', escrowId]
+          );
+          console.log(`DisputeResponse: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`);
+          fileLog(`DisputeResponse: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`);
+          await query(
+            'UPDATE trades SET leg2_state = $1 WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
+            ['RESOLVED', escrowId]
+          );
+          console.log(`DisputeResponse: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`);
+          fileLog(`DisputeResponse: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`);
+          break;
+        }
         default:
           break;
       }

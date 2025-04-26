@@ -15,10 +15,26 @@ const main = async () => {
   const fromBlock = process.env.FROM_BLOCK ? Number(process.env.FROM_BLOCK) : 0;
   console.log(`Fetching events from block ${fromBlock} to latest...`);
 
-  // for example, only fetch escrow-related events:
-  const filter = contract.filters.EscrowCreated();
-  const evts = (await contract.queryFilter(filter, fromBlock, 'latest')) as any[];
-  console.log(`Found ${evts.length} events`);
+  // fetch all events for this contract
+  const logs = await provider.getLogs({
+    address: process.env.CONTRACT_ADDRESS!,
+    fromBlock,
+    toBlock: 'latest'
+  });
+  console.log(`Found ${logs.length} logs`);
+  const evts = logs.map(log => {
+    const parsed = contract.interface.parseLog(log) as any;
+    return {
+      ...parsed,
+      args: parsed.args,
+      fragment: parsed.fragment,
+      blockNumber: log.blockNumber,
+      transactionHash: log.transactionHash,
+      data: log.data,
+      topics: log.topics
+    };
+  });
+
   for (const evt of evts) {
     const receipt: any = await provider.getTransactionReceipt(evt.transactionHash);
     if (!receipt) {

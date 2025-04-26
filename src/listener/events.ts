@@ -33,6 +33,14 @@ export function startEventListener() {
   const contract = getContract(wsProvider);
   console.log('Starting contract event listener for', CONTRACT_ADDRESS);
   fileLog(`Starting contract event listener for ${CONTRACT_ADDRESS}`);
+  // heartbeat: log every minute to show connection alive
+  setInterval(() => fileLog('heartbeat'), 60_000);
+  // catch underlying WebSocket close and error
+  const rawWs: any = (wsProvider as any)._websocket || (wsProvider as any).ws;
+  if (rawWs) {
+    rawWs.onclose = (event: any) => fileLog(`WebSocket closed: ${event.code}`);
+    rawWs.onerror = (error: any) => fileLog(`WebSocket error: ${error.message || error}`);
+  }
 
   // Listen to all logs from this contract
   const filter = { address: CONTRACT_ADDRESS };

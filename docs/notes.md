@@ -11,3 +11,7 @@ still got admin login in main routes
 <!-- tail -f api.log
 tail -f events.log
 psql -h localhost -U yapbay -d yapbay -->
+
+## listener
+
+## auto cancel must not happen if mark fiat is paid

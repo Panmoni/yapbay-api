@@ -46,9 +46,29 @@ router.post(
     }
 
     try {
+      // Defensive: If transaction_type is 'OTHER', check metadata for a more specific type
+      let finalTransactionType = transaction_type;
+      if (transaction_type === 'OTHER' && metadata) {
+        try {
+          // Accept both object and stringified JSON
+          const metaObj = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+          // Map metadata.action (or similar field) to a specific type
+          const actionTypeMap: Record<string, string> = {
+            'MARK_FIAT_PAID': 'MARK_FIAT_PAID',
+            'mark_fiat_paid': 'MARK_FIAT_PAID',
+            // Add more mappings as needed
+          };
+          const action = metaObj.action || metaObj.type || metaObj.event;
+          if (action && actionTypeMap[action]) {
+            finalTransactionType = actionTypeMap[action];
+          }
+        } catch (e) {
+          // Ignore parse errors, fallback to 'OTHER'
+        }
+      }
       // Verify the transaction type is valid
       const validTransactionTypes: string[] = ['CREATE_ESCROW', 'FUND_ESCROW', 'MARK_FIAT_PAID', 'RELEASE_ESCROW', 'CANCEL_ESCROW', 'DISPUTE_ESCROW', 'OPEN_DISPUTE', 'RESPOND_DISPUTE', 'RESOLVE_DISPUTE', 'OTHER'];
-      if (!validTransactionTypes.includes(transaction_type)) {
+      if (!validTransactionTypes.includes(finalTransactionType)) {
         res.status(400).json({
           error: 'Invalid transaction type',
           details: `Transaction type must be one of: ${validTransactionTypes.join(', ')}`
@@ -94,7 +114,7 @@ router.post(
       const transactionId = await recordTransaction({
         transaction_hash,
         status: status as TransactionStatus,
-        type: transaction_type as TransactionType,
+        type: finalTransactionType as TransactionType,
         block_number: block_number || null,
         sender_address: from_address,
         receiver_or_contract_address: to_address || null,

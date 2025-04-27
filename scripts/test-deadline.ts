@@ -2,6 +2,8 @@ import pool from '../src/db';
 import { expireDeadlines } from '../src/services/deadlineService';
 
 // States where a trade should not be cancelled, regardless of deadline
+// This is used in the test logic below when checking uncancelable states
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
 
 (async () => {

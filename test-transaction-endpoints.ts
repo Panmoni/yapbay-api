@@ -1,6 +1,6 @@
 // Simple script to test the transaction endpoints
-const axios = require('axios');
-const dotenv = require('dotenv');
+import axios from 'axios';
+import * as dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -20,7 +20,7 @@ const api = axios.create({
   }
 });
 
-async function testRecordTransaction() {
+async function testRecordTransaction(): Promise<number | null> {
   try {
     const response = await api.post('/transactions/record', {
       trade_id: 1, // Replace with a valid trade ID from your database
@@ -40,30 +40,30 @@ async function testRecordTransaction() {
     console.log('Record Transaction Response:', response.data);
     return response.data.transactionId;
   } catch (error) {
-    console.error('Error recording transaction:', error.response?.data || error.message);
+    console.error('Error recording transaction:', error.response?.data || (error as Error).message);
     return null;
   }
 }
 
-async function testGetTradeTransactions(tradeId) {
+async function testGetTradeTransactions(tradeId: number): Promise<void> {
   try {
     const response = await api.get(`/transactions/trade/${tradeId}`);
     console.log('Trade Transactions Response:', response.data);
   } catch (error) {
-    console.error('Error getting trade transactions:', error.response?.data || error.message);
+    console.error('Error getting trade transactions:', error.response?.data || (error as Error).message);
   }
 }
 
-async function testGetUserTransactions() {
+async function testGetUserTransactions(): Promise<void> {
   try {
     const response = await api.get('/transactions/user');
     console.log('User Transactions Response:', response.data);
   } catch (error) {
-    console.error('Error getting user transactions:', error.response?.data || error.message);
+    console.error('Error getting user transactions:', error.response?.data || (error as Error).message);
   }
 }
 
-async function runTests() {
+async function runTests(): Promise<void> {
   console.log('Testing transaction endpoints...');
   
   // Test recording a transaction

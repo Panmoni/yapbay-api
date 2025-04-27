@@ -36,10 +36,23 @@ export function startEventListener() {
   // heartbeat: log every minute to show connection alive
   setInterval(() => fileLog('heartbeat'), 60_000);
   // catch underlying WebSocket close and error
-  const rawWs: any = (wsProvider as any)._websocket || (wsProvider as any).ws;
+  type WebSocketProvider = typeof wsProvider;
+  type WebSocketConnection = {
+    onclose: (event: { code: number }) => void;
+    onerror: (error: { message?: string }) => void;
+  };
+  
+  const rawWs = ((wsProvider as WebSocketProvider) as unknown as { 
+    _websocket?: WebSocketConnection; 
+    ws?: WebSocketConnection 
+  })._websocket || ((wsProvider as WebSocketProvider) as unknown as { 
+    _websocket?: WebSocketConnection; 
+    ws?: WebSocketConnection 
+  }).ws;
+  
   if (rawWs) {
-    rawWs.onclose = (event: any) => fileLog(`WebSocket closed: ${event.code}`);
-    rawWs.onerror = (error: any) => fileLog(`WebSocket error: ${error.message || error}`);
+    rawWs.onclose = (event: { code: number }) => fileLog(`WebSocket closed: ${event.code}`);
+    rawWs.onerror = (error: { message?: string }) => fileLog(`WebSocket error: ${error.message || error}`);
   }
 
   // Listen to all logs from this contract

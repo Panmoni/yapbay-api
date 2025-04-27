@@ -24,8 +24,13 @@ router.post(
       transaction_type,
       from_address,
       to_address,
-      amount,
-      token_type,
+      // These variables are extracted but not used in this function
+      // They're kept in the destructuring for documentation of the API
+      // and future use
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      amount: _amount,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      token_type: _token_type,
       block_number,
       metadata,
       status = 'PENDING' // Default to PENDING if not provided
@@ -162,12 +167,12 @@ router.get(
           t.related_trade_id = $1
       `;
       
-      const params: any[] = [id];
+      const params: (string | number)[] = [id];
 
       // Add type filter if provided
       if (type) {
         sql += ' AND t.type = $2';
-        params.push(type);
+        params.push(type as string);
       }
 
       // Order by creation date, newest first
@@ -182,8 +187,9 @@ router.get(
           try {
             metadata = JSON.parse(tx.error_message);
             tx.error_message = null; // Clear error_message if it was used for metadata
-          } catch (e) {
+          } catch (error) {
             // Not valid JSON, leave as is (probably an actual error message)
+            console.debug(`Could not parse metadata from error_message: ${(error as Error).message}`);
           }
         }
         
@@ -245,13 +251,13 @@ router.get(
           (t.sender_address = $1 OR t.receiver_or_contract_address = $1)
       `;
       
-      const params: any[] = [walletAddress];
+      const params: (string | number)[] = [walletAddress];
       let paramIndex = 2;
 
       // Add type filter if provided
       if (type) {
         sql += ` AND t.type = $${paramIndex}`;
-        params.push(type);
+        params.push(type as string);
         paramIndex++;
       }
 
@@ -260,8 +266,8 @@ router.get(
       
       // Add pagination
       sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-      params.push(limit);
-      params.push(offset);
+      params.push(Number(limit));
+      params.push(Number(offset));
 
       const result = await query(sql, params);
       
@@ -272,8 +278,9 @@ router.get(
           try {
             metadata = JSON.parse(tx.error_message);
             tx.error_message = null; // Clear error_message if it was used for metadata
-          } catch (e) {
+          } catch (error) {
             // Not valid JSON, leave as is (probably an actual error message)
+            console.debug(`Could not parse metadata from error_message: ${(error as Error).message}`);
           }
         }
         

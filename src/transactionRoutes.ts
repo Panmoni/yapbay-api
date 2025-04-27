@@ -63,7 +63,8 @@ router.post(
             finalTransactionType = actionTypeMap[action];
           }
         } catch (e) {
-          // Ignore parse errors, fallback to 'OTHER'
+          // Log parse errors for debugging, fallback to 'OTHER'
+          logError('Failed to parse metadata when inferring transaction type in /transactions/record', e as Error);
         }
       }
       // Verify the transaction type is valid

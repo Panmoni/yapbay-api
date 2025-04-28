@@ -272,12 +272,50 @@ router.post(
         type: finalTransactionType as TransactionType,
         block_number: block_number || null,
         sender_address: from_address,
-        receiver_or_contract_address: finalToAddress || null,
+        receiver_or_contract_address: finalToAddress,
         related_trade_id: trade_id,
         related_escrow_db_id: escrowDbId,
-        // Store additional metadata in error_message field for now
         error_message: metadata ? JSON.stringify(metadata) : null
       });
+      
+      console.log(`[DB] Recorded/Updated transaction ${transaction_hash} with ID: ${transactionId}`);
+      
+      // Handle state updates based on transaction type
+      if (finalTransactionType === 'MARK_FIAT_PAID') {
+        try {
+          // Get current trade state
+          const tradeResult = await query(
+            'SELECT leg1_state FROM trades WHERE id = $1',
+            [trade_id]
+          );
+          
+          if (tradeResult.length === 0) {
+            console.log(`[WARN] Cannot update trade state: Trade with ID ${trade_id} not found`);
+          } else if (tradeResult[0].leg1_state !== 'FIAT_PAID') {
+            // Update trade leg1_state to FIAT_PAID
+            const timestamp = Math.floor(Date.now() / 1000);
+            await query(
+              'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE id = $3 AND leg1_state <> $1',
+              ['FIAT_PAID', timestamp, trade_id]
+            );
+            console.log(`[INFO] Updated trade id=${trade_id} leg1_state=FIAT_PAID`);
+            
+            // Also update escrow fiat_paid status if we have an escrow ID
+            if (escrowDbId) {
+              await query(
+                'UPDATE escrows SET fiat_paid = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND fiat_paid = FALSE',
+                [escrowDbId]
+              );
+              console.log(`[INFO] Updated escrow id=${escrowDbId} fiat_paid=TRUE`);
+            }
+          } else {
+            console.log(`[INFO] Trade id=${trade_id} already in leg1_state=FIAT_PAID, skipping update`);
+          }
+        } catch (err) {
+          console.error(`[ERROR] Failed to update trade state for MARK_FIAT_PAID: ${(err as Error).message}`);
+          // Continue with the response even if state update fails
+        }
+      }
 
       if (transactionId === null) {
         console.error(`[ERROR] Failed to record transaction ${transaction_hash} for trade ${trade_id}`);

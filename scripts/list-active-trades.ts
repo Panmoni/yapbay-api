@@ -75,7 +75,7 @@ function isUncancelable(trade: TradeDeadline): boolean {
         Leg2State: t.leg2_state || 'N/A',
         DeadlineField: next.field,
         Deadline: next.date.toISOString(),
-        Remaining: formatDuration(diff),
+        Remaining: uncancelable ? 'N/A' : formatDuration(diff),
         Uncancelable: uncancelable,
         CanAutoCancel: !uncancelable
       };

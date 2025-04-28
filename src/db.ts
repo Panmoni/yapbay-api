@@ -9,7 +9,7 @@ const pool = new Pool({
 
 export async function query(text: string, params?: unknown[]) {
   let retries = 3; // Number of retries for transient errors
-  let lastError = null;
+  let lastError: Error | unknown = null;
   
   while (retries > 0) {
     const client = await pool.connect();
@@ -20,10 +20,10 @@ export async function query(text: string, params?: unknown[]) {
       lastError = err;
       // Check if this is a transient error that we should retry
       const isTransientError = 
-        (err as any).code === 'ECONNRESET' || 
-        (err as any).code === '08006' ||  // Connection failure
-        (err as any).code === '08001' ||  // Unable to connect
-        (err as any).code === '57P01';    // Admin shutdown
+        (err as { code?: string }).code === 'ECONNRESET' || 
+        (err as { code?: string }).code === '08006' ||  // Connection failure
+        (err as { code?: string }).code === '08001' ||  // Unable to connect
+        (err as { code?: string }).code === '57P01';    // Admin shutdown
       
       if (!isTransientError) {
         // Non-transient error, don't retry

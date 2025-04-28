@@ -133,19 +133,59 @@ router.post(
         return;
       }
 
-      // Verify escrow exists if provided
+      // Verify escrow exists if provided (for FUND_ESCROW, this is required)
       let escrowDbId = null;
       if (escrow_id) {
-        const escrowResult = await query('SELECT id FROM escrows WHERE id = $1', [escrow_id]);
+        // First try to find by database ID
+        let escrowResult = await query('SELECT id, onchain_escrow_id FROM escrows WHERE id = $1', [escrow_id]);
+        
+        // If not found by database ID, try to find by blockchain ID (onchain_escrow_id)
         if (escrowResult.length === 0) {
-          console.log(`[ERROR] Escrow not found in /transactions/record: escrow_id=${escrow_id}`);
-          res.status(404).json({
-            error: 'Escrow not found',
-            details: `No escrow found with ID ${escrow_id}`
-          });
-          return;
+          console.log(`[INFO] Escrow not found by database ID ${escrow_id}, trying to find by blockchain ID`);
+          escrowResult = await query('SELECT id, onchain_escrow_id FROM escrows WHERE onchain_escrow_id = $1', [escrow_id]);
+          
+          if (escrowResult.length === 0) {
+            console.log(`[ERROR] Escrow not found by either database ID or blockchain ID: ${escrow_id}`);
+            res.status(404).json({
+              error: 'Escrow not found',
+              details: `No escrow found with database ID or blockchain ID ${escrow_id}`,
+              suggestion: 'Make sure you are using either the database ID or the blockchain ID of the escrow'
+            });
+            return;
+          } else {
+            console.log(`[INFO] Found escrow by blockchain ID ${escrow_id} -> database ID ${escrowResult[0].id}`);
+          }
         }
-        escrowDbId = escrow_id;
+        
+        // Use the database ID for the transaction record
+        escrowDbId = escrowResult[0].id;
+        console.log(`[INFO] Using escrow database ID ${escrowDbId} for transaction record (provided ID was ${escrow_id})`);
+      } else if (finalTransactionType === 'FUND_ESCROW' && metadata && metadata.escrow_id) {
+        // Special case: For FUND_ESCROW, try to get escrow ID from metadata if not provided directly
+        console.log(`[INFO] Attempting to find escrow using metadata.escrow_id: ${metadata.escrow_id}`);
+        const escrowResult = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [metadata.escrow_id]);
+        if (escrowResult.length > 0) {
+          escrowDbId = escrowResult[0].id;
+          console.log(`[INFO] Found escrow database ID ${escrowDbId} using metadata.escrow_id ${metadata.escrow_id}`);
+        } else {
+          console.log(`[WARN] Could not find escrow with onchain_escrow_id ${metadata.escrow_id} from metadata`);
+          // We'll continue without the escrow ID, but log a warning
+        }
+      } else if (finalTransactionType === 'FUND_ESCROW') {
+        // For FUND_ESCROW, we really should have an escrow ID
+        console.log(`[WARN] FUND_ESCROW transaction without escrow_id, attempting to find by trade_id`);
+        // Try to find the most recent escrow for this trade
+        const escrowResult = await query(
+          'SELECT id FROM escrows WHERE trade_id = $1 ORDER BY created_at DESC LIMIT 1', 
+          [trade_id]
+        );
+        if (escrowResult.length > 0) {
+          escrowDbId = escrowResult[0].id;
+          console.log(`[INFO] Found most recent escrow ID ${escrowDbId} for trade ${trade_id}`);
+        } else {
+          console.log(`[WARN] No escrow found for trade ${trade_id}, proceeding without escrow reference`);
+          // We'll continue without the escrow ID, but log a warning
+        }
       }
 
       // Handle special case for FUND_ESCROW with missing to_address

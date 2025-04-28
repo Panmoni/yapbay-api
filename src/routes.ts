@@ -1219,7 +1219,7 @@ router.post(
             buyer,
             process.env.ARBITRATOR_ADDRESS, // Assuming a fixed arbitrator for now
             'USDC', // Assuming USDC
-            amount,
+            Number(amount) / 1_000_000, // Convert blockchain amount (with 6 decimals) to database decimal format
             'FUNDED', // State after successful recording
             sequential || false,
             sequential_escrow_address || null,

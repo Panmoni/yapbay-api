@@ -128,7 +128,7 @@ export function startEventListener() {
           const arbitrator = parsed.args.arbitrator as string;
           const amount = parsed.args.amount.toString();
           // Convert blockchain amount (with 6 decimals) to database decimal format
-          const amountInDecimal = Number(amount) / 1_000_000;
+          const _amountInDecimal = Number(amount) / 1_000_000;
           const depositTs = Number(parsed.args.deposit_deadline.toString());
           const fiatTs = Number(parsed.args.fiat_deadline.toString());
           const depositDate = new Date(depositTs * 1000);
@@ -164,7 +164,7 @@ export function startEventListener() {
                 buyer,
                 arbitrator,
                 'USDC',
-                amountInDecimal,
+                _amountInDecimal,
                 'CREATED',
                 sequential,
                 seqAddr,
@@ -195,9 +195,6 @@ export function startEventListener() {
           const escrowId = parsed.args.escrowId.toString();
           const timestamp = Number(parsed.args.timestamp.toString());
           const counter = Number(parsed.args.counter.toString());
-          const amount = parsed.args.amount.toString();
-          // Convert blockchain amount (with 6 decimals) to database decimal format
-          const amountInDecimal = Number(amount) / 1_000_000;
 
           // Get current escrow state
           const escrowResult = await query(
@@ -376,9 +373,6 @@ export function startEventListener() {
         }
         case 'DisputeResolved': {
           const escrowId = parsed.args.escrowId.toString();
-          const decision = parsed.args.decision as boolean;
-          const explanationHash = parsed.args.explanationHash as string;
-          const bondAllocation = parsed.args.bondAllocation as string;
 
           // mark escrow resolved
           await query(
@@ -410,9 +404,7 @@ export function startEventListener() {
         }
         case 'SequentialAddressUpdated': {
           const escrowId = parsed.args.escrowId.toString();
-          const oldAddress = parsed.args.oldAddress as string;
           const newAddress = parsed.args.newAddress as string;
-          const timestamp = Number(parsed.args.timestamp.toString());
 
           await query(
             'UPDATE escrows SET sequential_escrow_address = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2',

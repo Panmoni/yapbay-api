@@ -8,13 +8,42 @@ const pool = new Pool({
 });
 
 export async function query(text: string, params?: unknown[]) {
-  const client = await pool.connect();
-  try {
-    const res = await client.query(text, params);
-    return res.rows;
-  } finally {
-    client.release();
+  let retries = 3; // Number of retries for transient errors
+  let lastError = null;
+  
+  while (retries > 0) {
+    const client = await pool.connect();
+    try {
+      const res = await client.query(text, params);
+      return res.rows;
+    } catch (err) {
+      lastError = err;
+      // Check if this is a transient error that we should retry
+      const isTransientError = 
+        (err as any).code === 'ECONNRESET' || 
+        (err as any).code === '08006' ||  // Connection failure
+        (err as any).code === '08001' ||  // Unable to connect
+        (err as any).code === '57P01';    // Admin shutdown
+      
+      if (!isTransientError) {
+        // Non-transient error, don't retry
+        throw err;
+      }
+      
+      retries--;
+      if (retries > 0) {
+        console.log(`[DB] Transient error, retrying... (${retries} attempts left)`);
+        // Wait a bit before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, (3 - retries) * 200));
+      }
+    } finally {
+      client.release();
+    }
   }
+  
+  // If we get here, we've exhausted all retries
+  console.error('[DB] All query retries failed:', lastError);
+  throw lastError;
 }
 
 export default pool;

@@ -1,9 +1,8 @@
-import express, { Response, Router } from 'express';
+import express, { Response, Router, Request, NextFunction } from 'express';
 import { query, recordTransaction, TransactionType, TransactionStatus } from './db';
 import { logError } from './logger';
 import { getWalletAddressFromJWT } from './utils/jwtUtils';
 import { withErrorHandling } from './middleware/errorHandler';
-import { Request } from 'express';
 import { CustomJwtPayload } from './utils/jwtUtils';
 
 // Extend Express Request interface to match the one in routes.ts
@@ -13,10 +12,29 @@ interface ExtendedRequest extends Request {
 
 const router: Router = express.Router();
 
+// Global error handler for the router
+const routerErrorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(`[CRITICAL] Transaction router error:`, err);
+  logError('Transaction router error', err);
+  
+  // Only send response if headers haven't been sent yet
+  if (!res.headersSent) {
+    res.status(500).json({
+      error: 'Internal server error in transaction router',
+      message: err.message
+    });
+  }
+  next(err);
+};
+
+// Apply the error handler to all routes in this router
+router.use(routerErrorHandler);
+
 // Record a new transaction
 router.post(
   '/record',
   withErrorHandling(async (req: ExtendedRequest, res: Response): Promise<void> => {
+    console.log('[DEBUG] /transactions/record endpoint hit with body:', JSON.stringify(req.body, null, 2));
     const {
       trade_id,
       escrow_id,
@@ -36,11 +54,28 @@ router.post(
       status = 'PENDING' // Default to PENDING if not provided
     } = req.body;
 
+    // Collect validation errors to provide more comprehensive feedback
+    const validationErrors: { field: string; message: string }[] = [];
+
     // Validate required fields
-    if (!transaction_hash || !transaction_type || !from_address || !trade_id) {
+    if (!transaction_hash) validationErrors.push({ field: 'transaction_hash', message: 'Transaction hash is required' });
+    if (!transaction_type) validationErrors.push({ field: 'transaction_type', message: 'Transaction type is required' });
+    if (!from_address) validationErrors.push({ field: 'from_address', message: 'From address is required' });
+    if (!trade_id) validationErrors.push({ field: 'trade_id', message: 'Trade ID is required' });
+
+    // Special validation for to_address based on transaction_type
+    if (transaction_type === 'FUND_ESCROW' && (!to_address || to_address === '')) {
+      console.log('[WARN] FUND_ESCROW transaction missing to_address, will attempt to use contract address from environment');
+      // We'll handle this later by using the contract address from environment
+    }
+    
+    // If we have validation errors, return them all at once
+    if (validationErrors.length > 0) {
+      console.log(`[ERROR] Validation failed for /transactions/record: ${JSON.stringify(validationErrors)}`);
       res.status(400).json({
-        error: 'Missing required fields',
-        details: 'transaction_hash, transaction_type, from_address, and trade_id are required'
+        error: 'Validation failed',
+        details: 'One or more required fields are missing or invalid',
+        validationErrors
       });
       return;
     }
@@ -90,6 +125,7 @@ router.post(
       // Verify trade exists
       const tradeResult = await query('SELECT id FROM trades WHERE id = $1', [trade_id]);
       if (tradeResult.length === 0) {
+        console.log(`[ERROR] Trade not found in /transactions/record: trade_id=${trade_id}`);
         res.status(404).json({
           error: 'Trade not found',
           details: `No trade found with ID ${trade_id}`
@@ -102,6 +138,7 @@ router.post(
       if (escrow_id) {
         const escrowResult = await query('SELECT id FROM escrows WHERE id = $1', [escrow_id]);
         if (escrowResult.length === 0) {
+          console.log(`[ERROR] Escrow not found in /transactions/record: escrow_id=${escrow_id}`);
           res.status(404).json({
             error: 'Escrow not found',
             details: `No escrow found with ID ${escrow_id}`
@@ -111,14 +148,32 @@ router.post(
         escrowDbId = escrow_id;
       }
 
+      // Handle special case for FUND_ESCROW with missing to_address
+      let finalToAddress = to_address;
+      if (finalTransactionType === 'FUND_ESCROW' && (!finalToAddress || finalToAddress === '')) {
+        const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+        if (CONTRACT_ADDRESS) {
+          console.log(`[INFO] Using contract address ${CONTRACT_ADDRESS} as to_address for FUND_ESCROW transaction`);
+          finalToAddress = CONTRACT_ADDRESS;
+        } else {
+          console.log('[ERROR] Missing to_address for FUND_ESCROW and no CONTRACT_ADDRESS in environment');
+          res.status(400).json({
+            error: 'Missing to_address',
+            details: 'FUND_ESCROW transactions require a to_address or CONTRACT_ADDRESS environment variable'
+          });
+          return;
+        }
+      }
+
       // Record the transaction
+      console.log(`[DEBUG] Recording transaction ${transaction_hash} for trade ${trade_id}`);
       const transactionId = await recordTransaction({
         transaction_hash,
         status: status as TransactionStatus,
         type: finalTransactionType as TransactionType,
         block_number: block_number || null,
         sender_address: from_address,
-        receiver_or_contract_address: to_address || null,
+        receiver_or_contract_address: finalToAddress || null,
         related_trade_id: trade_id,
         related_escrow_db_id: escrowDbId,
         // Store additional metadata in error_message field for now
@@ -126,6 +181,7 @@ router.post(
       });
 
       if (transactionId === null) {
+        console.error(`[ERROR] Failed to record transaction ${transaction_hash} for trade ${trade_id}`);
         res.status(500).json({
           error: 'Failed to record transaction',
           details: 'Database operation failed'
@@ -133,6 +189,7 @@ router.post(
         return;
       }
 
+      console.log(`[DEBUG] Successfully recorded transaction ${transaction_hash} with ID: ${transactionId}`);
       res.status(201).json({
         success: true,
         transactionId,
@@ -140,10 +197,23 @@ router.post(
         blockNumber: block_number || null
       });
     } catch (err) {
-      logError(`Error in /transactions/record endpoint for trade ${trade_id}`, err as Error);
+      const error = err as Error;
+      console.error(`[ERROR] Exception in /transactions/record endpoint:`, error);
+      logError(`Error in /transactions/record endpoint for trade ${trade_id}`, error);
+      
+      // Provide more detailed error information
+      const errorDetails = {
+        message: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        trade_id,
+        transaction_hash,
+        transaction_type
+      };
+      
       res.status(500).json({
-        error: (err as Error).message,
-        details: 'Error occurred while recording transaction'
+        error: error.message,
+        details: 'Error occurred while recording transaction',
+        errorInfo: errorDetails
       });
     }
   })

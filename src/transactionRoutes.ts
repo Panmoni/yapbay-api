@@ -139,51 +139,110 @@ router.post(
         // First try to find by database ID
         let escrowResult = await query('SELECT id, onchain_escrow_id FROM escrows WHERE id = $1', [escrow_id]);
         
-        // If not found by database ID, try to find by blockchain ID (onchain_escrow_id)
         if (escrowResult.length === 0) {
+          // If not found by database ID, try to find by blockchain ID
           console.log(`[INFO] Escrow not found by database ID ${escrow_id}, trying to find by blockchain ID`);
           escrowResult = await query('SELECT id, onchain_escrow_id FROM escrows WHERE onchain_escrow_id = $1', [escrow_id]);
           
           if (escrowResult.length === 0) {
-            console.log(`[ERROR] Escrow not found by either database ID or blockchain ID: ${escrow_id}`);
-            res.status(404).json({
-              error: 'Escrow not found',
-              details: `No escrow found with database ID or blockchain ID ${escrow_id}`,
-              suggestion: 'Make sure you are using either the database ID or the blockchain ID of the escrow'
-            });
-            return;
+            // Try to find using the escrow_id_mapping table
+            console.log(`[INFO] Trying to find escrow using escrow_id_mapping table with blockchain ID ${escrow_id}`);
+            const mappingResult = await query(
+              'SELECT e.id, e.onchain_escrow_id FROM escrow_id_mapping m JOIN escrows e ON m.database_id = e.id WHERE m.blockchain_id = $1',
+              [escrow_id]
+            );
+            
+            if (mappingResult.length > 0) {
+              escrowResult = mappingResult;
+              console.log(`[INFO] Found escrow via mapping table: blockchain ID ${escrow_id} -> database ID ${escrowResult[0].id}`);
+            } else {
+              console.log(`[WARN] Could not find escrow with ID ${escrow_id} in any table`);
+            }
           } else {
             console.log(`[INFO] Found escrow by blockchain ID ${escrow_id} -> database ID ${escrowResult[0].id}`);
           }
         }
         
-        // Use the database ID for the transaction record
-        escrowDbId = escrowResult[0].id;
-        console.log(`[INFO] Using escrow database ID ${escrowDbId} for transaction record (provided ID was ${escrow_id})`);
-      } else if (finalTransactionType === 'FUND_ESCROW' && metadata && metadata.escrow_id) {
-        // Special case: For FUND_ESCROW, try to get escrow ID from metadata if not provided directly
-        console.log(`[INFO] Attempting to find escrow using metadata.escrow_id: ${metadata.escrow_id}`);
-        const escrowResult = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [metadata.escrow_id]);
         if (escrowResult.length > 0) {
           escrowDbId = escrowResult[0].id;
-          console.log(`[INFO] Found escrow database ID ${escrowDbId} using metadata.escrow_id ${metadata.escrow_id}`);
+          console.log(`[INFO] Using escrow database ID ${escrowDbId} for transaction record (provided ID was ${escrow_id})`);
+          
+          // Create or update mapping if it doesn't exist
+          if (escrowResult[0].onchain_escrow_id && escrowResult[0].onchain_escrow_id !== escrow_id.toString()) {
+            try {
+              await query(
+                'INSERT INTO escrow_id_mapping (blockchain_id, database_id) VALUES ($1, $2) ON CONFLICT (blockchain_id) DO UPDATE SET database_id = $2',
+                [escrow_id, escrowDbId]
+              );
+              console.log(`[INFO] Created/updated ID mapping between blockchain ID ${escrow_id} and database ID ${escrowDbId}`);
+            } catch (err) {
+              console.log(`[WARN] Could not create escrow ID mapping: ${(err as Error).message}`);
+            }
+          }
+        }
+      } else if (finalTransactionType === 'FUND_ESCROW' && metadata && metadata.escrow_id) {
+        // Special case: For FUND_ESCROW, try to get escrow ID from metadata if not provided directly
+        console.log(`[INFO] FUND_ESCROW transaction without direct escrow_id, using escrow_id=${metadata.escrow_id} from metadata`);
+        
+        // First check the mapping table
+        let mappingResult = await query(
+          'SELECT database_id FROM escrow_id_mapping WHERE blockchain_id = $1',
+          [metadata.escrow_id]
+        );
+        
+        if (mappingResult.length > 0) {
+          escrowDbId = mappingResult[0].database_id;
+          console.log(`[INFO] Found escrow via mapping table: blockchain ID ${metadata.escrow_id} -> database ID ${escrowDbId}`);
         } else {
-          console.log(`[WARN] Could not find escrow with onchain_escrow_id ${metadata.escrow_id} from metadata`);
-          // We'll continue without the escrow ID, but log a warning
+          // Try to find by onchain_escrow_id
+          const escrowResult = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [metadata.escrow_id]);
+          if (escrowResult.length > 0) {
+            escrowDbId = escrowResult[0].id;
+            console.log(`[INFO] Found escrow by blockchain ID ${metadata.escrow_id} -> database ID ${escrowDbId}`);
+            
+            // Create mapping for future use
+            try {
+              await query(
+                'INSERT INTO escrow_id_mapping (blockchain_id, database_id) VALUES ($1, $2) ON CONFLICT (blockchain_id) DO UPDATE SET database_id = $2',
+                [metadata.escrow_id, escrowDbId]
+              );
+              console.log(`[INFO] Created ID mapping between blockchain ID ${metadata.escrow_id} and database ID ${escrowDbId}`);
+            } catch (err) {
+              console.log(`[WARN] Could not create escrow ID mapping: ${(err as Error).message}`);
+            }
+          } else {
+            console.log(`[WARN] Could not find escrow with onchain_escrow_id ${metadata.escrow_id} from metadata`);
+            // We'll continue without the escrow ID, but log a warning
+          }
         }
       } else if (finalTransactionType === 'FUND_ESCROW') {
         // For FUND_ESCROW, we really should have an escrow ID
         console.log(`[WARN] FUND_ESCROW transaction without escrow_id, attempting to find by trade_id`);
+        
         // Try to find the most recent escrow for this trade
         const escrowResult = await query(
-          'SELECT id FROM escrows WHERE trade_id = $1 ORDER BY created_at DESC LIMIT 1', 
+          'SELECT id, onchain_escrow_id FROM escrows WHERE trade_id = $1 ORDER BY created_at DESC LIMIT 1',
           [trade_id]
         );
+        
         if (escrowResult.length > 0) {
           escrowDbId = escrowResult[0].id;
-          console.log(`[INFO] Found most recent escrow ID ${escrowDbId} for trade ${trade_id}`);
+          console.log(`[INFO] Found most recent escrow for trade ${trade_id} -> database ID ${escrowDbId}`);
+          
+          // If we have an onchain_escrow_id, create a mapping for future use
+          if (escrowResult[0].onchain_escrow_id) {
+            try {
+              await query(
+                'INSERT INTO escrow_id_mapping (blockchain_id, database_id) VALUES ($1, $2) ON CONFLICT (blockchain_id) DO UPDATE SET database_id = $2',
+                [escrowResult[0].onchain_escrow_id, escrowDbId]
+              );
+              console.log(`[INFO] Created ID mapping between blockchain ID ${escrowResult[0].onchain_escrow_id} and database ID ${escrowDbId}`);
+            } catch (err) {
+              console.log(`[WARN] Could not create escrow ID mapping: ${(err as Error).message}`);
+            }
+          }
         } else {
-          console.log(`[WARN] No escrow found for trade ${trade_id}, proceeding without escrow reference`);
+          console.log(`[WARN] Could not find any escrow for trade ${trade_id}`);
           // We'll continue without the escrow ID, but log a warning
         }
       }

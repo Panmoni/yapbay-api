@@ -135,6 +135,56 @@ export function startEventListener() {
           const fiatDate = new Date(fiatTs * 1000);
           const sequential = parsed.args.sequential as boolean;
           const seqAddr = parsed.args.sequentialEscrowAddress as string;
+
+          // Check if trade already has an active escrow to prevent duplicates
+          const tradeEscrows = await query(
+            'SELECT e.id, e.onchain_escrow_id, e.state FROM escrows e WHERE e.trade_id = $1 ORDER BY e.created_at DESC LIMIT 1',
+            [tradeId]
+          );
+
+          // If trade already has an active escrow in a non-terminal state, log and skip
+          if (tradeEscrows.length > 0 &&
+              tradeEscrows[0].onchain_escrow_id !== escrowId &&
+              !['RELEASED', 'CANCELLED', 'RESOLVED'].includes(tradeEscrows[0].state)) {
+            console.log(
+              `EscrowCreated: Duplicate escrow detected. Trade ${tradeId} already has active escrow ${tradeEscrows[0].onchain_escrow_id} in state ${tradeEscrows[0].state}. New escrow ${escrowId} will be recorded but not set as active.`
+            );
+            fileLog(
+              `EscrowCreated: Duplicate escrow detected. Trade ${tradeId} already has active escrow ${tradeEscrows[0].onchain_escrow_id} in state ${tradeEscrows[0].state}. New escrow ${escrowId} will be recorded but not set as active.`
+            );
+
+            // Still record the escrow but don't update the trade
+            const existing = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [
+              escrowId,
+            ]);
+
+            if (existing.length === 0) {
+              await query(
+                'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+                [
+                  tradeId,
+                  CONTRACT_ADDRESS,
+                  seller,
+                  buyer,
+                  arbitrator,
+                  'USDC',
+                  _amountInDecimal,
+                  'CREATED',
+                  sequential,
+                  seqAddr,
+                  escrowId,
+                  depositDate,
+                  fiatDate,
+                ]
+              );
+              console.log(
+                `EscrowCreated: Inserted duplicate escrow onchainId=${escrowId} for tradeId=${tradeId} (not set as active)`
+              );
+              fileLog(`EscrowCreated: Inserted duplicate escrow onchainId=${escrowId} for tradeId=${tradeId} (not set as active)`);
+            }
+            break;
+          }
+
           // Upsert escrow record, avoid overwriting frontend record
           const existing = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [
             escrowId,
@@ -155,8 +205,9 @@ export function startEventListener() {
               } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
             );
           } else {
-            await query(
-              'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
+            // Insert new escrow record
+            const insertResult = await query(
+              'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
               [
                 tradeId,
                 CONTRACT_ADDRESS,
@@ -173,11 +224,22 @@ export function startEventListener() {
                 fiatDate,
               ]
             );
+
+            const newEscrowId = insertResult[0]?.id;
             console.log(
-              `EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`
+              `EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId} with database ID=${newEscrowId}`
             );
-            fileLog(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`);
+            fileLog(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId} with database ID=${newEscrowId}`);
+
+            // Create a mapping record to help with ID synchronization
+            await query(
+              'INSERT INTO escrow_id_mapping (blockchain_id, database_id) VALUES ($1, $2) ON CONFLICT (blockchain_id) DO UPDATE SET database_id = $2',
+              [escrowId, newEscrowId]
+            );
+            console.log(`EscrowCreated: Created ID mapping between blockchain ID ${escrowId} and database ID ${newEscrowId}`);
+            fileLog(`EscrowCreated: Created ID mapping between blockchain ID ${escrowId} and database ID ${newEscrowId}`);
           }
+
           // Update trade leg state
           await query(
             'UPDATE trades SET leg1_state = $1, leg1_escrow_onchain_id = $2 WHERE id = $3 AND leg1_state <> $1',
@@ -189,6 +251,123 @@ export function startEventListener() {
           fileLog(
             `EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`
           );
+          break;
+        }
+        case 'FiatMarkedPaid': {
+          const escrowId = parsed.args.escrowId.toString();
+          const tradeId = Number(parsed.args.tradeId.toString());
+          const timestamp = Number(parsed.args.timestamp.toString());
+
+          try {
+            // Get current escrow and trade state to ensure proper transitions
+            const escrowResult = await query(
+              'SELECT state, fiat_paid FROM escrows WHERE onchain_escrow_id = $1',
+              [escrowId]
+            );
+            
+            const tradeResult = await query(
+              'SELECT leg1_state FROM trades WHERE id = $1',
+              [tradeId]
+            );
+            
+            // Validate that escrow exists
+            if (escrowResult.length === 0) {
+              console.error(`FiatMarkedPaid: Escrow with onchain ID ${escrowId} not found in database`);
+              fileLog(`FiatMarkedPaid: Escrow with onchain ID ${escrowId} not found in database`);
+              
+              // Try to create a mapping record if it exists in another form
+              const alternateEscrow = await query(
+                'SELECT id FROM escrows WHERE trade_id = $1 ORDER BY created_at DESC LIMIT 1',
+                [tradeId]
+              );
+              
+              if (alternateEscrow.length > 0) {
+                try {
+                  await query(
+                    'INSERT INTO escrow_id_mapping (blockchain_id, database_id) VALUES ($1, $2) ON CONFLICT (blockchain_id) DO UPDATE SET database_id = $2',
+                    [escrowId, alternateEscrow[0].id]
+                  );
+                  console.log(`FiatMarkedPaid: Created recovery mapping between blockchain ID ${escrowId} and database ID ${alternateEscrow[0].id}`);
+                  fileLog(`FiatMarkedPaid: Created recovery mapping between blockchain ID ${escrowId} and database ID ${alternateEscrow[0].id}`);
+                } catch (err) {
+                  console.error(`FiatMarkedPaid: Failed to create recovery mapping: ${(err as Error).message}`);
+                  fileLog(`FiatMarkedPaid: Failed to create recovery mapping: ${(err as Error).message}`);
+                }
+              }
+            } else {
+              // Only update if not already marked as paid
+              if (!escrowResult[0].fiat_paid) {
+                // Update escrow fiat_paid status
+                await query(
+                  'UPDATE escrows SET fiat_paid = TRUE, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $1 AND fiat_paid = FALSE',
+                  [escrowId]
+                );
+                console.log(`FiatMarkedPaid: Updated escrow onchainId=${escrowId} fiat_paid=TRUE`);
+                fileLog(`FiatMarkedPaid: Updated escrow onchainId=${escrowId} fiat_paid=TRUE`);
+              } else {
+                console.log(`FiatMarkedPaid: Escrow onchainId=${escrowId} already marked as fiat_paid=TRUE, skipping update`);
+                fileLog(`FiatMarkedPaid: Escrow onchainId=${escrowId} already marked as fiat_paid=TRUE, skipping update`);
+              }
+            }
+            
+            // Validate that trade exists
+            if (tradeResult.length === 0) {
+              console.error(`FiatMarkedPaid: Trade with ID ${tradeId} not found in database`);
+              fileLog(`FiatMarkedPaid: Trade with ID ${tradeId} not found in database`);
+            } else {
+              // Only update if not already in FIAT_PAID state
+              if (tradeResult[0].leg1_state !== 'FIAT_PAID') {
+                // Update trade leg1_state to FIAT_PAID
+                await query(
+                  'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE id = $3 AND leg1_state <> $1',
+                  ['FIAT_PAID', timestamp, tradeId]
+                );
+                console.log(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
+                fileLog(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
+              } else {
+                console.log(`FiatMarkedPaid: Trade id=${tradeId} already in leg1_state=FIAT_PAID, skipping update`);
+                fileLog(`FiatMarkedPaid: Trade id=${tradeId} already in leg1_state=FIAT_PAID, skipping update`);
+              }
+            }
+            
+            // Record this event in a dedicated transaction record for better tracking
+            try {
+              await recordTransaction({
+                transaction_hash: log.transactionHash,
+                status: 'SUCCESS',
+                type: 'MARK_FIAT_PAID',
+                block_number: log.blockNumber,
+                related_trade_id: tradeId,
+                sender_address: parsed.args.sender?.toString() || null,
+                receiver_or_contract_address: CONTRACT_ADDRESS,
+                error_message: JSON.stringify({ escrow_id: escrowId, timestamp })
+              });
+              console.log(`FiatMarkedPaid: Recorded transaction record for tx=${log.transactionHash}`);
+              fileLog(`FiatMarkedPaid: Recorded transaction record for tx=${log.transactionHash}`);
+            } catch (err) {
+              console.error(`FiatMarkedPaid: Failed to record transaction: ${(err as Error).message}`);
+              fileLog(`FiatMarkedPaid: Failed to record transaction: ${(err as Error).message}`);
+            }
+          } catch (err) {
+            console.error(`FiatMarkedPaid: Error processing event: ${(err as Error).message}`);
+            fileLog(`FiatMarkedPaid: Error processing event: ${(err as Error).message}`);
+            
+            // Attempt to record the error
+            try {
+              await recordTransaction({
+                transaction_hash: log.transactionHash,
+                status: 'FAILED',
+                type: 'MARK_FIAT_PAID',
+                block_number: log.blockNumber,
+                related_trade_id: tradeId,
+                error_message: `Error processing FiatMarkedPaid: ${(err as Error).message}`
+              });
+            } catch (recordErr) {
+              console.error(`FiatMarkedPaid: Failed to record error transaction: ${(recordErr as Error).message}`);
+              fileLog(`FiatMarkedPaid: Failed to record error transaction: ${(recordErr as Error).message}`);
+            }
+          }
+          
           break;
         }
         case 'FundsDeposited': {
@@ -265,58 +444,118 @@ export function startEventListener() {
         }
         case 'EscrowReleased': {
           const escrowId = parsed.args.escrowId.toString();
+          const timestamp = Number(parsed.args.timestamp?.toString() || Math.floor(Date.now() / 1000));
+          
+          // Update escrow state to RELEASED
           await query(
-            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
-            ['RELEASED', escrowId]
+            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE onchain_escrow_id = $3 AND state <> $1',
+            ['RELEASED', timestamp, escrowId]
           );
-          console.log(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
-          fileLog(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
+          console.log(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED at timestamp=${timestamp}`);
+          fileLog(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED at timestamp=${timestamp}`);
+          
+          // Update trade state to RELEASED
           await query(
-            'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
-            ['RELEASED', escrowId]
+            'UPDATE trades SET leg1_state = $1, leg1_completed_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
+            ['RELEASED', timestamp, escrowId]
           );
           console.log(`EscrowReleased: Updated trade leg1_state=RELEASED for escrowId=${escrowId}`);
           fileLog(`EscrowReleased: Updated trade leg1_state=RELEASED for escrowId=${escrowId}`);
+          
+          // Also update leg2 if it exists
+          await query(
+            'UPDATE trades SET leg2_state = $1, leg2_completed_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
+            ['RELEASED', timestamp, escrowId]
+          );
+          
+          // Get trade ID for this escrow to record completion
+          const tradeResult = await query(
+            'SELECT id FROM trades WHERE leg1_escrow_onchain_id = $1 OR leg2_escrow_onchain_id = $1 LIMIT 1',
+            [escrowId]
+          );
+          
+          if (tradeResult.length > 0) {
+            const tradeId = tradeResult[0].id;
+            
+            // Check if both legs are complete or if this is a single-leg trade
+            const tradeStateResult = await query(
+              'SELECT leg1_state, leg2_state, leg2_escrow_onchain_id FROM trades WHERE id = $1',
+              [tradeId]
+            );
+            
+            if (tradeStateResult.length > 0) {
+              const { leg1_state, leg2_state, leg2_escrow_onchain_id } = tradeStateResult[0];
+              
+              // If this is a single-leg trade or both legs are complete, mark the trade as completed
+              if (!leg2_escrow_onchain_id || (leg1_state === 'RELEASED' && leg2_state === 'RELEASED')) {
+                await query(
+                  'UPDATE trades SET completed = TRUE, completed_at = to_timestamp($1) WHERE id = $2 AND completed = FALSE',
+                  [timestamp, tradeId]
+                );
+                console.log(`EscrowReleased: Marked trade ${tradeId} as completed at timestamp=${timestamp}`);
+                fileLog(`EscrowReleased: Marked trade ${tradeId} as completed at timestamp=${timestamp}`);
+              }
+            }
+          }
+          
           break;
         }
         case 'EscrowCancelled': {
           const escrowId = parsed.args.escrowId.toString();
+          const timestamp = Number(parsed.args.timestamp?.toString() || Math.floor(Date.now() / 1000));
+          
+          // Update escrow state to CANCELLED
           await query(
-            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
-            ['CANCELLED', escrowId]
+            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE onchain_escrow_id = $3 AND state <> $1',
+            ['CANCELLED', timestamp, escrowId]
           );
-          console.log(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED`);
-          fileLog(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED`);
+          console.log(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED at timestamp=${timestamp}`);
+          fileLog(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED at timestamp=${timestamp}`);
+          
+          // Update trade state to CANCELLED
           await query(
-            'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
-            ['CANCELLED', escrowId]
+            'UPDATE trades SET leg1_state = $1, leg1_completed_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
+            ['CANCELLED', timestamp, escrowId]
           );
-          console.log(
-            `EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`
-          );
+          console.log(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
           fileLog(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
-          break;
-        }
-        case 'FiatMarkedPaid': {
-          const escrowId = parsed.args.escrowId.toString();
-          const tradeId = Number(parsed.args.tradeId.toString());
-          const timestamp = Number(parsed.args.timestamp.toString());
-
-          // Update trade leg1_state to FIAT_PAID
+          
+          // Also update leg2 if it exists
           await query(
-            'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE id = $3 AND leg1_state <> $1',
-            ['FIAT_PAID', timestamp, tradeId]
+            'UPDATE trades SET leg2_state = $1, leg2_completed_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
+            ['CANCELLED', timestamp, escrowId]
           );
-          console.log(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
-          fileLog(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
-
-          // Also update escrow fiat_paid status if needed
-          await query(
-            'UPDATE escrows SET fiat_paid = TRUE, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $1 AND fiat_paid = FALSE',
+          
+          // Get trade ID for this escrow to record completion (cancellation is also a form of completion)
+          const tradeResult = await query(
+            'SELECT id FROM trades WHERE leg1_escrow_onchain_id = $1 OR leg2_escrow_onchain_id = $1 LIMIT 1',
             [escrowId]
           );
-          console.log(`FiatMarkedPaid: Updated escrow onchainId=${escrowId} fiat_paid=TRUE`);
-          fileLog(`FiatMarkedPaid: Updated escrow onchainId=${escrowId} fiat_paid=TRUE`);
+          
+          if (tradeResult.length > 0) {
+            const tradeId = tradeResult[0].id;
+            
+            // Check if both legs are cancelled or if this is a single-leg trade
+            const tradeStateResult = await query(
+              'SELECT leg1_state, leg2_state, leg2_escrow_onchain_id FROM trades WHERE id = $1',
+              [tradeId]
+            );
+            
+            if (tradeStateResult.length > 0) {
+              const { leg1_state, leg2_state, leg2_escrow_onchain_id } = tradeStateResult[0];
+              
+              // If this is a single-leg trade or both legs are cancelled, mark the trade as completed
+              if (!leg2_escrow_onchain_id || (leg1_state === 'CANCELLED' && leg2_state === 'CANCELLED')) {
+                await query(
+                  'UPDATE trades SET completed = TRUE, completed_at = to_timestamp($1), cancelled = TRUE WHERE id = $2 AND completed = FALSE',
+                  [timestamp, tradeId]
+                );
+                console.log(`EscrowCancelled: Marked trade ${tradeId} as completed (cancelled) at timestamp=${timestamp}`);
+                fileLog(`EscrowCancelled: Marked trade ${tradeId} as completed (cancelled) at timestamp=${timestamp}`);
+              }
+            }
+          }
+          
           break;
         }
         case 'DisputeOpened': {

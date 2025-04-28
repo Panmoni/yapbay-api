@@ -119,6 +119,7 @@ CREATE TABLE escrows (
     deposit_deadline TIMESTAMP WITH TIME ZONE,
     fiat_deadline TIMESTAMP WITH TIME ZONE,
     dispute_id INTEGER,
+    completed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -267,6 +268,7 @@ CREATE INDEX idx_escrows_trade_id ON escrows(trade_id);
 CREATE INDEX idx_escrows_escrow_address ON escrows(escrow_address);
 CREATE INDEX idx_escrows_onchain_escrow_id ON escrows(onchain_escrow_id);
 CREATE INDEX idx_escrows_state ON escrows(state);
+CREATE INDEX idx_escrows_completed_at ON escrows(completed_at);
 CREATE INDEX idx_disputes_escrow_id ON disputes(escrow_id);
 CREATE INDEX idx_disputes_trade_id ON disputes(trade_id);
 CREATE INDEX idx_dispute_evidence_dispute_id ON dispute_evidence(dispute_id);

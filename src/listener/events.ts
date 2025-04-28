@@ -34,25 +34,32 @@ export function startEventListener() {
   console.log('Starting contract event listener for', CONTRACT_ADDRESS);
   fileLog(`Starting contract event listener for ${CONTRACT_ADDRESS}`);
   // heartbeat: log every minute to show connection alive
-  setInterval(() => fileLog('heartbeat'), 60_000);
+  // setInterval(() => fileLog('heartbeat'), 60_000);
   // catch underlying WebSocket close and error
   type WebSocketProvider = typeof wsProvider;
   type WebSocketConnection = {
     onclose: (event: { code: number }) => void;
     onerror: (error: { message?: string }) => void;
   };
-  
-  const rawWs = ((wsProvider as WebSocketProvider) as unknown as { 
-    _websocket?: WebSocketConnection; 
-    ws?: WebSocketConnection 
-  })._websocket || ((wsProvider as WebSocketProvider) as unknown as { 
-    _websocket?: WebSocketConnection; 
-    ws?: WebSocketConnection 
-  }).ws;
-  
+
+  const rawWs =
+    (
+      wsProvider as WebSocketProvider as unknown as {
+        _websocket?: WebSocketConnection;
+        ws?: WebSocketConnection;
+      }
+    )._websocket ||
+    (
+      wsProvider as WebSocketProvider as unknown as {
+        _websocket?: WebSocketConnection;
+        ws?: WebSocketConnection;
+      }
+    ).ws;
+
   if (rawWs) {
     rawWs.onclose = (event: { code: number }) => fileLog(`WebSocket closed: ${event.code}`);
-    rawWs.onerror = (error: { message?: string }) => fileLog(`WebSocket error: ${error.message || error}`);
+    rawWs.onerror = (error: { message?: string }) =>
+      fileLog(`WebSocket error: ${error.message || error}`);
   }
 
   // Listen to all logs from this contract
@@ -68,9 +75,8 @@ export function startEventListener() {
         const raw = parsed.args[idx];
         argsObj[input.name] = typeof raw === 'bigint' ? raw.toString() : raw;
       });
-      const tradeIdValue = parsed.args.tradeId !== undefined
-        ? Number(parsed.args.tradeId.toString())
-        : null;
+      const tradeIdValue =
+        parsed.args.tradeId !== undefined ? Number(parsed.args.tradeId.toString()) : null;
 
       const insertSql = `
         INSERT INTO contract_events
@@ -86,10 +92,10 @@ export function startEventListener() {
         block_number: log.blockNumber,
         related_trade_id: tradeIdValue,
       });
-      
+
       // Ensure log_index is never null (use 0 as default if missing)
       const logIndex = log.logIndex !== undefined ? log.logIndex : 0;
-      
+
       const params = [
         parsed.name,
         log.blockNumber,
@@ -101,8 +107,16 @@ export function startEventListener() {
       ];
 
       await query(insertSql, params);
-      console.log(`Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${logIndex} args=${JSON.stringify(argsObj)}`);
-      fileLog(`Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${logIndex} args=${JSON.stringify(argsObj)}`);
+      console.log(
+        `Logged event ${parsed.name} tx=${
+          log.transactionHash
+        } logIndex=${logIndex} args=${JSON.stringify(argsObj)}`
+      );
+      fileLog(
+        `Logged event ${parsed.name} tx=${
+          log.transactionHash
+        } logIndex=${logIndex} args=${JSON.stringify(argsObj)}`
+      );
 
       // Sync normalized escrow & trade state
       switch (parsed.name) {
@@ -122,23 +136,46 @@ export function startEventListener() {
           const sequential = parsed.args.sequential as boolean;
           const seqAddr = parsed.args.sequentialEscrowAddress as string;
           // Upsert escrow record, avoid overwriting frontend record
-          const existing = await query(
-            'SELECT id FROM escrows WHERE onchain_escrow_id = $1',
-            [escrowId]
-          );
+          const existing = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [
+            escrowId,
+          ]);
           if (existing.length > 0) {
             await query(
               'UPDATE escrows SET state = $1, deposit_deadline = $2, fiat_deadline = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
               ['CREATED', depositDate, fiatDate, existing[0].id]
             );
-            console.log(`EscrowCreated: Updated escrow id=${existing[0].id} deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`);
-            fileLog(`EscrowCreated: Updated escrow id=${existing[0].id} deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`);
+            console.log(
+              `EscrowCreated: Updated escrow id=${
+                existing[0].id
+              } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
+            );
+            fileLog(
+              `EscrowCreated: Updated escrow id=${
+                existing[0].id
+              } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
+            );
           } else {
             await query(
               'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
-              [tradeId, CONTRACT_ADDRESS, seller, buyer, arbitrator, 'USDC', amountInDecimal, 'CREATED', sequential, seqAddr, escrowId, depositDate, fiatDate]
+              [
+                tradeId,
+                CONTRACT_ADDRESS,
+                seller,
+                buyer,
+                arbitrator,
+                'USDC',
+                amountInDecimal,
+                'CREATED',
+                sequential,
+                seqAddr,
+                escrowId,
+                depositDate,
+                fiatDate,
+              ]
             );
-            console.log(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`);
+            console.log(
+              `EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`
+            );
             fileLog(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`);
           }
           // Update trade leg state
@@ -146,8 +183,12 @@ export function startEventListener() {
             'UPDATE trades SET leg1_state = $1, leg1_escrow_onchain_id = $2 WHERE id = $3 AND leg1_state <> $1',
             ['CREATED', escrowId, tradeId]
           );
-          console.log(`EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`);
-          fileLog(`EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`);
+          console.log(
+            `EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`
+          );
+          fileLog(
+            `EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`
+          );
           break;
         }
         case 'FundsDeposited': {
@@ -157,16 +198,16 @@ export function startEventListener() {
           const amount = parsed.args.amount.toString();
           // Convert blockchain amount (with 6 decimals) to database decimal format
           const amountInDecimal = Number(amount) / 1_000_000;
-          
+
           // Get current escrow state
           const escrowResult = await query(
             'SELECT state FROM escrows WHERE onchain_escrow_id = $1',
             [escrowId]
           );
-          
+
           if (escrowResult.length > 0) {
             const currentState = escrowResult[0].state;
-            
+
             // If escrow is in CREATED state, mark it as FUNDED (initial deposit)
             if (currentState === 'CREATED') {
               await query(
@@ -175,14 +216,16 @@ export function startEventListener() {
               );
               console.log(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
               fileLog(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
-              
+
               await query(
                 'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state = $3',
                 ['FUNDED', escrowId, 'CREATED']
               );
-              console.log(`FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
+              console.log(
+                `FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`
+              );
               fileLog(`FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
-            } 
+            }
             // Otherwise, mark fiat as paid (subsequent deposits)
             else {
               // mark fiat paid on escrow
@@ -190,23 +233,35 @@ export function startEventListener() {
                 'UPDATE escrows SET fiat_paid = TRUE, counter = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND (fiat_paid = FALSE OR counter <> $1)',
                 [counter, escrowId]
               );
-              console.log(`FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`);
-              fileLog(`FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`);
-              
+              console.log(
+                `FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`
+              );
+              fileLog(
+                `FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`
+              );
+
               // update trade legs fiat paid
               await query(
                 'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
                 ['FIAT_PAID', timestamp, escrowId]
               );
-              console.log(`FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`);
-              fileLog(`FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`);
-              
+              console.log(
+                `FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`
+              );
+              fileLog(
+                `FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`
+              );
+
               await query(
                 'UPDATE trades SET leg2_state = $1, leg2_fiat_paid_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
                 ['FIAT_PAID', timestamp, escrowId]
               );
-              console.log(`FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`);
-              fileLog(`FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`);
+              console.log(
+                `FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`
+              );
+              fileLog(
+                `FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`
+              );
             }
           }
           break;
@@ -239,7 +294,9 @@ export function startEventListener() {
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['CANCELLED', escrowId]
           );
-          console.log(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
+          console.log(
+            `EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`
+          );
           fileLog(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
           break;
         }
@@ -247,7 +304,7 @@ export function startEventListener() {
           const escrowId = parsed.args.escrowId.toString();
           const tradeId = Number(parsed.args.tradeId.toString());
           const timestamp = Number(parsed.args.timestamp.toString());
-          
+
           // Update trade leg1_state to FIAT_PAID
           await query(
             'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE id = $3 AND leg1_state <> $1',
@@ -255,7 +312,7 @@ export function startEventListener() {
           );
           console.log(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
           fileLog(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
-          
+
           // Also update escrow fiat_paid status if needed
           await query(
             'UPDATE escrows SET fiat_paid = TRUE, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $1 AND fiat_paid = FALSE',
@@ -303,13 +360,17 @@ export function startEventListener() {
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['RESOLVED', escrowId]
           );
-          console.log(`DisputeResponse: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`);
+          console.log(
+            `DisputeResponse: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`
+          );
           fileLog(`DisputeResponse: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`);
           await query(
             'UPDATE trades SET leg2_state = $1 WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
             ['RESOLVED', escrowId]
           );
-          console.log(`DisputeResponse: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`);
+          console.log(
+            `DisputeResponse: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`
+          );
           fileLog(`DisputeResponse: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`);
           break;
         }
@@ -318,7 +379,7 @@ export function startEventListener() {
           const decision = parsed.args.decision as boolean;
           const explanationHash = parsed.args.explanationHash as string;
           const bondAllocation = parsed.args.bondAllocation as string;
-          
+
           // mark escrow resolved
           await query(
             'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
@@ -326,20 +387,24 @@ export function startEventListener() {
           );
           console.log(`DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED`);
           fileLog(`DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED`);
-          
+
           // update trade legs resolved
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
             ['RESOLVED', escrowId]
           );
-          console.log(`DisputeResolved: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`);
+          console.log(
+            `DisputeResolved: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`
+          );
           fileLog(`DisputeResolved: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`);
-          
+
           await query(
             'UPDATE trades SET leg2_state = $1 WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
             ['RESOLVED', escrowId]
           );
-          console.log(`DisputeResolved: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`);
+          console.log(
+            `DisputeResolved: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`
+          );
           fileLog(`DisputeResolved: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`);
           break;
         }
@@ -348,13 +413,17 @@ export function startEventListener() {
           const oldAddress = parsed.args.oldAddress as string;
           const newAddress = parsed.args.newAddress as string;
           const timestamp = Number(parsed.args.timestamp.toString());
-          
+
           await query(
             'UPDATE escrows SET sequential_escrow_address = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2',
             [newAddress, escrowId]
           );
-          console.log(`SequentialAddressUpdated: Updated escrow onchainId=${escrowId} sequential_escrow_address=${newAddress}`);
-          fileLog(`SequentialAddressUpdated: Updated escrow onchainId=${escrowId} sequential_escrow_address=${newAddress}`);
+          console.log(
+            `SequentialAddressUpdated: Updated escrow onchainId=${escrowId} sequential_escrow_address=${newAddress}`
+          );
+          fileLog(
+            `SequentialAddressUpdated: Updated escrow onchainId=${escrowId} sequential_escrow_address=${newAddress}`
+          );
           break;
         }
         default:
@@ -363,7 +432,7 @@ export function startEventListener() {
     } catch (err) {
       console.error('Error handling log:', err);
       fileLog(`Error handling log: ${err}`);
-      
+
       // Attempt to record the error in a way that won't cause database constraint violations
       try {
         // Record a more detailed error transaction
@@ -373,9 +442,9 @@ export function startEventListener() {
           type: 'OTHER',
           block_number: log.blockNumber,
           related_trade_id: null,
-          error_message: `Event listener error: ${(err as Error).message || 'Unknown error'}`
+          error_message: `Event listener error: ${(err as Error).message || 'Unknown error'}`,
         });
-        
+
         console.log(`[RECOVERY] Recorded error transaction for ${log.transactionHash}`);
         fileLog(`[RECOVERY] Recorded error transaction for ${log.transactionHash}`);
       } catch (recordErr) {

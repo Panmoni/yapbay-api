@@ -2,6 +2,7 @@
 DROP TABLE IF EXISTS dispute_resolutions CASCADE;
 DROP TABLE IF EXISTS dispute_evidence CASCADE;
 DROP TABLE IF EXISTS disputes CASCADE;
+DROP TABLE IF EXISTS escrow_id_mapping CASCADE;
 DROP TABLE IF EXISTS escrows CASCADE;
 DROP TABLE IF EXISTS transactions CASCADE;
 DROP TABLE IF EXISTS trade_cancellations CASCADE;
@@ -241,16 +242,20 @@ CREATE TABLE trade_cancellations (
 
 CREATE INDEX idx_trade_cancellations_trade_id ON trade_cancellations(trade_id);
 
--- Foreign key constraints
-ALTER TABLE trades
-    ADD CONSTRAINT fk_leg1_dispute FOREIGN KEY (leg1_dispute_id) REFERENCES disputes(id),
-    ADD CONSTRAINT fk_leg2_dispute FOREIGN KEY (leg2_dispute_id) REFERENCES disputes(id);
+-- escrow_id_mapping: Maps blockchain escrow IDs to database escrow IDs for better synchronization
+CREATE TABLE escrow_id_mapping (
+  id SERIAL PRIMARY KEY,
+  blockchain_id VARCHAR(255) NOT NULL UNIQUE,
+  database_id INTEGER NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_database_id FOREIGN KEY (database_id) REFERENCES escrows(id) ON DELETE CASCADE
+);
 
-ALTER TABLE escrows
-    ADD CONSTRAINT fk_dispute FOREIGN KEY (dispute_id) REFERENCES disputes(id),
-    ADD CONSTRAINT escrows_trade_id_escrow_id_unique UNIQUE (trade_id, escrow_id);
+-- Create index for faster lookups
+CREATE INDEX idx_escrow_id_mapping_blockchain_id ON escrow_id_mapping(blockchain_id);
+CREATE INDEX idx_escrow_id_mapping_database_id ON escrow_id_mapping(database_id);
 
--- Indexes for performance
 CREATE INDEX idx_accounts_wallet_address ON accounts(wallet_address);
 CREATE INDEX idx_offers_creator_account_id ON offers(creator_account_id);
 CREATE INDEX idx_trades_overall_status ON trades(overall_status);
@@ -327,6 +332,11 @@ CREATE TRIGGER update_trade_cancellations_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_escrow_id_mapping_updated_at
+    BEFORE UPDATE ON escrow_id_mapping
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- 10. enforce trade deadlines: block state updates past deadlines
 CREATE OR REPLACE FUNCTION enforce_trade_deadlines()
 RETURNS TRIGGER AS $$
@@ -356,3 +366,12 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER enforce_trade_deadlines
   BEFORE UPDATE ON trades
   FOR EACH ROW EXECUTE FUNCTION enforce_trade_deadlines();
+
+-- Foreign key constraints
+ALTER TABLE trades
+    ADD CONSTRAINT fk_leg1_dispute FOREIGN KEY (leg1_dispute_id) REFERENCES disputes(id),
+    ADD CONSTRAINT fk_leg2_dispute FOREIGN KEY (leg2_dispute_id) REFERENCES disputes(id);
+
+ALTER TABLE escrows
+    ADD CONSTRAINT fk_dispute FOREIGN KEY (dispute_id) REFERENCES disputes(id),
+    ADD CONSTRAINT escrows_trade_id_escrow_id_unique UNIQUE (trade_id, escrow_id);

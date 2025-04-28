@@ -113,6 +113,8 @@ export function startEventListener() {
           const buyer = parsed.args.buyer as string;
           const arbitrator = parsed.args.arbitrator as string;
           const amount = parsed.args.amount.toString();
+          // Convert blockchain amount (with 6 decimals) to database decimal format
+          const amountInDecimal = Number(amount) / 1_000_000;
           const depositTs = Number(parsed.args.deposit_deadline.toString());
           const fiatTs = Number(parsed.args.fiat_deadline.toString());
           const depositDate = new Date(depositTs * 1000);
@@ -134,7 +136,7 @@ export function startEventListener() {
           } else {
             await query(
               'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
-              [tradeId, CONTRACT_ADDRESS, seller, buyer, arbitrator, 'USDC', amount, 'CREATED', sequential, seqAddr, escrowId, depositDate, fiatDate]
+              [tradeId, CONTRACT_ADDRESS, seller, buyer, arbitrator, 'USDC', amountInDecimal, 'CREATED', sequential, seqAddr, escrowId, depositDate, fiatDate]
             );
             console.log(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`);
             fileLog(`EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId}`);
@@ -153,6 +155,8 @@ export function startEventListener() {
           const timestamp = Number(parsed.args.timestamp.toString());
           const counter = Number(parsed.args.counter.toString());
           const amount = parsed.args.amount.toString();
+          // Convert blockchain amount (with 6 decimals) to database decimal format
+          const amountInDecimal = Number(amount) / 1_000_000;
           
           // Get current escrow state
           const escrowResult = await query(

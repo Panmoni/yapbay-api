@@ -374,7 +374,7 @@ router.get(
         return;
       }
 
-      // Build the query
+      // Build the query to get all transactions for this trade
       let sql = `
         SELECT 
           t.id, 
@@ -388,19 +388,25 @@ router.get(
           t.error_message, 
           t.related_trade_id as trade_id, 
           t.related_escrow_db_id as escrow_id, 
-          t.created_at
+          t.created_at,
+          tr.leg1_crypto_amount as amount,
+          tr.leg1_crypto_token as token_type
         FROM 
           transactions t
+        LEFT JOIN
+          trades tr ON t.related_trade_id = tr.id
         WHERE 
           t.related_trade_id = $1
       `;
       
       const params: (string | number)[] = [id];
+      let paramIndex = 2;
 
       // Add type filter if provided
       if (type) {
-        sql += ' AND t.type = $2';
+        sql += ` AND t.type = $${paramIndex}`;
         params.push(type as string);
+        paramIndex++;
       }
 
       // Order by creation date, newest first
@@ -423,7 +429,8 @@ router.get(
         
         return {
           ...tx,
-          metadata
+          metadata,
+          transaction_type: tx.transaction_type // Ensure transaction_type is explicitly included
         };
       });
 

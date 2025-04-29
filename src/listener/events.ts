@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 import { wsProvider, getContract } from '../celo';
-import { query, recordTransaction } from '../db';
+import { query, recordTransaction, TransactionType } from '../db';
 import type { LogDescription, ParamType } from 'ethers';
 import fs from 'fs';
 import path from 'path';
@@ -84,11 +84,45 @@ export function startEventListener() {
         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
         ON CONFLICT DO NOTHING;
       `;
+      // Map event name to transaction type
+      let transactionType: TransactionType = 'OTHER';
+      switch (parsed.name) {
+        case 'EscrowCreated':
+          transactionType = 'CREATE_ESCROW';
+          break;
+        case 'FiatMarkedPaid':
+          transactionType = 'MARK_FIAT_PAID';
+          break;
+        case 'FundsDeposited':
+          transactionType = 'FUND_ESCROW';
+          break;
+        case 'EscrowReleased':
+          transactionType = 'RELEASE_ESCROW';
+          break;
+        case 'EscrowCancelled':
+          transactionType = 'CANCEL_ESCROW';
+          break;
+        case 'DisputeOpened':
+          transactionType = 'OPEN_DISPUTE';
+          break;
+        case 'DisputeResponse':
+          transactionType = 'RESPOND_DISPUTE';
+          break;
+        case 'DisputeResolved':
+          transactionType = 'RESOLVE_DISPUTE';
+          break;
+        case 'SequentialAddressUpdated':
+          transactionType = 'OTHER'; // No specific type for this event
+          break;
+        default:
+          transactionType = 'OTHER';
+      }
+
       // Record the transaction and get its DB ID
       const transactionId = await recordTransaction({
         transaction_hash: log.transactionHash,
         status: 'SUCCESS',
-        type: 'OTHER',
+        type: transactionType,
         block_number: log.blockNumber,
         related_trade_id: tradeIdValue,
       });
@@ -317,17 +351,61 @@ export function startEventListener() {
             
             // Attempt to record the error
             try {
+              // Determine transaction type based on error context if possible
+              let errorTransactionType: TransactionType = 'OTHER';
+              
+              // Try to parse the event name from the error or log
+              try {
+                const parsedError = contract.interface.parseLog(log);
+                if (parsedError) {
+                  switch (parsedError.name) {
+                    case 'EscrowCreated':
+                      errorTransactionType = 'CREATE_ESCROW';
+                      break;
+                    case 'FiatMarkedPaid':
+                      errorTransactionType = 'MARK_FIAT_PAID';
+                      break;
+                    case 'FundsDeposited':
+                      errorTransactionType = 'FUND_ESCROW';
+                      break;
+                    case 'EscrowReleased':
+                      errorTransactionType = 'RELEASE_ESCROW';
+                      break;
+                    case 'EscrowCancelled':
+                      errorTransactionType = 'CANCEL_ESCROW';
+                      break;
+                    case 'DisputeOpened':
+                      errorTransactionType = 'OPEN_DISPUTE';
+                      break;
+                    case 'DisputeResponse':
+                      errorTransactionType = 'RESPOND_DISPUTE';
+                      break;
+                    case 'DisputeResolved':
+                      errorTransactionType = 'RESOLVE_DISPUTE';
+                      break;
+                  }
+                }
+              } catch (parseErr) {
+                // If we can't parse the log, just use OTHER
+                console.log(`Could not parse error log to determine transaction type: ${parseErr}`);
+              }
+              
+              // Record a more detailed error transaction
               await recordTransaction({
                 transaction_hash: log.transactionHash,
                 status: 'FAILED',
-                type: 'MARK_FIAT_PAID',
+                type: errorTransactionType,
                 block_number: log.blockNumber,
-                related_trade_id: tradeId,
-                error_message: `Error processing FiatMarkedPaid: ${(err as Error).message}`
+                related_trade_id: null,
+                error_message: `Event listener error: ${(err as Error).message || 'Unknown error'}`,
               });
+
+              console.log(`[RECOVERY] Recorded error transaction for ${log.transactionHash}`);
+              fileLog(`[RECOVERY] Recorded error transaction for ${log.transactionHash}`);
             } catch (recordErr) {
-              console.error(`FiatMarkedPaid: Failed to record error transaction: ${(recordErr as Error).message}`);
-              fileLog(`FiatMarkedPaid: Failed to record error transaction: ${(recordErr as Error).message}`);
+              // If even the error recording fails, just log it without further action
+              console.error('Failed to record error transaction:', recordErr);
+              fileLog(`Failed to record error transaction: ${recordErr}`);
             }
           }
           
@@ -641,11 +719,50 @@ export function startEventListener() {
 
       // Attempt to record the error
       try {
+        // Determine transaction type based on error context if possible
+        let errorTransactionType: TransactionType = 'OTHER';
+        
+        // Try to parse the event name from the error or log
+        try {
+          const parsedError = contract.interface.parseLog(log);
+          if (parsedError) {
+            switch (parsedError.name) {
+              case 'EscrowCreated':
+                errorTransactionType = 'CREATE_ESCROW';
+                break;
+              case 'FiatMarkedPaid':
+                errorTransactionType = 'MARK_FIAT_PAID';
+                break;
+              case 'FundsDeposited':
+                errorTransactionType = 'FUND_ESCROW';
+                break;
+              case 'EscrowReleased':
+                errorTransactionType = 'RELEASE_ESCROW';
+                break;
+              case 'EscrowCancelled':
+                errorTransactionType = 'CANCEL_ESCROW';
+                break;
+              case 'DisputeOpened':
+                errorTransactionType = 'OPEN_DISPUTE';
+                break;
+              case 'DisputeResponse':
+                errorTransactionType = 'RESPOND_DISPUTE';
+                break;
+              case 'DisputeResolved':
+                errorTransactionType = 'RESOLVE_DISPUTE';
+                break;
+            }
+          }
+        } catch (parseErr) {
+          // If we can't parse the log, just use OTHER
+          console.log(`Could not parse error log to determine transaction type: ${parseErr}`);
+        }
+        
         // Record a more detailed error transaction
         await recordTransaction({
           transaction_hash: log.transactionHash,
           status: 'FAILED',
-          type: 'OTHER',
+          type: errorTransactionType,
           block_number: log.blockNumber,
           related_trade_id: null,
           error_message: `Event listener error: ${(err as Error).message || 'Unknown error'}`,

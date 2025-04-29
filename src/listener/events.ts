@@ -118,12 +118,55 @@ export function startEventListener() {
           transactionType = 'OTHER';
       }
 
-      // Record the transaction and get its DB ID
+      let senderAddress = null;
+      let receiverAddress = null;
+      
+      // Extract sender and receiver addresses based on event type
+      switch (parsed.name) {
+        case 'EscrowCreated':
+          senderAddress = parsed.args.seller as string;
+          receiverAddress = CONTRACT_ADDRESS;
+          break;
+        case 'FundsDeposited':
+          senderAddress = parsed.args.depositor as string;
+          receiverAddress = CONTRACT_ADDRESS;
+          break;
+        case 'FiatMarkedPaid':
+          senderAddress = parsed.args.buyer as string;
+          receiverAddress = parsed.args.seller as string;
+          break;
+        case 'EscrowReleased':
+          senderAddress = parsed.args.releaser as string;
+          receiverAddress = parsed.args.seller as string;
+          break;
+        case 'EscrowCancelled':
+          senderAddress = parsed.args.canceller as string;
+          receiverAddress = parsed.args.buyer as string;
+          break;
+        // Add other cases as needed
+      }
+      
+      // Create metadata object to store in error_message field
+      const metadataObj: Record<string, any> = {};
+      
+      // Add relevant fields to metadata based on event type
+      if (parsed.name === 'EscrowCreated' || parsed.name === 'FundsDeposited' || 
+          parsed.name === 'FiatMarkedPaid' || parsed.name === 'EscrowReleased' || 
+          parsed.name === 'EscrowCancelled') {
+        metadataObj.escrow_id = parsed.args.escrowId?.toString();
+        
+        if (parsed.args.seller) metadataObj.seller = parsed.args.seller;
+        if (parsed.args.buyer) metadataObj.buyer = parsed.args.buyer;
+      }
+      
       const transactionId = await recordTransaction({
         transaction_hash: log.transactionHash,
         status: 'SUCCESS',
         type: transactionType,
         block_number: log.blockNumber,
+        sender_address: senderAddress,
+        receiver_or_contract_address: receiverAddress,
+        error_message: Object.keys(metadataObj).length > 0 ? JSON.stringify(metadataObj) : null,
         related_trade_id: tradeIdValue,
       });
 

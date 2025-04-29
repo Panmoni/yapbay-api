@@ -377,3 +377,12 @@ ALTER TABLE trades
 ALTER TABLE escrows
     ADD CONSTRAINT fk_dispute FOREIGN KEY (dispute_id) REFERENCES disputes(id),
     ADD CONSTRAINT escrows_trade_id_escrow_id_unique UNIQUE (trade_id, escrow_id);
+
+-- Create a unique index with a WHERE condition for trade_id and onchain_escrow_id
+CREATE UNIQUE INDEX idx_unique_trade_onchain_escrow 
+ON escrows (trade_id, onchain_escrow_id) 
+WHERE onchain_escrow_id IS NOT NULL;
+
+-- Add comment explaining the index
+COMMENT ON INDEX idx_unique_trade_onchain_escrow IS 
+'Ensures that there is only one escrow record per trade_id and onchain_escrow_id combination. This prevents duplicate escrow records from being created by different processes.';

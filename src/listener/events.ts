@@ -393,6 +393,7 @@ export function startEventListener() {
               console.log(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
               fileLog(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
 
+              // Update trade leg1_state to FUNDED
               await query(
                 'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state = $3',
                 ['FUNDED', escrowId, 'CREATED']
@@ -402,42 +403,53 @@ export function startEventListener() {
               );
               fileLog(`FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
             }
-            // Otherwise, mark fiat as paid (subsequent deposits)
-            else {
-              // mark fiat paid on escrow
-              await query(
-                'UPDATE escrows SET fiat_paid = TRUE, counter = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND (fiat_paid = FALSE OR counter <> $1)',
-                [counter, escrowId]
+            // If this is a sequential trade and escrow is in FUNDED state, mark fiat as paid
+            else if (currentState === 'FUNDED') {
+              // Get trade information to check if it's sequential
+              const tradeResult = await query(
+                'SELECT sequential FROM trades WHERE leg1_escrow_onchain_id = $1 OR leg2_escrow_onchain_id = $1',
+                [escrowId]
               );
-              console.log(
-                `FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`
-              );
-              fileLog(
-                `FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`
-              );
+              
+              if (tradeResult.length > 0 && tradeResult[0].sequential) {
+                // mark fiat paid on escrow
+                await query(
+                  'UPDATE escrows SET fiat_paid = TRUE, counter = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND (fiat_paid = FALSE OR counter <> $1)',
+                  [counter, escrowId]
+                );
+                console.log(
+                  `FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`
+                );
+                fileLog(
+                  `FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`
+                );
 
-              // update trade legs fiat paid
-              await query(
-                'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
-                ['FIAT_PAID', timestamp, escrowId]
-              );
-              console.log(
-                `FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`
-              );
-              fileLog(
-                `FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`
-              );
+                // update trade legs fiat paid
+                await query(
+                  'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
+                  ['FIAT_PAID', timestamp, escrowId]
+                );
+                console.log(
+                  `FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`
+                );
+                fileLog(
+                  `FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`
+                );
 
-              await query(
-                'UPDATE trades SET leg2_state = $1, leg2_fiat_paid_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
-                ['FIAT_PAID', timestamp, escrowId]
-              );
-              console.log(
-                `FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`
-              );
-              fileLog(
-                `FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`
-              );
+                await query(
+                  'UPDATE trades SET leg2_state = $1, leg2_fiat_paid_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
+                  ['FIAT_PAID', timestamp, escrowId]
+                );
+                console.log(
+                  `FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`
+                );
+                fileLog(
+                  `FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`
+                );
+              } else {
+                console.log(`FundsDeposited: Ignoring subsequent deposit for non-sequential trade with escrowId=${escrowId}`);
+                fileLog(`FundsDeposited: Ignoring subsequent deposit for non-sequential trade with escrowId=${escrowId}`);
+              }
             }
           }
           break;
@@ -664,7 +676,7 @@ export function startEventListener() {
       console.error('Error handling log:', err);
       fileLog(`Error handling log: ${err}`);
 
-      // Attempt to record the error in a way that won't cause database constraint violations
+      // Attempt to record the error
       try {
         // Record a more detailed error transaction
         await recordTransaction({

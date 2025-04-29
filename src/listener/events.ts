@@ -510,16 +510,16 @@ export function startEventListener() {
           
           // Update trade state to CANCELLED
           await query(
-            'UPDATE trades SET leg1_state = $1, leg1_completed_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
-            ['CANCELLED', timestamp, escrowId]
+            'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
+            ['CANCELLED', escrowId]
           );
           console.log(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
           fileLog(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
           
           // Also update leg2 if it exists
           await query(
-            'UPDATE trades SET leg2_state = $1, leg2_completed_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
-            ['CANCELLED', timestamp, escrowId]
+            'UPDATE trades SET leg2_state = $1 WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
+            ['CANCELLED', escrowId]
           );
           
           // Get trade ID for this escrow to record completion (cancellation is also a form of completion)

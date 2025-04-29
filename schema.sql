@@ -87,7 +87,6 @@ CREATE TABLE trades (
     leg1_cancelled_by VARCHAR(42),
     leg1_dispute_id INTEGER,
     leg1_escrow_onchain_id VARCHAR(42), -- The on-chain escrow ID (from the EscrowCreated event) for leg 1.
-    leg1_completed_at TIMESTAMP WITH TIME ZONE, -- Added to track when the leg is fully completed
 
     -- Leg 2 (Sell Leg, optional)
     leg2_state VARCHAR(25) CHECK (leg2_state IN ('CREATED', 'FUNDED', 'FIAT_PAID', 'RELEASED', 'CANCELLED', 'DISPUTED', 'RESOLVED')),

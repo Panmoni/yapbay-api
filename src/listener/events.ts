@@ -136,74 +136,37 @@ export function startEventListener() {
           const sequential = parsed.args.sequential as boolean;
           const seqAddr = parsed.args.sequentialEscrowAddress as string;
 
-          // Check if trade already has an active escrow to prevent duplicates
-          const tradeEscrows = await query(
-            'SELECT e.id, e.onchain_escrow_id, e.state FROM escrows e WHERE e.trade_id = $1 ORDER BY e.created_at DESC LIMIT 1',
-            [tradeId]
-          );
-
-          // If trade already has an active escrow in a non-terminal state, log and skip
-          if (tradeEscrows.length > 0 &&
-              tradeEscrows[0].onchain_escrow_id !== escrowId &&
-              !['RELEASED', 'CANCELLED', 'RESOLVED'].includes(tradeEscrows[0].state)) {
-            console.log(
-              `EscrowCreated: Duplicate escrow detected. Trade ${tradeId} already has active escrow ${tradeEscrows[0].onchain_escrow_id} in state ${tradeEscrows[0].state}. New escrow ${escrowId} will be recorded but not set as active.`
-            );
-            fileLog(
-              `EscrowCreated: Duplicate escrow detected. Trade ${tradeId} already has active escrow ${tradeEscrows[0].onchain_escrow_id} in state ${tradeEscrows[0].state}. New escrow ${escrowId} will be recorded but not set as active.`
-            );
-
-            // Still record the escrow but don't update the trade
-            const existing = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [
-              escrowId,
-            ]);
-
-            if (existing.length === 0) {
-              await query(
-                'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
-                [
-                  tradeId,
-                  CONTRACT_ADDRESS,
-                  seller,
-                  buyer,
-                  arbitrator,
-                  'USDC',
-                  _amountInDecimal,
-                  'CREATED',
-                  sequential,
-                  seqAddr,
-                  escrowId,
-                  depositDate,
-                  fiatDate,
-                ]
-              );
-              console.log(
-                `EscrowCreated: Inserted duplicate escrow onchainId=${escrowId} for tradeId=${tradeId} (not set as active)`
-              );
-              fileLog(`EscrowCreated: Inserted duplicate escrow onchainId=${escrowId} for tradeId=${tradeId} (not set as active)`);
-            }
-            break;
-          }
-
-          // Upsert escrow record, avoid overwriting frontend record
-          const existing = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [
+          // Check if this escrow already exists in the database
+          const existingEscrow = await query('SELECT id, state FROM escrows WHERE onchain_escrow_id = $1', [
             escrowId,
           ]);
-          if (existing.length > 0) {
-            await query(
-              'UPDATE escrows SET state = $1, deposit_deadline = $2, fiat_deadline = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
-              ['CREATED', depositDate, fiatDate, existing[0].id]
-            );
-            console.log(
-              `EscrowCreated: Updated escrow id=${
-                existing[0].id
-              } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
-            );
-            fileLog(
-              `EscrowCreated: Updated escrow id=${
-                existing[0].id
-              } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
-            );
+
+          if (existingEscrow.length > 0) {
+            // Escrow already exists - update it if needed but don't create a duplicate
+            // Only update if it's not in a terminal state
+            if (!['RELEASED', 'CANCELLED', 'RESOLVED'].includes(existingEscrow[0].state)) {
+              await query(
+                'UPDATE escrows SET deposit_deadline = $1, fiat_deadline = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+                [depositDate, fiatDate, existingEscrow[0].id]
+              );
+              console.log(
+                `EscrowCreated: Updated existing escrow id=${
+                  existingEscrow[0].id
+                } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
+              );
+              fileLog(
+                `EscrowCreated: Updated existing escrow id=${
+                  existingEscrow[0].id
+                } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
+              );
+            } else {
+              console.log(
+                `EscrowCreated: Escrow onchainId=${escrowId} already exists in terminal state ${existingEscrow[0].state}. No update needed.`
+              );
+              fileLog(
+                `EscrowCreated: Escrow onchainId=${escrowId} already exists in terminal state ${existingEscrow[0].state}. No update needed.`
+              );
+            }
           } else {
             // Insert new escrow record
             const insertResult = await query(
@@ -240,10 +203,10 @@ export function startEventListener() {
             fileLog(`EscrowCreated: Created ID mapping between blockchain ID ${escrowId} and database ID ${newEscrowId}`);
           }
 
-          // Update trade leg state
+          // Update trade leg state - only if not already in a later state
           await query(
-            'UPDATE trades SET leg1_state = $1, leg1_escrow_onchain_id = $2 WHERE id = $3 AND leg1_state <> $1',
-            ['CREATED', escrowId, tradeId]
+            'UPDATE trades SET leg1_state = $1, leg1_escrow_onchain_id = $2 WHERE id = $3 AND (leg1_state IS NULL OR leg1_state = $4)',
+            ['CREATED', escrowId, tradeId, 'CREATED']
           );
           console.log(
             `EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`

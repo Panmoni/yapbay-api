@@ -1,7 +1,5 @@
 # YapBay API Notes
 
-smart polling?
-
 ## Refactor Routes
 
 maybe use new middleware and services directories.

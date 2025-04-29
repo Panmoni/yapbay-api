@@ -1267,36 +1267,59 @@ router.post(
           [CONTRACT_ADDRESS, 'FUNDED', verifiedEscrowId, trade_id]
         );
 
-        // Record the escrow in the database and get its ID
-        const escrowInsertResult = await query(
-          'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',
-          [
-            trade_id,
-            CONTRACT_ADDRESS, // Using the main contract address as the escrow identifier for now
-            seller,
-            buyer,
-            process.env.ARBITRATOR_ADDRESS, // Assuming a fixed arbitrator for now
-            'USDC', // Assuming USDC
-            Number(amount) / 1_000_000, // Convert blockchain amount (with 6 decimals) to database decimal format
-            'FUNDED', // State after successful recording
-            sequential || false,
-            sequential_escrow_address || null,
-            verifiedEscrowId, // Store the blockchain escrow ID in the new column
-          ]
+        // Check if an escrow with this onchain_escrow_id already exists
+        const existingEscrow = await query(
+          'SELECT id FROM escrows WHERE onchain_escrow_id = $1',
+          [verifiedEscrowId]
         );
 
-        if (escrowInsertResult.length === 0 || !escrowInsertResult[0].id) {
-          logError(
-            `Failed to insert escrow record for trade ${trade_id} and tx ${transaction_hash}`,
-            new Error('Escrow insertion failed to return ID')
+        let escrowDbId;
+
+        if (existingEscrow.length > 0) {
+          // Escrow already exists - update it instead of creating a duplicate
+          escrowDbId = existingEscrow[0].id;
+          await query(
+            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            ['FUNDED', escrowDbId]
           );
-          // Don't record transaction if escrow insert failed
-          res.status(500).json({ error: 'Failed to record escrow in database' });
-          return; // Stop execution
+          console.log(`Updated existing escrow id=${escrowDbId} with onchain_escrow_id=${verifiedEscrowId} to state=FUNDED`);
+        } else {
+          // Record the escrow in the database and get its ID
+          const escrowInsertResult = await query(
+            'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',
+            [
+              trade_id,
+              CONTRACT_ADDRESS, // Using the main contract address as the escrow identifier for now
+              seller,
+              buyer,
+              process.env.ARBITRATOR_ADDRESS, // Assuming a fixed arbitrator for now
+              'USDC', // Assuming USDC
+              Number(amount) / 1_000_000, // Convert blockchain amount (with 6 decimals) to database decimal format
+              'FUNDED', // State after successful recording
+              sequential || false,
+              sequential_escrow_address || null,
+              verifiedEscrowId, // Store the blockchain escrow ID in the new column
+            ]
+          );
+
+          if (escrowInsertResult.length === 0 || !escrowInsertResult[0].id) {
+            logError(
+              `Failed to insert escrow record for trade ${trade_id} and tx ${transaction_hash}`,
+              new Error('Escrow insertion failed to return ID')
+            );
+            // Don't record transaction if escrow insert failed
+            res.status(500).json({ error: 'Failed to record escrow in database' });
+            return; // Stop execution
+          }
+
+          escrowDbId = escrowInsertResult[0].id;
         }
 
-        const escrowDbId = escrowInsertResult[0].id;
-
+        // Create a mapping record to help with ID synchronization if it doesn't exist
+        await query(
+          'INSERT INTO escrow_id_mapping (blockchain_id, database_id) VALUES ($1, $2) ON CONFLICT (blockchain_id) DO UPDATE SET database_id = $2',
+          [verifiedEscrowId, escrowDbId]
+        );
         // Record the successful blockchain transaction
         await recordTransaction({
           transaction_hash: txReceipt.hash,

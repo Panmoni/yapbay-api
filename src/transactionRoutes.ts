@@ -122,6 +122,31 @@ router.post(
         return;
       }
 
+      // Extract sender/receiver addresses from metadata if not provided directly
+      let finalFromAddress = from_address;
+      let finalToAddress = to_address;
+
+      // Parse metadata if it's a string
+      const metaObj = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+
+      // Extract sender address from metadata if not provided directly
+      if ((!finalFromAddress || finalFromAddress === '') && metaObj) {
+        finalFromAddress = metaObj.seller || metaObj.from || metaObj.sender_address || finalFromAddress;
+        console.log(`[INFO] Extracted sender address from metadata: ${finalFromAddress}`);
+      }
+
+      // Extract receiver address from metadata if not provided directly
+      if ((!finalToAddress || finalToAddress === '') && metaObj) {
+        finalToAddress = metaObj.buyer || metaObj.to || metaObj.receiver_address || finalToAddress;
+        console.log(`[INFO] Extracted receiver address from metadata: ${finalToAddress}`);
+      }
+
+      // For FUND_ESCROW specifically, use contract address if to_address is missing
+      if (finalTransactionType === 'FUND_ESCROW' && (!finalToAddress || finalToAddress === '')) {
+        finalToAddress = process.env.CONTRACT_ADDRESS;
+        console.log(`[INFO] Using contract address for FUND_ESCROW: ${finalToAddress}`);
+      }
+
       // Verify trade exists
       const tradeResult = await query('SELECT id FROM trades WHERE id = $1', [trade_id]);
       if (tradeResult.length === 0) {
@@ -247,23 +272,6 @@ router.post(
         }
       }
 
-      // Handle special case for FUND_ESCROW with missing to_address
-      let finalToAddress = to_address;
-      if (finalTransactionType === 'FUND_ESCROW' && (!finalToAddress || finalToAddress === '')) {
-        const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-        if (CONTRACT_ADDRESS) {
-          console.log(`[INFO] Using contract address ${CONTRACT_ADDRESS} as to_address for FUND_ESCROW transaction`);
-          finalToAddress = CONTRACT_ADDRESS;
-        } else {
-          console.log('[ERROR] Missing to_address for FUND_ESCROW and no CONTRACT_ADDRESS in environment');
-          res.status(400).json({
-            error: 'Missing to_address',
-            details: 'FUND_ESCROW transactions require a to_address or CONTRACT_ADDRESS environment variable'
-          });
-          return;
-        }
-      }
-
       // Record the transaction
       console.log(`[DEBUG] Recording transaction ${transaction_hash} for trade ${trade_id}`);
       const transactionId = await recordTransaction({
@@ -271,11 +279,11 @@ router.post(
         status: status as TransactionStatus,
         type: finalTransactionType as TransactionType,
         block_number: block_number || null,
-        sender_address: from_address,
-        receiver_or_contract_address: finalToAddress,
+        sender_address: finalFromAddress || null,
+        receiver_or_contract_address: finalToAddress || null,
+        error_message: metadata ? JSON.stringify(metadata) : null,
         related_trade_id: trade_id,
         related_escrow_db_id: escrowDbId,
-        error_message: metadata ? JSON.stringify(metadata) : null
       });
       
       console.log(`[DB] Recorded/Updated transaction ${transaction_hash} with ID: ${transactionId}`);

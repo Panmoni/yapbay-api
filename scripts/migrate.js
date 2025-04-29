@@ -3,15 +3,17 @@
 /* eslint-env node */
 /* eslint-disable no-undef */
 
+// node scripts/migrate.js
+
 /**
  * Simple database migration script for YapBay API
- * 
+ *
  * This script:
  * 1. Checks for migrations in the migrations/ directory
  * 2. Determines which migrations have not been applied yet
  * 3. Applies pending migrations in order
  * 4. Records each migration in the schema_migrations table
- * 
+ *
  * Usage: node scripts/migrate.js [--only=filename.sql]
  */
 
@@ -45,7 +47,7 @@ if (!dbConnectionString) {
 
 // Connect to the database
 const client = new Client({
-  connectionString: dbConnectionString
+  connectionString: dbConnectionString,
 });
 
 // Path to migrations directory
@@ -71,7 +73,8 @@ async function migrate() {
     console.log(`Found ${appliedMigrations.length} previously applied migrations`);
 
     // Get list of all migration files
-    let migrationFiles = fs.readdirSync(migrationsDir)
+    let migrationFiles = fs
+      .readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql'))
       .sort(); // Sort to ensure migrations are applied in order
 
@@ -105,19 +108,19 @@ async function migrate() {
     for (const migrationFile of pendingMigrations) {
       const version = getMigrationVersion(migrationFile);
       const migrationPath = path.join(migrationsDir, migrationFile);
-      
+
       console.log(`Applying migration: ${migrationFile}`);
-      
+
       try {
         // Mark migration as started (dirty=true)
         await markMigrationStarted(version, getDescriptionFromFilename(migrationFile));
-        
+
         // Apply the migration
         await applyMigration(migrationPath);
-        
+
         // Mark migration as completed (dirty=false)
         await markMigrationCompleted(version);
-        
+
         console.log(`✅ Successfully applied migration: ${migrationFile}`);
       } catch (error) {
         console.error(`❌ Error applying migration ${migrationFile}:`, error.message);
@@ -145,7 +148,7 @@ async function ensureMigrationsTable() {
         WHERE table_name = 'schema_migrations'
       );
     `);
-    
+
     if (!tableCheck.rows[0].exists) {
       console.log('Creating schema_migrations table...');
       await client.query(`
@@ -170,7 +173,8 @@ async function getAppliedMigrations() {
     const result = await client.query('SELECT version FROM schema_migrations ORDER BY version');
     return result.rows.map(row => row.version);
   } catch (error) {
-    if (error.code === '42P01') { // Table does not exist
+    if (error.code === '42P01') {
+      // Table does not exist
       return [];
     }
     throw error;
@@ -182,11 +186,11 @@ async function applyMigration(migrationPath) {
   try {
     const command = `psql "${dbConnectionString}" -f "${migrationPath}"`;
     const { stdout, stderr } = await execPromise(command);
-    
+
     if (stderr && !stderr.includes('NOTICE:') && !stderr.includes('psql:')) {
       throw new Error(stderr);
     }
-    
+
     return stdout;
   } catch (error) {
     throw new Error(`Failed to apply migration: ${error.message}`);
@@ -203,10 +207,7 @@ async function markMigrationStarted(version, description) {
 
 // Mark a migration as completed (dirty=false)
 async function markMigrationCompleted(version) {
-  await client.query(
-    'UPDATE schema_migrations SET dirty = FALSE WHERE version = $1',
-    [version]
-  );
+  await client.query('UPDATE schema_migrations SET dirty = FALSE WHERE version = $1', [version]);
 }
 
 // Extract version from migration filename (e.g., 20250429180100_add_missing_columns.sql -> 20250429180100)

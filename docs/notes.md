@@ -9,3 +9,7 @@ still got admin login in main routes
 adminRoutes
 transactionRoutes
 routes
+
+## Ref
+
+node scripts/migrate.js

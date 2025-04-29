@@ -489,11 +489,11 @@ export function startEventListener() {
 
           // Update the trade state
           await query(
-            'UPDATE trades SET leg1_state = $1, leg1_released_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
-            ['COMPLETED', timestamp, escrowId]
+            'UPDATE trades SET leg1_state = $1, leg1_released_at = to_timestamp($2), overall_status = $3 WHERE leg1_escrow_onchain_id = $4 AND leg1_state <> $1',
+            ['RELEASED', timestamp, 'COMPLETED', escrowId]
           );
-          console.log(`EscrowReleased: Updated trade leg1_state=COMPLETED for escrowId=${escrowId}`);
-          fileLog(`EscrowReleased: Updated trade leg1_state=COMPLETED for escrowId=${escrowId}`);
+          console.log(`EscrowReleased: Updated trade leg1_state=RELEASED overall_status=COMPLETED for escrowId=${escrowId}`);
+          fileLog(`EscrowReleased: Updated trade leg1_state=RELEASED overall_status=COMPLETED for escrowId=${escrowId}`);
           break;
         }
         case 'EscrowCancelled': {

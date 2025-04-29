@@ -1,7 +1,7 @@
 // .gitignore
 node_modules/
 dist/
-.env
+.env*
 .vscode/
 .keys/
 jwt.txt

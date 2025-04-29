@@ -1,17 +1,5 @@
 # YapBay API Notes
 
-## Refactor Routes
+will events be more reliable as its own process?
 
-maybe use new middleware and services directories.
-
-still got admin login in main routes
-
-adminRoutes
-transactionRoutes
-routes
-
-## Ref
-
-### to run migrations
-
-node scripts/migrate.js
+see plan for refactoring routes

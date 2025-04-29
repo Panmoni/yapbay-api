@@ -1,3 +1,11 @@
+-- schema_migrations table to track schema changes
+CREATE TABLE schema_migrations (
+    version VARCHAR(255) NOT NULL PRIMARY KEY,
+    applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    description TEXT,
+    dirty BOOLEAN NOT NULL DEFAULT FALSE
+);
+
 -- Drop existing tables to ensure clean setup
 DROP TABLE IF EXISTS dispute_resolutions CASCADE;
 DROP TABLE IF EXISTS dispute_evidence CASCADE;

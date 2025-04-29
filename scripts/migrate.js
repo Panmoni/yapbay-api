@@ -9,7 +9,7 @@
  * 3. Applies pending migrations in order
  * 4. Records each migration in the schema_migrations table
  * 
- * Usage: node scripts/migrate.js
+ * Usage: node scripts/migrate.js [--only=filename.sql]
  */
 
 const fs = require('fs');
@@ -20,6 +20,16 @@ const { Client } = require('pg');
 require('dotenv').config();
 
 const execPromise = promisify(exec);
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+let onlyFile = null;
+
+args.forEach(arg => {
+  if (arg.startsWith('--only=')) {
+    onlyFile = arg.split('=')[1];
+  }
+});
 
 // Get database connection string from environment
 const dbConnectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
@@ -58,11 +68,21 @@ async function migrate() {
     console.log(`Found ${appliedMigrations.length} previously applied migrations`);
 
     // Get list of all migration files
-    const migrationFiles = fs.readdirSync(migrationsDir)
+    let migrationFiles = fs.readdirSync(migrationsDir)
       .filter(file => file.endsWith('.sql'))
       .sort(); // Sort to ensure migrations are applied in order
 
-    console.log(`Found ${migrationFiles.length} migration files`);
+    // If --only flag is provided, filter to only that file
+    if (onlyFile) {
+      migrationFiles = migrationFiles.filter(file => file === onlyFile);
+      if (migrationFiles.length === 0) {
+        console.error(`Error: Migration file ${onlyFile} not found in ${migrationsDir}`);
+        process.exit(1);
+      }
+      console.log(`Only applying migration: ${onlyFile}`);
+    } else {
+      console.log(`Found ${migrationFiles.length} migration files`);
+    }
 
     // Determine which migrations need to be applied
     const pendingMigrations = migrationFiles.filter(file => {
@@ -160,7 +180,7 @@ async function applyMigration(migrationPath) {
     const command = `psql "${dbConnectionString}" -f "${migrationPath}"`;
     const { stdout, stderr } = await execPromise(command);
     
-    if (stderr && !stderr.includes('NOTICE:')) {
+    if (stderr && !stderr.includes('NOTICE:') && !stderr.includes('psql:')) {
       throw new Error(stderr);
     }
     

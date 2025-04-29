@@ -862,6 +862,37 @@ router.get(
       'SELECT t.* FROM trades t JOIN accounts a ON t.leg1_seller_account_id = a.id OR t.leg1_buyer_account_id = a.id WHERE LOWER(a.wallet_address) = LOWER($1)',
       [jwtWalletAddress]
     );
+    
+    // Find the most recently updated trade
+    const lastModifiedTime = result.length > 0 
+      ? Math.max(...result.map(trade => trade.updated_at?.getTime() || 0))
+      : Date.now();
+    const lastModified = new Date(lastModifiedTime);
+    const lastModifiedStr = lastModified.toUTCString();
+    
+    // Generate ETag based on result data
+    const etag = `W/"${lastModifiedTime}-${JSON.stringify(result).length}"`;
+    
+    // Check if client has the latest version using ETag
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end(); // Not Modified
+      return;
+    }
+    
+    // Check if client has the latest version using Last-Modified
+    if (req.headers['if-modified-since']) {
+      const ifModifiedSince = new Date(req.headers['if-modified-since'] as string);
+      if (lastModified <= ifModifiedSince) {
+        res.status(304).end(); // Not Modified
+        return;
+      }
+    }
+    
+    // Set ETag and Last-Modified headers
+    res.setHeader('ETag', etag);
+    res.setHeader('Last-Modified', lastModifiedStr);
+    res.setHeader('Cache-Control', 'private, must-revalidate');
+    
     res.json(result);
   })
 );
@@ -943,6 +974,33 @@ router.get(
 
       // Check if the requester is a participant
       if (participantWallets.has(requesterWalletAddress.toLowerCase())) {
+        // Get the last modified timestamp
+        const lastModified = tradeData.updated_at || new Date();
+        const lastModifiedStr = lastModified.toUTCString();
+        
+        // Generate ETag based on trade data for conditional requests
+        const etag = `W/"${lastModified.getTime()}-${JSON.stringify(tradeData).length}"`;
+        
+        // Check if client has the latest version using ETag
+        if (req.headers['if-none-match'] === etag) {
+          res.status(304).end(); // Not Modified
+          return;
+        }
+        
+        // Check if client has the latest version using Last-Modified
+        if (req.headers['if-modified-since']) {
+          const ifModifiedSince = new Date(req.headers['if-modified-since'] as string);
+          if (lastModified <= ifModifiedSince) {
+            res.status(304).end(); // Not Modified
+            return;
+          }
+        }
+        
+        // Set ETag and Last-Modified headers
+        res.setHeader('ETag', etag);
+        res.setHeader('Last-Modified', lastModifiedStr);
+        res.setHeader('Cache-Control', 'private, must-revalidate');
+        
         // Requester is a participant, return full trade details
         res.json(tradeData);
       } else {

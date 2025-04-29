@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+/* eslint-env node */
+/* eslint-disable no-undef */
+
 /**
  * Simple database migration script for YapBay API
  * 

@@ -12,4 +12,6 @@ routes
 
 ## Ref
 
+### to run migrations
+
 node scripts/migrate.js

@@ -147,7 +147,7 @@ export function startEventListener() {
       }
       
       // Create metadata object to store in error_message field
-      const metadataObj: Record<string, any> = {};
+      const metadataObj: Record<string, unknown> = {};
       
       // Add relevant fields to metadata based on event type
       if (parsed.name === 'EscrowCreated' || parsed.name === 'FundsDeposited' || 
@@ -456,9 +456,7 @@ export function startEventListener() {
         }
         case 'FundsDeposited': {
           const escrowId = parsed.args.escrowId.toString();
-          const amount = parsed.args.amount.toString();
           const counter = parsed.args.counter.toString();
-          const timestamp = parsed.args.timestamp.toString();
 
           // Update the escrow state
           await query(

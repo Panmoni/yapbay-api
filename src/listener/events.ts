@@ -456,144 +456,46 @@ export function startEventListener() {
         }
         case 'FundsDeposited': {
           const escrowId = parsed.args.escrowId.toString();
-          const timestamp = Number(parsed.args.timestamp.toString());
-          const counter = Number(parsed.args.counter.toString());
+          const amount = parsed.args.amount.toString();
+          const counter = parsed.args.counter.toString();
+          const timestamp = parsed.args.timestamp.toString();
 
-          // Get current escrow state
-          const escrowResult = await query(
-            'SELECT state FROM escrows WHERE onchain_escrow_id = $1',
-            [escrowId]
+          // Update the escrow state
+          await query(
+            'UPDATE escrows SET state = $1, counter = $2, updated_at = CURRENT_TIMESTAMP, sequential = $3 WHERE onchain_escrow_id = $4',
+            ['FUNDED', counter, false, escrowId]
           );
+          console.log(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
+          fileLog(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
 
-          if (escrowResult.length > 0) {
-            const currentState = escrowResult[0].state;
-
-            // If escrow is in CREATED state, mark it as FUNDED (initial deposit)
-            if (currentState === 'CREATED') {
-              await query(
-                'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state = $3',
-                ['FUNDED', escrowId, 'CREATED']
-              );
-              console.log(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
-              fileLog(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
-
-              // Update trade leg1_state to FUNDED
-              await query(
-                'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state = $3',
-                ['FUNDED', escrowId, 'CREATED']
-              );
-              console.log(
-                `FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`
-              );
-              fileLog(`FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
-            }
-            // If this is a sequential trade and escrow is in FUNDED state, mark fiat as paid
-            else if (currentState === 'FUNDED') {
-              // Get trade information to check if it's sequential
-              const tradeResult = await query(
-                'SELECT sequential FROM trades WHERE leg1_escrow_onchain_id = $1 OR leg2_escrow_onchain_id = $1',
-                [escrowId]
-              );
-              
-              if (tradeResult.length > 0 && tradeResult[0].sequential) {
-                // mark fiat paid on escrow
-                await query(
-                  'UPDATE escrows SET fiat_paid = TRUE, counter = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND (fiat_paid = FALSE OR counter <> $1)',
-                  [counter, escrowId]
-                );
-                console.log(
-                  `FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`
-                );
-                fileLog(
-                  `FundsDeposited: Updated escrow onchainId=${escrowId} fiat_paid counter=${counter}`
-                );
-
-                // update trade legs fiat paid
-                await query(
-                  'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
-                  ['FIAT_PAID', timestamp, escrowId]
-                );
-                console.log(
-                  `FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`
-                );
-                fileLog(
-                  `FundsDeposited: Updated trade leg1_state=FIAT_PAID for escrowId=${escrowId}`
-                );
-
-                await query(
-                  'UPDATE trades SET leg2_state = $1, leg2_fiat_paid_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
-                  ['FIAT_PAID', timestamp, escrowId]
-                );
-                console.log(
-                  `FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`
-                );
-                fileLog(
-                  `FundsDeposited: Updated trade leg2_state=FIAT_PAID for escrowId=${escrowId}`
-                );
-              } else {
-                console.log(`FundsDeposited: Ignoring subsequent deposit for non-sequential trade with escrowId=${escrowId}`);
-                fileLog(`FundsDeposited: Ignoring subsequent deposit for non-sequential trade with escrowId=${escrowId}`);
-              }
-            }
-          }
+          // Update the trade state
+          await query(
+            'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
+            ['FUNDED', escrowId]
+          );
+          console.log(`FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
+          fileLog(`FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
           break;
         }
         case 'EscrowReleased': {
           const escrowId = parsed.args.escrowId.toString();
-          const timestamp = Number(parsed.args.timestamp?.toString() || Math.floor(Date.now() / 1000));
-          
-          // Update escrow state to RELEASED
+          const timestamp = parsed.args.timestamp.toString();
+
+          // Update the escrow state
           await query(
-            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE onchain_escrow_id = $3 AND state <> $1',
+            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE onchain_escrow_id = $3',
             ['RELEASED', timestamp, escrowId]
           );
-          console.log(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED at timestamp=${timestamp}`);
-          fileLog(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED at timestamp=${timestamp}`);
-          
-          // Update trade state to RELEASED
+          console.log(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
+          fileLog(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
+
+          // Update the trade state
           await query(
-            'UPDATE trades SET leg1_state = $1, leg1_completed_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
-            ['RELEASED', timestamp, escrowId]
+            'UPDATE trades SET leg1_state = $1, leg1_released_at = to_timestamp($2) WHERE leg1_escrow_onchain_id = $3 AND leg1_state <> $1',
+            ['COMPLETED', timestamp, escrowId]
           );
-          console.log(`EscrowReleased: Updated trade leg1_state=RELEASED for escrowId=${escrowId}`);
-          fileLog(`EscrowReleased: Updated trade leg1_state=RELEASED for escrowId=${escrowId}`);
-          
-          // Also update leg2 if it exists
-          await query(
-            'UPDATE trades SET leg2_state = $1, leg2_completed_at = to_timestamp($2) WHERE leg2_escrow_onchain_id = $3 AND leg2_state <> $1',
-            ['RELEASED', timestamp, escrowId]
-          );
-          
-          // Get trade ID for this escrow to record completion
-          const tradeResult = await query(
-            'SELECT id FROM trades WHERE leg1_escrow_onchain_id = $1 OR leg2_escrow_onchain_id = $1 LIMIT 1',
-            [escrowId]
-          );
-          
-          if (tradeResult.length > 0) {
-            const tradeId = tradeResult[0].id;
-            
-            // Check if both legs are complete or if this is a single-leg trade
-            const tradeStateResult = await query(
-              'SELECT leg1_state, leg2_state, leg2_escrow_onchain_id FROM trades WHERE id = $1',
-              [tradeId]
-            );
-            
-            if (tradeStateResult.length > 0) {
-              const { leg1_state, leg2_state, leg2_escrow_onchain_id } = tradeStateResult[0];
-              
-              // If this is a single-leg trade or both legs are complete, mark the trade as completed
-              if (!leg2_escrow_onchain_id || (leg1_state === 'RELEASED' && leg2_state === 'RELEASED')) {
-                await query(
-                  'UPDATE trades SET completed = TRUE, completed_at = to_timestamp($1) WHERE id = $2 AND completed = FALSE',
-                  [timestamp, tradeId]
-                );
-                console.log(`EscrowReleased: Marked trade ${tradeId} as completed at timestamp=${timestamp}`);
-                fileLog(`EscrowReleased: Marked trade ${tradeId} as completed at timestamp=${timestamp}`);
-              }
-            }
-          }
-          
+          console.log(`EscrowReleased: Updated trade leg1_state=COMPLETED for escrowId=${escrowId}`);
+          fileLog(`EscrowReleased: Updated trade leg1_state=COMPLETED for escrowId=${escrowId}`);
           break;
         }
         case 'EscrowCancelled': {

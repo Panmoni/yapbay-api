@@ -28,11 +28,10 @@ const app = express();
 
 // CORS Configuration
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production'
-    ? process.env.CORS_ORIGIN_PROD || 'https://app.yapbay.com'
-    : process.env.CORS_ORIGIN_DEV || 'http://localhost:5173',
+  origin: ['https://app.yapbay.com', 'http://localhost:5173', 'http://localhost:5174'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
 };
 
 // Security middleware

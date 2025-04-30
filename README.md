@@ -2,6 +2,8 @@
 
 This is the backend API for YapBay, a peer-to-peer cryptocurrency trading platform that facilitates secure exchanges between crypto and fiat currencies. The platform utilizes blockchain-based smart contracts for escrow services, ensuring secure and trustless transactions.
 
+The primary repo for this project is at [https://github.com/Panmoni/yapbay](https://github.com/Panmoni/yapbay).
+
 ## Project Documentation
 
 For detailed project requirements and specifications, see [Project Requirements](docs/reqs.md).

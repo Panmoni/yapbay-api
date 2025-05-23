@@ -897,6 +897,49 @@ router.get(
   })
 );
 
+// Get escrow balance by onchain escrow ID
+router.get(
+  '/escrows/:onchainEscrowId/balance',
+  requireJWT,
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const { onchainEscrowId } = req.params;
+    const jwtWalletAddress = getWalletAddressFromJWT(req);
+    
+    if (!jwtWalletAddress) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    try {
+      // Get escrow details and verify user has access
+      const escrowResult = await query(
+        `SELECT e.id, e.current_balance, e.amount, e.state, e.onchain_escrow_id
+         FROM escrows e
+         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
+         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
+        [onchainEscrowId, jwtWalletAddress]
+      );
+
+      if (escrowResult.length === 0) {
+        res.status(404).json({ error: 'Escrow not found or access denied' });
+        return;
+      }
+
+      const escrow = escrowResult[0];
+      res.json({
+        escrow_id: escrow.id,
+        onchain_escrow_id: escrow.onchain_escrow_id,
+        current_balance: escrow.current_balance,
+        original_amount: escrow.amount,
+        state: escrow.state
+      });
+    } catch (error) {
+      console.error('Error fetching escrow balance:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  })
+);
+
 // List escrows for authenticated user
 router.get(
   '/my/escrows',

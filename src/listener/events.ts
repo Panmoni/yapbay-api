@@ -84,39 +84,8 @@ export function startEventListener() {
         VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
         ON CONFLICT DO NOTHING;
       `;
-      // Map event name to transaction type
-      let transactionType: TransactionType = 'OTHER';
-      switch (parsed.name) {
-        case 'EscrowCreated':
-          transactionType = 'CREATE_ESCROW';
-          break;
-        case 'FiatMarkedPaid':
-          transactionType = 'MARK_FIAT_PAID';
-          break;
-        case 'FundsDeposited':
-          transactionType = 'FUND_ESCROW';
-          break;
-        case 'EscrowReleased':
-          transactionType = 'RELEASE_ESCROW';
-          break;
-        case 'EscrowCancelled':
-          transactionType = 'CANCEL_ESCROW';
-          break;
-        case 'DisputeOpened':
-          transactionType = 'OPEN_DISPUTE';
-          break;
-        case 'DisputeResponse':
-          transactionType = 'RESPOND_DISPUTE';
-          break;
-        case 'DisputeResolved':
-          transactionType = 'RESOLVE_DISPUTE';
-          break;
-        case 'SequentialAddressUpdated':
-          transactionType = 'OTHER'; // No specific type for this event
-          break;
-        default:
-          transactionType = 'OTHER';
-      }
+      // All blockchain events use EVENT transaction type
+      const transactionType: TransactionType = 'EVENT';
 
       let senderAddress = null;
       let receiverAddress = null;
@@ -397,41 +366,8 @@ export function startEventListener() {
               // Determine transaction type based on error context if possible
               let errorTransactionType: TransactionType = 'OTHER';
               
-              // Try to parse the event name from the error or log
-              try {
-                const parsedError = contract.interface.parseLog(log);
-                if (parsedError) {
-                  switch (parsedError.name) {
-                    case 'EscrowCreated':
-                      errorTransactionType = 'CREATE_ESCROW';
-                      break;
-                    case 'FiatMarkedPaid':
-                      errorTransactionType = 'MARK_FIAT_PAID';
-                      break;
-                    case 'FundsDeposited':
-                      errorTransactionType = 'FUND_ESCROW';
-                      break;
-                    case 'EscrowReleased':
-                      errorTransactionType = 'RELEASE_ESCROW';
-                      break;
-                    case 'EscrowCancelled':
-                      errorTransactionType = 'CANCEL_ESCROW';
-                      break;
-                    case 'DisputeOpened':
-                      errorTransactionType = 'OPEN_DISPUTE';
-                      break;
-                    case 'DisputeResponse':
-                      errorTransactionType = 'RESPOND_DISPUTE';
-                      break;
-                    case 'DisputeResolved':
-                      errorTransactionType = 'RESOLVE_DISPUTE';
-                      break;
-                  }
-                }
-              } catch (parseErr) {
-                // If we can't parse the log, just use OTHER
-                console.log(`Could not parse error log to determine transaction type: ${parseErr}`);
-              }
+              // All events use EVENT transaction type
+              errorTransactionType = 'EVENT';
               
               // Record a more detailed error transaction
               await recordTransaction({
@@ -457,14 +393,18 @@ export function startEventListener() {
         case 'FundsDeposited': {
           const escrowId = parsed.args.escrowId.toString();
           const counter = parsed.args.counter.toString();
+          const amount = parsed.args.amount.toString();
 
-          // Update the escrow state
+          // Convert blockchain amount (with 6 decimals) to database decimal format
+          const amountInDecimal = Number(amount) / 1_000_000;
+
+          // Update the escrow state and balance
           await query(
-            'UPDATE escrows SET state = $1, counter = $2, updated_at = CURRENT_TIMESTAMP, sequential = $3 WHERE onchain_escrow_id = $4',
-            ['FUNDED', counter, false, escrowId]
+            'UPDATE escrows SET state = $1, counter = $2, current_balance = $3, updated_at = CURRENT_TIMESTAMP, sequential = $4 WHERE onchain_escrow_id = $5',
+            ['FUNDED', counter, amountInDecimal, false, escrowId]
           );
-          console.log(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
-          fileLog(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED`);
+          console.log(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED current_balance=${amountInDecimal}`);
+          fileLog(`FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED current_balance=${amountInDecimal}`);
 
           // Update the trade state
           await query(
@@ -479,13 +419,13 @@ export function startEventListener() {
           const escrowId = parsed.args.escrowId.toString();
           const timestamp = parsed.args.timestamp.toString();
 
-          // Update the escrow state
+          // Update the escrow state and set balance to 0 (funds released)
           await query(
-            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE onchain_escrow_id = $3',
-            ['RELEASED', timestamp, escrowId]
+            'UPDATE escrows SET state = $1, current_balance = $2, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($3) WHERE onchain_escrow_id = $4',
+            ['RELEASED', 0, timestamp, escrowId]
           );
-          console.log(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
-          fileLog(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED`);
+          console.log(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED current_balance=0`);
+          fileLog(`EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED current_balance=0`);
 
           // Update the trade state
           await query(
@@ -500,13 +440,13 @@ export function startEventListener() {
           const escrowId = parsed.args.escrowId.toString();
           const timestamp = Number(parsed.args.timestamp?.toString() || Math.floor(Date.now() / 1000));
           
-          // Update escrow state to CANCELLED
+          // Update escrow state to CANCELLED and set balance to 0 (funds returned)
           await query(
-            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE onchain_escrow_id = $3 AND state <> $1',
-            ['CANCELLED', timestamp, escrowId]
+            'UPDATE escrows SET state = $1, current_balance = $2, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($3) WHERE onchain_escrow_id = $4 AND state <> $1',
+            ['CANCELLED', 0, timestamp, escrowId]
           );
-          console.log(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED at timestamp=${timestamp}`);
-          fileLog(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED at timestamp=${timestamp}`);
+          console.log(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED current_balance=0 at timestamp=${timestamp}`);
+          fileLog(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED current_balance=0 at timestamp=${timestamp}`);
           
           // Update trade state to CANCELLED
           await query(
@@ -609,13 +549,13 @@ export function startEventListener() {
         case 'DisputeResolved': {
           const escrowId = parsed.args.escrowId.toString();
 
-          // mark escrow resolved
+          // mark escrow resolved and set balance to 0 (funds distributed)
           await query(
-            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
-            ['RESOLVED', escrowId]
+            'UPDATE escrows SET state = $1, current_balance = $2, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $3 AND state <> $1',
+            ['RESOLVED', 0, escrowId]
           );
-          console.log(`DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED`);
-          fileLog(`DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED`);
+          console.log(`DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED current_balance=0`);
+          fileLog(`DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED current_balance=0`);
 
           // update trade legs resolved
           await query(
@@ -653,6 +593,26 @@ export function startEventListener() {
           );
           break;
         }
+        case 'EscrowBalanceChanged': {
+          const escrowId = parsed.args.escrowId.toString();
+          const newBalance = parsed.args.newBalance.toString();
+          const reason = parsed.args.reason as string;
+
+          // Convert blockchain amount (with 6 decimals) to database decimal format
+          const balanceInDecimal = Number(newBalance) / 1_000_000;
+
+          await query(
+            'UPDATE escrows SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2',
+            [balanceInDecimal, escrowId]
+          );
+          console.log(
+            `EscrowBalanceChanged: Updated escrow onchainId=${escrowId} current_balance=${balanceInDecimal} reason=${reason}`
+          );
+          fileLog(
+            `EscrowBalanceChanged: Updated escrow onchainId=${escrowId} current_balance=${balanceInDecimal} reason=${reason}`
+          );
+          break;
+        }
         default:
           break;
       }
@@ -665,41 +625,8 @@ export function startEventListener() {
         // Determine transaction type based on error context if possible
         let errorTransactionType: TransactionType = 'OTHER';
         
-        // Try to parse the event name from the error or log
-        try {
-          const parsedError = contract.interface.parseLog(log);
-          if (parsedError) {
-            switch (parsedError.name) {
-              case 'EscrowCreated':
-                errorTransactionType = 'CREATE_ESCROW';
-                break;
-              case 'FiatMarkedPaid':
-                errorTransactionType = 'MARK_FIAT_PAID';
-                break;
-              case 'FundsDeposited':
-                errorTransactionType = 'FUND_ESCROW';
-                break;
-              case 'EscrowReleased':
-                errorTransactionType = 'RELEASE_ESCROW';
-                break;
-              case 'EscrowCancelled':
-                errorTransactionType = 'CANCEL_ESCROW';
-                break;
-              case 'DisputeOpened':
-                errorTransactionType = 'OPEN_DISPUTE';
-                break;
-              case 'DisputeResponse':
-                errorTransactionType = 'RESPOND_DISPUTE';
-                break;
-              case 'DisputeResolved':
-                errorTransactionType = 'RESOLVE_DISPUTE';
-                break;
-            }
-          }
-        } catch (parseErr) {
-          // If we can't parse the log, just use OTHER
-          console.log(`Could not parse error log to determine transaction type: ${parseErr}`);
-        }
+        // All events use EVENT transaction type
+        errorTransactionType = 'EVENT';
         
         // Record a more detailed error transaction
         await recordTransaction({

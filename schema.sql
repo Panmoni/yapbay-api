@@ -119,6 +119,7 @@ CREATE TABLE escrows (
     arbitrator_address VARCHAR(42) NOT NULL,
     token_type VARCHAR(10) NOT NULL DEFAULT 'USDC',
     amount DECIMAL(15,6) NOT NULL CHECK (amount <= 100.0),
+    current_balance DECIMAL(15,6),
     state VARCHAR(20) NOT NULL CHECK (state IN ('CREATED', 'FUNDED', 'RELEASED', 'CANCELLED', 'DISPUTED', 'RESOLVED')),
     sequential BOOLEAN NOT NULL,
     sequential_escrow_address VARCHAR(42),
@@ -180,6 +181,7 @@ BEGIN
             'OPEN_DISPUTE',
             'RESPOND_DISPUTE',
             'RESOLVE_DISPUTE',
+            'EVENT',
             'OTHER'
         );
     END IF;
@@ -276,6 +278,7 @@ CREATE INDEX idx_escrows_trade_id ON escrows(trade_id);
 CREATE INDEX idx_escrows_escrow_address ON escrows(escrow_address);
 CREATE INDEX idx_escrows_onchain_escrow_id ON escrows(onchain_escrow_id);
 CREATE INDEX idx_escrows_state ON escrows(state);
+CREATE INDEX idx_escrows_current_balance ON escrows(current_balance);
 CREATE INDEX idx_escrows_completed_at ON escrows(completed_at);
 CREATE INDEX idx_disputes_escrow_id ON disputes(escrow_id);
 CREATE INDEX idx_disputes_trade_id ON disputes(trade_id);

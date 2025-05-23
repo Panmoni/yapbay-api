@@ -61,6 +61,7 @@ export type TransactionType =
   | 'OPEN_DISPUTE'
   | 'RESPOND_DISPUTE'
   | 'RESOLVE_DISPUTE'
+  | 'EVENT'
   | 'OTHER';
 
 export interface TransactionData {

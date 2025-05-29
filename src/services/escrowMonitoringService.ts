@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import { provider } from '../celo';
 import { YapBayEscrow } from '../types/YapBayEscrow';
 import YapBayEscrowABI from '../contract/YapBayEscrow.json';
-import pool from '../db';
+import pool, { syncEscrowBalance, recordBalanceValidation } from '../db';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -183,6 +183,48 @@ export class EscrowMonitoringService {
       try {
         console.log(`[EscrowMonitor] Attempting to auto-cancel escrow ${escrowId}`);
         
+        // Validate balance before cancellation
+        try {
+          const storedBalance = await this.contract.getStoredEscrowBalance(escrowId);
+          const calculatedBalance = await this.contract.getCalculatedEscrowBalance(escrowId);
+          
+          const storedFormatted = ethers.formatUnits(storedBalance, 6);
+          const calculatedFormatted = ethers.formatUnits(calculatedBalance, 6);
+          
+          console.log(`[EscrowMonitor] Escrow ${escrowId} balance validation - Stored: ${storedFormatted} USDC, Calculated: ${calculatedFormatted} USDC`);
+          
+          // Get database balance for comparison
+          const dbResult = await pool.query(
+            'SELECT current_balance FROM escrows WHERE onchain_escrow_id = $1',
+            [escrowId.toString()]
+          );
+          
+          if (dbResult.rows.length > 0) {
+            const dbBalance = dbResult.rows[0].current_balance;
+            
+            // Record balance validation for audit
+            await recordBalanceValidation(
+              escrowId.toString(),
+              storedFormatted,
+              calculatedFormatted,
+              dbBalance
+            );
+            
+            // Sync database if needed
+            if (Math.abs(parseFloat(storedFormatted) - dbBalance) > 0.000001) {
+              console.warn(`[EscrowMonitor] Database balance mismatch for escrow ${escrowId}: DB=${dbBalance}, Contract=${storedFormatted}`);
+              await syncEscrowBalance(escrowId.toString(), storedFormatted, 'Auto-cancel validation sync');
+            }
+          }
+          
+          // Log warning if contract balances don't match expectations
+          if (storedBalance !== calculatedBalance) {
+            console.warn(`[EscrowMonitor] Contract balance mismatch for escrow ${escrowId}: stored=${storedFormatted}, calculated=${calculatedFormatted}`);
+          }
+        } catch (balanceError) {
+          console.warn(`[EscrowMonitor] Could not validate balance for escrow ${escrowId}:`, balanceError);
+        }
+        
         // Estimate gas first to avoid failed transactions
         const gasEstimate = await this.contract.autoCancel.estimateGas(escrowId);
         const gasLimit = gasEstimate * 120n / 100n; // Add 20% buffer
@@ -299,6 +341,49 @@ export class EscrowMonitoringService {
       client.release();
     }
   }
+
+  /**
+   * Validate balance consistency across database and contract
+   */
+  async validateAllEscrowBalances(): Promise<void> {
+    console.log('[EscrowMonitor] Starting balance validation check');
+    
+    try {
+      const activeEscrows = await this.getActiveEscrowsFromDatabase();
+      
+      for (const escrowId of activeEscrows) {
+        try {
+          const [storedBalance, calculatedBalance] = await Promise.all([
+            this.contract.getStoredEscrowBalance(escrowId),
+            this.contract.getCalculatedEscrowBalance(escrowId)
+          ]);
+          
+          const storedFormatted = ethers.formatUnits(storedBalance, 6);
+          const calculatedFormatted = ethers.formatUnits(calculatedBalance, 6);
+          
+          // Get database balance
+          const dbResult = await pool.query(
+            'SELECT current_balance FROM escrows WHERE onchain_escrow_id = $1',
+            [escrowId.toString()]
+          );
+          
+          if (dbResult.rows.length > 0) {
+            const dbBalance = dbResult.rows[0].current_balance;
+            
+            // Check for significant differences (more than 1 micro-USDC)
+            if (Math.abs(parseFloat(storedFormatted) - dbBalance) > 0.000001) {
+              console.warn(`[EscrowMonitor] Balance sync needed for escrow ${escrowId}: DB=${dbBalance}, Contract=${storedFormatted}`);
+              await syncEscrowBalance(escrowId.toString(), storedFormatted, 'Validation sync');
+            }
+          }
+        } catch (error) {
+          console.error(`[EscrowMonitor] Error validating balance for escrow ${escrowId}:`, error);
+        }
+      }
+    } catch (error) {
+      console.error('[EscrowMonitor] Error during balance validation:', error);
+    }
+  }
 }
 
 /**
@@ -315,6 +400,12 @@ export async function monitorExpiredEscrows(): Promise<void> {
   try {
     const service = new EscrowMonitoringService();
     await service.monitorAndCancelExpiredEscrows();
+    
+    // Run balance validation every 10th monitoring cycle (approximately every 10 minutes if running every minute)
+    const shouldValidateBalances = Math.random() < 0.1; // 10% chance each run
+    if (shouldValidateBalances) {
+      await service.validateAllEscrowBalances();
+    }
   } catch (error) {
     console.error('[EscrowMonitor] Critical error in monitoring service:', error);
     // Don't re-throw to prevent cron job from stopping

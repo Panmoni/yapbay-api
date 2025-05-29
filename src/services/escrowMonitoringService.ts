@@ -250,13 +250,13 @@ export class EscrowMonitoringService {
         results.push(result);
         console.log(`[EscrowMonitor] Successfully auto-cancelled escrow ${escrowId}`);
 
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(`[EscrowMonitor] Failed to auto-cancel escrow ${escrowId}:`, error);
         
         const result: AutoCancellationResult = {
           escrowId,
           success: false,
-          errorMessage: error.message || error.toString()
+          errorMessage: error instanceof Error ? error.message : String(error)
         };
 
         results.push(result);
@@ -372,7 +372,7 @@ export class EscrowMonitoringService {
             
             // Check for significant differences (more than 1 micro-USDC)
             if (Math.abs(parseFloat(storedFormatted) - dbBalance) > 0.000001) {
-              console.warn(`[EscrowMonitor] Balance sync needed for escrow ${escrowId}: DB=${dbBalance}, Contract=${storedFormatted}`);
+              console.warn(`[EscrowMonitor] Balance sync needed for escrow ${escrowId}: DB=${dbBalance}, Contract=${storedFormatted}, Calculated=${calculatedFormatted}`);
               await syncEscrowBalance(escrowId.toString(), storedFormatted, 'Validation sync');
             }
           }

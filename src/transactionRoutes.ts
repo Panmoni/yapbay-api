@@ -476,7 +476,6 @@ router.post(
                     tradeResult[0].leg1_state !== 'COMPLETED' && 
                     tradeResult[0].leg1_state !== 'CANCELLED') {
             // Update trade leg1_state to DISPUTED
-            const timestamp = Math.floor(Date.now() / 1000);
             await query(
               'UPDATE trades SET leg1_state = $1, overall_status = $2 WHERE id = $3 AND leg1_state <> $1',
               ['DISPUTED', 'DISPUTED', trade_id]

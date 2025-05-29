@@ -159,8 +159,8 @@ export class EscrowMonitoringService {
       
       return {
         escrowId,
-        tradeId: escrowInfo.trade_id || escrowInfo[0]?.toString() || '',
-        seller: escrowInfo.seller || escrowInfo[1] || '',
+        tradeId: (escrowInfo.trade_id || escrowInfo[0] || '').toString(),
+        seller: (escrowInfo.seller || escrowInfo[1] || '').toString(),
         amount: (escrowInfo.amount || escrowInfo[2] || 0).toString(),
         state: Number(escrowInfo.state || escrowInfo[3] || 0),
         depositDeadline: Number(escrowInfo.deposit_deadline || escrowInfo[4] || 0),

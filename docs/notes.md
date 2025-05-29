@@ -1,6 +1,10 @@
 # YapBay API Notes
 
-update routes for multi-network
+## multi network
+~8 major routes** need network middleware + query updates
+2. **Deadline service** needs multi-network processing
+3. **Admin routes** may need network awareness
+4. **Testing** network isolation end-to-end
 
 ## api contracts
 enable these to be pulled from the api so can be shown on app. maybe return them as part of /health?

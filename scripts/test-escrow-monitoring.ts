@@ -117,7 +117,7 @@ async function testEscrowMonitoring() {
     }
 
     // Initialize the monitoring service
-    const service = new EscrowMonitoringService();
+    new EscrowMonitoringService();
     console.log('✅ EscrowMonitoringService initialized successfully');
 
     // Test 1: Check database connection and active escrows

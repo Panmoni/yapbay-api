@@ -3,6 +3,7 @@ import { query, recordTransaction, TransactionType, TransactionStatus } from './
 import { logError } from './logger';
 import { getWalletAddressFromJWT } from './utils/jwtUtils';
 import { withErrorHandling } from './middleware/errorHandler';
+import { requireNetwork } from './middleware/networkMiddleware';
 import { CustomJwtPayload } from './utils/jwtUtils';
 
 // Extend Express Request interface to match the one in routes.ts
@@ -33,6 +34,7 @@ router.use(routerErrorHandler);
 // Record a new transaction
 router.post(
   '/record',
+  requireNetwork,
   withErrorHandling(async (req: ExtendedRequest, res: Response): Promise<void> => {
     console.log('[DEBUG] /transactions/record endpoint hit with body:', JSON.stringify(req.body, null, 2));
     const {
@@ -53,6 +55,7 @@ router.post(
       metadata,
       status = 'PENDING' // Default to PENDING if not provided
     } = req.body;
+    const networkId = req.networkId!;
 
     // Collect validation errors to provide more comprehensive feedback
     const validationErrors: { field: string; message: string }[] = [];
@@ -284,6 +287,7 @@ router.post(
         error_message: metadata ? JSON.stringify(metadata) : null,
         related_trade_id: trade_id,
         related_escrow_db_id: escrowDbId,
+        network_id: networkId,
       });
       
       console.log(`[DB] Recorded/Updated transaction ${transaction_hash} with ID: ${transactionId}`);

@@ -1,6 +1,8 @@
 import express, { Request as ExpressRequest, Response, Router, NextFunction } from 'express';
 import { query, recordTransaction } from './db';
-import { provider } from './celo';
+import { CeloService } from './celo';
+import { NetworkService } from './services/networkService';
+import { requireNetwork, optionalNetwork } from './middleware/networkMiddleware';
 import { requestLogger, logError } from './logger';
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
@@ -281,8 +283,10 @@ router.use('/transactions', transactionRouter);
 // Health Check Endpoint (Authenticated)
 router.get(
   '/health',
+  optionalNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const walletAddress = getWalletAddressFromJWT(req);
+    const networkId = req.networkId!;
     let dbOk = false;
     let celoNetwork: ethers.Network | null = null;
     let celoError: string | null = null;
@@ -295,6 +299,7 @@ router.get(
     }
 
     try {
+      const provider = await CeloService.getProviderForNetwork(networkId);
       celoNetwork = await provider.getNetwork();
     } catch (celoErr) {
       logError('Health check Celo provider failed', celoErr as Error);
@@ -901,8 +906,10 @@ router.get(
 router.get(
   '/escrows/:onchainEscrowId/balance',
   requireJWT,
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
+    const networkId = req.networkId!;
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     
     if (!jwtWalletAddress) {
@@ -910,62 +917,29 @@ router.get(
       return;
     }
 
+    // Verify the user is involved in this escrow on this network
+    const escrowCheck = await query(
+      `SELECT e.* FROM escrows e
+       WHERE e.onchain_escrow_id = $1 AND e.network_id = $2
+       AND (LOWER(e.seller_address) = LOWER($3) OR LOWER(e.buyer_address) = LOWER($3))`,
+      [onchainEscrowId, networkId, jwtWalletAddress]
+    );
+
+    if (escrowCheck.length === 0) {
+      res.status(404).json({ error: 'Escrow not found or access denied' });
+      return;
+    }
+
     try {
-      // Get escrow details and verify user has access
-      const escrowResult = await query(
-        `SELECT e.id, e.current_balance, e.amount, e.state, e.onchain_escrow_id
-         FROM escrows e
-         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
-         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
-        [onchainEscrowId, jwtWalletAddress]
-      );
-
-      if (escrowResult.length === 0) {
-        res.status(404).json({ error: 'Escrow not found or access denied' });
-        return;
-      }
-
-      const escrow = escrowResult[0];
-
-      // Get contract balance data
-      const contract = new ethers.Contract(
-        process.env.CONTRACT_ADDRESS || '',
-        YapBayEscrowABI.abi,
-        provider
-      );
-
-      try {
-        const [storedBalance, calculatedBalance] = await Promise.all([
-          contract.getStoredEscrowBalance(onchainEscrowId),
-          contract.getCalculatedEscrowBalance(onchainEscrowId)
-        ]);
-
-        res.json({
-          escrow_id: escrow.id,
-          onchain_escrow_id: escrow.onchain_escrow_id,
-          database_balance: escrow.current_balance,
-          contract_stored_balance: ethers.formatUnits(storedBalance, 6),
-          contract_calculated_balance: ethers.formatUnits(calculatedBalance, 6),
-          original_amount: escrow.amount,
-          state: escrow.state
-        });
-      } catch (contractError) {
-        // Fallback to database data if contract call fails
-        console.warn('Contract balance call failed, using database data:', contractError);
-        res.json({
-          escrow_id: escrow.id,
-          onchain_escrow_id: escrow.onchain_escrow_id,
-          database_balance: escrow.current_balance,
-          contract_stored_balance: null,
-          contract_calculated_balance: null,
-          original_amount: escrow.amount,
-          state: escrow.state,
-          warning: 'Contract balance data unavailable'
-        });
-      }
+      const balance = await CeloService.getEscrowBalance(networkId, parseInt(onchainEscrowId));
+      res.json({
+        network: req.network!.name,
+        escrowId: onchainEscrowId,
+        balance
+      });
     } catch (error) {
       console.error('Error fetching escrow balance:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch escrow balance' });
     }
   })
 );
@@ -974,8 +948,10 @@ router.get(
 router.get(
   '/escrows/:onchainEscrowId/stored-balance',
   requireJWT,
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
+    const networkId = req.networkId!;
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     
     if (!jwtWalletAddress) {
@@ -983,37 +959,30 @@ router.get(
       return;
     }
 
+    // Verify the user is involved in this escrow on this network
+    const escrowCheck = await query(
+      `SELECT e.* FROM escrows e
+       WHERE e.onchain_escrow_id = $1 AND e.network_id = $2
+       AND (LOWER(e.seller_address) = LOWER($3) OR LOWER(e.buyer_address) = LOWER($3))`,
+      [onchainEscrowId, networkId, jwtWalletAddress]
+    );
+
+    if (escrowCheck.length === 0) {
+      res.status(404).json({ error: 'Escrow not found or access denied' });
+      return;
+    }
+
     try {
-      // Verify user has access to this escrow
-      const escrowResult = await query(
-        `SELECT e.id FROM escrows e
-         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
-         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
-        [onchainEscrowId, jwtWalletAddress]
-      );
+      const contract = await CeloService.getContractForNetwork(networkId);
+      const stored = await contract.getStoredEscrowBalance(onchainEscrowId);
 
-      if (escrowResult.length === 0) {
-        res.status(404).json({ error: 'Escrow not found or access denied' });
-        return;
-      }
-
-      // Call contract function
-      const contract = new ethers.Contract(
-        process.env.CONTRACT_ADDRESS || '',
-        YapBayEscrowABI.abi,
-        provider
-      );
-
-      const storedBalance = await contract.getStoredEscrowBalance(onchainEscrowId);
-      
       res.json({
-        onchain_escrow_id: onchainEscrowId,
-        stored_balance: ethers.formatUnits(storedBalance, 6),
-        stored_balance_raw: storedBalance.toString()
+        escrowId: onchainEscrowId,
+        storedBalance: ethers.formatUnits(stored, 6)
       });
     } catch (error) {
       console.error('Error fetching stored escrow balance:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch stored escrow balance' });
     }
   })
 );
@@ -1022,8 +991,10 @@ router.get(
 router.get(
   '/escrows/:onchainEscrowId/calculated-balance',
   requireJWT,
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
+    const networkId = req.networkId!;
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     
     if (!jwtWalletAddress) {
@@ -1031,37 +1002,30 @@ router.get(
       return;
     }
 
+    // Verify the user is involved in this escrow on this network
+    const escrowCheck = await query(
+      `SELECT e.* FROM escrows e
+       WHERE e.onchain_escrow_id = $1 AND e.network_id = $2
+       AND (LOWER(e.seller_address) = LOWER($3) OR LOWER(e.buyer_address) = LOWER($3))`,
+      [onchainEscrowId, networkId, jwtWalletAddress]
+    );
+
+    if (escrowCheck.length === 0) {
+      res.status(404).json({ error: 'Escrow not found or access denied' });
+      return;
+    }
+
     try {
-      // Verify user has access to this escrow
-      const escrowResult = await query(
-        `SELECT e.id FROM escrows e
-         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
-         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
-        [onchainEscrowId, jwtWalletAddress]
-      );
+      const contract = await CeloService.getContractForNetwork(networkId);
+      const calculated = await contract.getCalculatedEscrowBalance(onchainEscrowId);
 
-      if (escrowResult.length === 0) {
-        res.status(404).json({ error: 'Escrow not found or access denied' });
-        return;
-      }
-
-      // Call contract function
-      const contract = new ethers.Contract(
-        process.env.CONTRACT_ADDRESS || '',
-        YapBayEscrowABI.abi,
-        provider
-      );
-
-      const calculatedBalance = await contract.getCalculatedEscrowBalance(onchainEscrowId);
-      
       res.json({
-        onchain_escrow_id: onchainEscrowId,
-        calculated_balance: ethers.formatUnits(calculatedBalance, 6),
-        calculated_balance_raw: calculatedBalance.toString()
+        escrowId: onchainEscrowId,
+        calculatedBalance: ethers.formatUnits(calculated, 6)
       });
     } catch (error) {
       console.error('Error fetching calculated escrow balance:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch calculated escrow balance' });
     }
   })
 );
@@ -1070,8 +1034,10 @@ router.get(
 router.get(
   '/escrows/:onchainEscrowId/sequential-info',
   requireJWT,
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
+    const networkId = req.networkId!;
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     
     if (!jwtWalletAddress) {
@@ -1079,40 +1045,30 @@ router.get(
       return;
     }
 
+    // Verify the user is involved in this escrow on this network
+    const escrowCheck = await query(
+      `SELECT e.* FROM escrows e
+       WHERE e.onchain_escrow_id = $1 AND e.network_id = $2
+       AND (LOWER(e.seller_address) = LOWER($3) OR LOWER(e.buyer_address) = LOWER($3))`,
+      [onchainEscrowId, networkId, jwtWalletAddress]
+    );
+
+    if (escrowCheck.length === 0) {
+      res.status(404).json({ error: 'Escrow not found or access denied' });
+      return;
+    }
+
     try {
-      // Verify user has access to this escrow
-      const escrowResult = await query(
-        `SELECT e.id FROM escrows e
-         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
-         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
-        [onchainEscrowId, jwtWalletAddress]
-      );
-
-      if (escrowResult.length === 0) {
-        res.status(404).json({ error: 'Escrow not found or access denied' });
-        return;
-      }
-
-      // Call contract function
-      const contract = new ethers.Contract(
-        process.env.CONTRACT_ADDRESS || '',
-        YapBayEscrowABI.abi,
-        provider
-      );
-
-      const sequentialInfo = await contract.getSequentialEscrowInfo(onchainEscrowId);
+      const sequentialInfo = await CeloService.getSequentialInfo(networkId, parseInt(onchainEscrowId));
       
       res.json({
-        onchain_escrow_id: onchainEscrowId,
-        is_sequential: sequentialInfo.isSequential,
-        sequential_address: sequentialInfo.sequentialAddress,
-        sequential_balance: ethers.formatUnits(sequentialInfo.sequentialBalance, 6),
-        sequential_balance_raw: sequentialInfo.sequentialBalance.toString(),
-        was_released: sequentialInfo.wasReleased
+        network: req.network!.name,
+        escrowId: onchainEscrowId,
+        sequentialInfo
       });
     } catch (error) {
       console.error('Error fetching sequential escrow info:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to fetch sequential escrow info' });
     }
   })
 );
@@ -1121,8 +1077,10 @@ router.get(
 router.get(
   '/escrows/:onchainEscrowId/auto-cancel-eligible',
   requireJWT,
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
+    const networkId = req.networkId!;
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     
     if (!jwtWalletAddress) {
@@ -1130,36 +1088,29 @@ router.get(
       return;
     }
 
+    // Verify the user is involved in this escrow on this network
+    const escrowCheck = await query(
+      `SELECT e.* FROM escrows e
+       WHERE e.onchain_escrow_id = $1 AND e.network_id = $2
+       AND (LOWER(e.seller_address) = LOWER($3) OR LOWER(e.buyer_address) = LOWER($3))`,
+      [onchainEscrowId, networkId, jwtWalletAddress]
+    );
+
+    if (escrowCheck.length === 0) {
+      res.status(404).json({ error: 'Escrow not found or access denied' });
+      return;
+    }
+
     try {
-      // Verify user has access to this escrow
-      const escrowResult = await query(
-        `SELECT e.id FROM escrows e
-         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
-         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
-        [onchainEscrowId, jwtWalletAddress]
-      );
-
-      if (escrowResult.length === 0) {
-        res.status(404).json({ error: 'Escrow not found or access denied' });
-        return;
-      }
-
-      // Call contract function
-      const contract = new ethers.Contract(
-        process.env.CONTRACT_ADDRESS || '',
-        YapBayEscrowABI.abi,
-        provider
-      );
-
-      const isEligible = await contract.isEligibleForAutoCancel(onchainEscrowId);
+      const isEligible = await CeloService.checkAutoCancelEligible(networkId, parseInt(onchainEscrowId));
       
       res.json({
-        onchain_escrow_id: onchainEscrowId,
-        is_eligible_for_auto_cancel: isEligible
+        escrowId: onchainEscrowId,
+        isEligibleForAutoCancel: isEligible
       });
     } catch (error) {
       console.error('Error checking auto-cancel eligibility:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Failed to check auto-cancel eligibility' });
     }
   })
 );
@@ -1167,17 +1118,21 @@ router.get(
 // List escrows for authenticated user
 router.get(
   '/my/escrows',
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const jwtWalletAddress = getWalletAddressFromJWT(req);
+    const networkId = req.networkId!;
+    
     if (!jwtWalletAddress) {
       res.status(404).json({ error: 'Wallet address not found in token' });
       return;
     }
     const result = await query(
       `SELECT e.* FROM escrows e
-     JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
-     WHERE LOWER(a.wallet_address) = LOWER($1)`,
-      [jwtWalletAddress]
+       WHERE e.network_id = $1 
+       AND (LOWER(e.seller_address) = LOWER($2) OR LOWER(e.buyer_address) = LOWER($2))
+       ORDER BY e.created_at DESC`,
+      [networkId, jwtWalletAddress]
     );
     res.json(result);
   })
@@ -1362,6 +1317,7 @@ router.put(
 router.post(
   '/escrows/record',
   requireJWT,
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const {
       trade_id,
@@ -1374,8 +1330,14 @@ router.post(
       sequential_escrow_address,
     } = req.body;
     const jwtWalletAddress = getWalletAddressFromJWT(req);
+    const networkId = req.networkId!;
 
-    const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+    const network = await NetworkService.getNetworkById(networkId);
+    if (!network) {
+      res.status(400).json({ error: 'Invalid network' });
+      return;
+    }
+    const CONTRACT_ADDRESS = network.contractAddress;
     if (!CONTRACT_ADDRESS) {
       logError(
         'CONTRACT_ADDRESS environment variable not set',
@@ -1445,6 +1407,8 @@ router.post(
 
       // Verify the transaction on the blockchain
       try {
+        const defaultNetwork = await NetworkService.getDefaultNetwork();
+        const provider = await CeloService.getProviderForNetwork(defaultNetwork.id);
         const txReceipt = await provider.getTransactionReceipt(transaction_hash);
 
         if (!txReceipt || txReceipt.status !== 1) {
@@ -1599,6 +1563,7 @@ router.post(
           related_trade_id: trade_id,
           related_escrow_db_id: escrowDbId, // Link to the DB escrow record
           error_message: null,
+          network_id: networkId,
         });
 
         res.json({
@@ -1618,6 +1583,7 @@ router.post(
           receiver_or_contract_address: CONTRACT_ADDRESS,
           related_trade_id: trade_id,
           error_message: (txError as Error).message,
+          network_id: networkId,
           // Other fields might be null or unknown here
         });
         logError(`Transaction verification error for hash ${transaction_hash}`, txError as Error);

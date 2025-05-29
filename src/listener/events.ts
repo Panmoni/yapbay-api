@@ -113,6 +113,10 @@ export function startEventListener() {
           senderAddress = parsed.args.canceller as string;
           receiverAddress = parsed.args.buyer as string;
           break;
+        case 'EscrowBalanceChanged':
+          senderAddress = CONTRACT_ADDRESS;
+          receiverAddress = CONTRACT_ADDRESS;
+          break;
         // Add other cases as needed
       }
       

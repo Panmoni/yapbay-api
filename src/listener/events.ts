@@ -4,6 +4,7 @@ import { query, recordTransaction, TransactionType } from '../db';
 import type { LogDescription, ParamType } from 'ethers';
 import fs from 'fs';
 import path from 'path';
+import pool from '../db';
 
 dotenv.config();
 
@@ -440,13 +441,48 @@ export function startEventListener() {
           const escrowId = parsed.args.escrowId.toString();
           const timestamp = Number(parsed.args.timestamp?.toString() || Math.floor(Date.now() / 1000));
           
+          // Check if this was an auto-cancellation by examining the transaction
+          const txHash = log.transactionHash;
+          const arbitratorAddress = process.env.ARBITRATOR_ADDRESS;
+          let isAutoCancellation = false;
+          
+          try {
+            // Check if this cancellation was triggered by our monitoring service
+            const autoCancelResult = await pool.query(
+              'SELECT id FROM contract_auto_cancellations WHERE escrow_id = $1 AND transaction_hash = $2',
+              [escrowId, txHash]
+            );
+            
+            if (autoCancelResult.rows.length > 0) {
+              isAutoCancellation = true;
+              console.log(`EscrowCancelled: Detected auto-cancellation for escrow ${escrowId}`);
+              fileLog(`EscrowCancelled: Detected auto-cancellation for escrow ${escrowId}`);
+            } else if (arbitratorAddress && parsed.args.canceller === arbitratorAddress) {
+              // If cancelled by arbitrator address but not found in our records, likely an auto-cancellation
+              isAutoCancellation = true;
+              console.log(`EscrowCancelled: Detected likely auto-cancellation by arbitrator for escrow ${escrowId}`);
+              fileLog(`EscrowCancelled: Detected likely auto-cancellation by arbitrator for escrow ${escrowId}`);
+              
+              // Update our auto-cancellation record if it exists but wasn't linked to tx hash
+              await pool.query(`
+                UPDATE contract_auto_cancellations 
+                SET transaction_hash = $1, status = 'SUCCESS'
+                WHERE escrow_id = $2 AND transaction_hash IS NULL AND status = 'PENDING'
+              `, [txHash, escrowId]);
+            }
+          } catch (error) {
+            console.error(`EscrowCancelled: Error checking auto-cancellation status:`, error);
+            fileLog(`EscrowCancelled: Error checking auto-cancellation status: ${error}`);
+          }
+
           // Update escrow state to CANCELLED and set balance to 0 (funds returned)
+          const cancellationNote = isAutoCancellation ? 'AUTO_CANCELLED' : 'CANCELLED';
           await query(
             'UPDATE escrows SET state = $1, current_balance = $2, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($3) WHERE onchain_escrow_id = $4 AND state <> $1',
-            ['CANCELLED', 0, timestamp, escrowId]
+            [cancellationNote, 0, timestamp, escrowId]
           );
-          console.log(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED current_balance=0 at timestamp=${timestamp}`);
-          fileLog(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=CANCELLED current_balance=0 at timestamp=${timestamp}`);
+          console.log(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=${cancellationNote} current_balance=0 at timestamp=${timestamp}`);
+          fileLog(`EscrowCancelled: Updated escrow onchainId=${escrowId} state=${cancellationNote} current_balance=0 at timestamp=${timestamp}`);
           
           // Update trade state to CANCELLED
           await query(

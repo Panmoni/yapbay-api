@@ -10,6 +10,7 @@ CREATE TABLE schema_migrations (
 DROP TABLE IF EXISTS dispute_resolutions CASCADE;
 DROP TABLE IF EXISTS dispute_evidence CASCADE;
 DROP TABLE IF EXISTS disputes CASCADE;
+DROP TABLE IF EXISTS contract_auto_cancellations CASCADE;
 DROP TABLE IF EXISTS escrow_id_mapping CASCADE;
 DROP TABLE IF EXISTS escrows CASCADE;
 DROP TABLE IF EXISTS transactions CASCADE;
@@ -105,7 +106,12 @@ CREATE TABLE trades (
     leg2_cancelled_at TIMESTAMP WITH TIME ZONE,
     leg2_cancelled_by VARCHAR(42),
     leg2_dispute_id INTEGER,
-    leg2_escrow_onchain_id VARCHAR(42) -- The on-chain escrow ID (from the EscrowCreated event) for leg 2.
+    leg2_escrow_onchain_id VARCHAR(42), -- The on-chain escrow ID (from the EscrowCreated event) for leg 2.
+    
+    -- Trade completion tracking
+    completed BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    cancelled BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- 4. escrows: Tracks on-chain escrow state
@@ -120,7 +126,7 @@ CREATE TABLE escrows (
     token_type VARCHAR(10) NOT NULL DEFAULT 'USDC',
     amount DECIMAL(15,6) NOT NULL CHECK (amount <= 100.0),
     current_balance DECIMAL(15,6),
-    state VARCHAR(20) NOT NULL CHECK (state IN ('CREATED', 'FUNDED', 'RELEASED', 'CANCELLED', 'DISPUTED', 'RESOLVED')),
+    state VARCHAR(20) NOT NULL CHECK (state IN ('CREATED', 'FUNDED', 'RELEASED', 'CANCELLED', 'AUTO_CANCELLED', 'DISPUTED', 'RESOLVED')),
     sequential BOOLEAN NOT NULL,
     sequential_escrow_address VARCHAR(42),
     fiat_paid BOOLEAN NOT NULL DEFAULT FALSE,
@@ -235,12 +241,15 @@ CREATE TABLE contract_events (
     args JSONB NOT NULL,
     trade_id BIGINT,
     transaction_id BIGINT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT contract_events_unique_tx_log UNIQUE (transaction_hash, log_index),
+    CONSTRAINT fk_contract_events_transaction_id FOREIGN KEY (transaction_id) REFERENCES transactions(id)
 );
 
 CREATE INDEX idx_contract_events_name ON contract_events(event_name);
 CREATE INDEX idx_contract_events_block_number ON contract_events(block_number);
 CREATE INDEX idx_contract_events_tx_hash ON contract_events(transaction_hash);
+CREATE INDEX idx_contract_events_trade_id ON contract_events(trade_id);
 
 -- 9. trade_cancellations: audit trail for auto-cancels
 CREATE TABLE trade_cancellations (
@@ -252,6 +261,42 @@ CREATE TABLE trade_cancellations (
 );
 
 CREATE INDEX idx_trade_cancellations_trade_id ON trade_cancellations(trade_id);
+
+-- 10. contract_auto_cancellations: Tracks automatic escrow cancellations performed by the monitoring service
+CREATE TABLE contract_auto_cancellations (
+    id SERIAL PRIMARY KEY,
+    escrow_id INTEGER NOT NULL,
+    transaction_hash VARCHAR(66),
+    gas_used INTEGER,
+    gas_price BIGINT,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('SUCCESS', 'FAILED', 'PENDING')),
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for efficient querying by escrow_id
+CREATE INDEX idx_contract_auto_cancellations_escrow_id 
+    ON contract_auto_cancellations(escrow_id);
+
+-- Index for querying by status
+CREATE INDEX idx_contract_auto_cancellations_status 
+    ON contract_auto_cancellations(status);
+
+-- Index for time-based queries
+CREATE INDEX idx_contract_auto_cancellations_created_at 
+    ON contract_auto_cancellations(created_at);
+
+-- Index for transaction hash lookups
+CREATE INDEX idx_contract_auto_cancellations_tx_hash 
+    ON contract_auto_cancellations(transaction_hash);
+
+COMMENT ON TABLE contract_auto_cancellations IS 'Tracks automatic escrow cancellations performed by the monitoring service';
+COMMENT ON COLUMN contract_auto_cancellations.escrow_id IS 'The blockchain escrow ID that was cancelled';
+COMMENT ON COLUMN contract_auto_cancellations.transaction_hash IS 'The blockchain transaction hash of the cancellation';
+COMMENT ON COLUMN contract_auto_cancellations.gas_used IS 'Amount of gas used for the transaction';
+COMMENT ON COLUMN contract_auto_cancellations.gas_price IS 'Gas price in wei for the transaction';
+COMMENT ON COLUMN contract_auto_cancellations.status IS 'Status of the cancellation attempt: SUCCESS, FAILED, or PENDING';
+COMMENT ON COLUMN contract_auto_cancellations.error_message IS 'Error message if the cancellation failed';
 
 -- escrow_id_mapping: Maps blockchain escrow IDs to database escrow IDs for better synchronization
 CREATE TABLE escrow_id_mapping (
@@ -280,6 +325,9 @@ CREATE INDEX idx_escrows_onchain_escrow_id ON escrows(onchain_escrow_id);
 CREATE INDEX idx_escrows_state ON escrows(state);
 CREATE INDEX idx_escrows_current_balance ON escrows(current_balance);
 CREATE INDEX idx_escrows_completed_at ON escrows(completed_at);
+CREATE INDEX idx_trades_completed ON trades(completed);
+CREATE INDEX idx_trades_completed_at ON trades(completed_at);
+CREATE INDEX idx_trades_cancelled ON trades(cancelled);
 CREATE INDEX idx_disputes_escrow_id ON disputes(escrow_id);
 CREATE INDEX idx_disputes_trade_id ON disputes(trade_id);
 CREATE INDEX idx_dispute_evidence_dispute_id ON dispute_evidence(dispute_id);
@@ -350,7 +398,12 @@ CREATE TRIGGER update_escrow_id_mapping_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- 10. enforce trade deadlines: block state updates past deadlines
+CREATE TRIGGER update_contract_auto_cancellations_updated_at
+    BEFORE UPDATE ON contract_auto_cancellations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- 11. enforce trade deadlines: block state updates past deadlines
 CREATE OR REPLACE FUNCTION enforce_trade_deadlines()
 RETURNS TRIGGER AS $$
 BEGIN

@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
-import { wsProvider, getContract } from '../celo';
+import { CeloService } from '../celo';
+import { NetworkService } from '../services/networkService';
 import { query, recordTransaction, TransactionType } from '../db';
 import type { LogDescription, ParamType } from 'ethers';
 import fs from 'fs';
@@ -8,10 +9,8 @@ import pool from '../db';
 
 dotenv.config();
 
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
-if (!CONTRACT_ADDRESS) {
-  throw new Error('CONTRACT_ADDRESS not set in environment variables');
-}
+// This file is deprecated - use multiNetworkEvents.ts instead
+// Keeping for backward compatibility only
 
 const logFilePath = path.join(process.cwd(), 'events.log');
 const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
@@ -30,41 +29,19 @@ interface ContractLog {
   data: string;
 }
 
-export function startEventListener() {
-  const contract = getContract(wsProvider);
-  console.log('Starting contract event listener for', CONTRACT_ADDRESS);
-  fileLog(`Starting contract event listener for ${CONTRACT_ADDRESS}`);
-  // heartbeat: log every minute to show connection alive
-  // setInterval(() => fileLog('heartbeat'), 60_000);
-  // catch underlying WebSocket close and error
-  type WebSocketProvider = typeof wsProvider;
-  type WebSocketConnection = {
-    onclose: (event: { code: number }) => void;
-    onerror: (error: { message?: string }) => void;
-  };
-
-  const rawWs =
-    (
-      wsProvider as WebSocketProvider as unknown as {
-        _websocket?: WebSocketConnection;
-        ws?: WebSocketConnection;
-      }
-    )._websocket ||
-    (
-      wsProvider as WebSocketProvider as unknown as {
-        _websocket?: WebSocketConnection;
-        ws?: WebSocketConnection;
-      }
-    ).ws;
-
-  if (rawWs) {
-    rawWs.onclose = (event: { code: number }) => fileLog(`WebSocket closed: ${event.code}`);
-    rawWs.onerror = (error: { message?: string }) =>
-      fileLog(`WebSocket error: ${error.message || error}`);
-  }
+export async function startEventListener() {
+  console.log('⚠️  WARNING: This is the legacy single-network event listener.');
+  console.log('⚠️  Please use multiNetworkEvents.ts for production.');
+  
+  const defaultNetwork = await NetworkService.getDefaultNetwork();
+  const wsProvider = await CeloService.getWsProviderForNetwork(defaultNetwork.id);
+  const contract = await CeloService.getContractForNetwork(defaultNetwork.id, wsProvider);
+  
+  console.log('Starting contract event listener for', defaultNetwork.contractAddress);
+  fileLog(`Starting contract event listener for ${defaultNetwork.contractAddress}`);
 
   // Listen to all logs from this contract
-  const filter = { address: CONTRACT_ADDRESS };
+  const filter = { address: defaultNetwork.contractAddress };
 
   wsProvider.on(filter, async (log: ContractLog) => {
     try {
@@ -95,11 +72,11 @@ export function startEventListener() {
       switch (parsed.name) {
         case 'EscrowCreated':
           senderAddress = parsed.args.seller as string;
-          receiverAddress = CONTRACT_ADDRESS;
+          receiverAddress = defaultNetwork.contractAddress;
           break;
         case 'FundsDeposited':
           senderAddress = parsed.args.depositor as string;
-          receiverAddress = CONTRACT_ADDRESS;
+          receiverAddress = defaultNetwork.contractAddress;
           break;
         case 'FiatMarkedPaid':
           senderAddress = parsed.args.buyer as string;
@@ -114,8 +91,8 @@ export function startEventListener() {
           receiverAddress = parsed.args.buyer as string;
           break;
         case 'EscrowBalanceChanged':
-          senderAddress = CONTRACT_ADDRESS;
-          receiverAddress = CONTRACT_ADDRESS;
+          senderAddress = defaultNetwork.contractAddress;
+          receiverAddress = defaultNetwork.contractAddress;
           break;
         // Add other cases as needed
       }
@@ -142,6 +119,7 @@ export function startEventListener() {
         receiver_or_contract_address: receiverAddress,
         error_message: Object.keys(metadataObj).length > 0 ? JSON.stringify(metadataObj) : null,
         related_trade_id: tradeIdValue,
+        network_id: defaultNetwork.id,
       });
 
       // Ensure log_index is never null (use 0 as default if missing)
@@ -221,21 +199,21 @@ export function startEventListener() {
           } else {
             // Insert new escrow record
             const insertResult = await query(
-              'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, deposit_deadline, fiat_deadline) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
+              'INSERT INTO escrows (trade_id, escrow_address, onchain_escrow_id, seller_address, buyer_address, arbitrator_address, amount, current_balance, state, sequential, sequential_escrow_address, deposit_deadline, fiat_deadline, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8, $9, $10, $11, $12, $13) RETURNING id',
               [
                 tradeId,
-                CONTRACT_ADDRESS,
+                defaultNetwork.contractAddress,
+                escrowId,
                 seller,
                 buyer,
                 arbitrator,
-                'USDC',
                 _amountInDecimal,
                 'CREATED',
                 sequential,
                 seqAddr,
-                escrowId,
                 depositDate,
                 fiatDate,
+                defaultNetwork.id,
               ]
             );
 
@@ -352,9 +330,10 @@ export function startEventListener() {
                 type: 'MARK_FIAT_PAID',
                 block_number: log.blockNumber,
                 related_trade_id: tradeId,
-                sender_address: parsed.args.sender?.toString() || null,
-                receiver_or_contract_address: CONTRACT_ADDRESS,
-                error_message: JSON.stringify({ escrow_id: escrowId, timestamp })
+                sender_address: parsed.args.buyer,
+                receiver_or_contract_address: parsed.args.seller,
+                error_message: JSON.stringify({ escrow_id: escrowId, timestamp }),
+                network_id: defaultNetwork.id
               });
               console.log(`FiatMarkedPaid: Recorded transaction record for tx=${log.transactionHash}`);
               fileLog(`FiatMarkedPaid: Recorded transaction record for tx=${log.transactionHash}`);
@@ -368,20 +347,15 @@ export function startEventListener() {
             
             // Attempt to record the error
             try {
-              // Determine transaction type based on error context if possible
-              let errorTransactionType: TransactionType = 'OTHER';
-              
-              // All events use EVENT transaction type
-              errorTransactionType = 'EVENT';
-              
               // Record a more detailed error transaction
               await recordTransaction({
                 transaction_hash: log.transactionHash,
                 status: 'FAILED',
-                type: errorTransactionType,
+                type: 'EVENT',
                 block_number: log.blockNumber,
                 related_trade_id: null,
                 error_message: `Event listener error: ${(err as Error).message || 'Unknown error'}`,
+                network_id: defaultNetwork.id,
               });
 
               console.log(`[RECOVERY] Recorded error transaction for ${log.transactionHash}`);
@@ -662,20 +636,15 @@ export function startEventListener() {
 
       // Attempt to record the error
       try {
-        // Determine transaction type based on error context if possible
-        let errorTransactionType: TransactionType = 'OTHER';
-        
-        // All events use EVENT transaction type
-        errorTransactionType = 'EVENT';
-        
         // Record a more detailed error transaction
         await recordTransaction({
           transaction_hash: log.transactionHash,
           status: 'FAILED',
-          type: errorTransactionType,
+          type: 'EVENT',
           block_number: log.blockNumber,
           related_trade_id: null,
           error_message: `Event listener error: ${(err as Error).message || 'Unknown error'}`,
+          network_id: defaultNetwork.id,
         });
 
         console.log(`[RECOVERY] Recorded error transaction for ${log.transactionHash}`);

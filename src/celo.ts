@@ -205,12 +205,12 @@ export const getDefaultSigner = async (): Promise<ethers.Wallet> => {
   return CeloService.getSignerForNetwork(defaultNetwork.id);
 };
 
-// Legacy exports for backward compatibility
-export const provider = getDefaultProvider();
-export const wsProvider = getDefaultWsProvider();
-export const getSigner = getDefaultSigner;
-export const getContract = getDefaultContract;
-export const getSignedContract = getDefaultSignedContract;
+// Legacy exports for backward compatibility - these should be replaced with network-aware versions
+export { getDefaultProvider as provider };
+export { getDefaultWsProvider as wsProvider };
+export { getDefaultSigner as getSigner };
+export { getDefaultContract as getContract };
+export { getDefaultSignedContract as getSignedContract };
 export const formatUSDC = CeloService.formatUSDC;
 export const parseUSDC = CeloService.parseUSDC;
 export const getEscrowBalance = async (escrowId: number) => {

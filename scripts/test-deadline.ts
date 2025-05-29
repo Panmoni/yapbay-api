@@ -1,5 +1,6 @@
 import pool from '../src/db';
 import { expireDeadlines } from '../src/services/deadlineService';
+import { NetworkService } from '../src/services/networkService';
 
 // States where a trade should not be cancelled, regardless of deadline
 // This is used in the test logic below when checking uncancelable states
@@ -9,6 +10,10 @@ const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
 (async () => {
   const client = await pool.connect();
   try {
+    // Get default network for testing
+    const defaultNetwork = await NetworkService.getDefaultNetwork();
+    console.log(`Using network: ${defaultNetwork.name} (ID: ${defaultNetwork.id})`);
+
     // Test 1: Test database trigger blocks updates when deadline passed
     await client.query('BEGIN');
     const past = new Date(Date.now() - 3600000).toISOString();
@@ -16,9 +21,9 @@ const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
       `INSERT INTO trades(
          overall_status, from_fiat_currency, destination_fiat_currency,
          leg1_state, leg1_crypto_amount, leg1_fiat_currency,
-         leg1_escrow_deposit_deadline
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past]
+         leg1_escrow_deposit_deadline, network_id
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past, defaultNetwork.id]
     );
     const id = res.rows[0].id;
     try {
@@ -48,9 +53,9 @@ const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
       `INSERT INTO trades(
          overall_status, from_fiat_currency, destination_fiat_currency,
          leg1_state, leg1_crypto_amount, leg1_fiat_currency,
-         leg1_escrow_deposit_deadline
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past]
+         leg1_escrow_deposit_deadline, network_id
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past, defaultNetwork.id]
     );
     const cancelableId = cancelableRes.rows[0].id;
     console.log(`Created cancelable trade with ID: ${cancelableId}`);
@@ -60,9 +65,9 @@ const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
       `INSERT INTO trades(
          overall_status, from_fiat_currency, destination_fiat_currency,
          leg1_state, leg1_crypto_amount, leg1_fiat_currency,
-         leg1_fiat_payment_deadline
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      ['IN_PROGRESS', 'USD', 'USD', 'FIAT_PAID', 1.0, 'USD', past]
+         leg1_fiat_payment_deadline, network_id
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      ['IN_PROGRESS', 'USD', 'USD', 'FIAT_PAID', 1.0, 'USD', past, defaultNetwork.id]
     );
     const uncancelableId = uncancelableRes.rows[0].id;
     console.log(`Created uncancelable trade with ID: ${uncancelableId}`);

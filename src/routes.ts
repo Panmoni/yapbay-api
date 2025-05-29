@@ -103,7 +103,16 @@ const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: string)
     try {
       const table = resourceType === 'account' ? 'accounts' : 'offers';
       const column = resourceType === 'account' ? 'wallet_address' : 'creator_account_id';
-      const result = await query(`SELECT ${column} FROM ${table} WHERE id = $1`, [resourceId]);
+      
+      let result;
+      if (resourceType === 'offer' && req.networkId) {
+        // For offers, include network filtering
+        result = await query(`SELECT ${column} FROM ${table} WHERE id = $1 AND network_id = $2`, [resourceId, req.networkId]);
+      } else {
+        // For accounts (cross-network) or when network not available
+        result = await query(`SELECT ${column} FROM ${table} WHERE id = $1`, [resourceId]);
+      }
+      
       if (result.length === 0) {
         res.status(404).json({ error: `${resourceType} not found` });
         return;
@@ -188,15 +197,20 @@ router.get(
 // /offers/:id
 router.get(
   '/offers/:id',
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
+    const networkId = req.networkId!;
     try {
-      const result = await query('SELECT * FROM offers WHERE id = $1', [id]);
+      const result = await query('SELECT * FROM offers WHERE id = $1 AND network_id = $2', [id, networkId]);
       if (result.length === 0) {
         res.status(404).json({ error: 'Offer not found' });
         return;
       }
-      res.json(result[0]);
+      res.json({
+        network: req.network!.name,
+        offer: result[0]
+      });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -207,11 +221,13 @@ router.get(
 // /offers
 router.get(
   '/offers',
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { type, token, owner } = req.query;
+    const networkId = req.networkId!;
     try {
-      let sql = 'SELECT * FROM offers WHERE 1=1';
-      const params: string[] = [];
+      let sql = 'SELECT * FROM offers WHERE network_id = $1';
+      const params: (string | number)[] = [networkId];
 
       if (type) {
         sql += ' AND offer_type = $' + (params.length + 1);
@@ -238,7 +254,10 @@ router.get(
       }
 
       const result = await query(sql, params);
-      res.json(result);
+      res.json({
+        network: req.network!.name,
+        offers: result
+      });
     } catch (err) {
       logError('[GET /offers] Error fetching offers', err as Error);
       res.status(500).json({ error: (err as Error).message });
@@ -485,8 +504,10 @@ router.put(
 // Create a new offer (restricted to creator's account)
 router.post(
   '/offers',
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { creator_account_id, offer_type, min_amount, fiat_currency = 'USD' } = req.body;
+    const networkId = req.networkId!;
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     if (!jwtWalletAddress) {
       res.status(403).json({ error: 'No wallet address in token' });
@@ -522,7 +543,7 @@ router.post(
       return;
     }
     const result = await query(
-      'INSERT INTO offers (creator_account_id, offer_type, token, fiat_currency, min_amount, max_amount, total_available_amount, rate_adjustment, terms, escrow_deposit_time_limit, fiat_payment_time_limit) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',
+      'INSERT INTO offers (creator_account_id, offer_type, token, fiat_currency, min_amount, max_amount, total_available_amount, rate_adjustment, terms, escrow_deposit_time_limit, fiat_payment_time_limit, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *',
       [
         creator_account_id,
         offer_type,
@@ -535,18 +556,24 @@ router.post(
         req.body.terms || 'Cash only',
         '15 minutes',
         '30 minutes',
+        networkId,
       ]
     );
-    res.status(201).json({ id: result[0].id });
+    res.status(201).json({
+      network: req.network!.name,
+      offer: result[0]
+    });
   })
 );
 
 // Update an offer (restricted to creator)
 router.put(
   '/offers/:id',
+  requireNetwork,
   restrictToOwner('offer', 'id'),
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
+    const networkId = req.networkId!;
     try {
       const {
         min_amount,
@@ -581,7 +608,7 @@ router.put(
         offer_type = COALESCE($9, offer_type),
         token = COALESCE($10, token),
         updated_at = NOW()
-      WHERE id = $11 RETURNING id`,
+      WHERE id = $11 AND network_id = $12 RETURNING *`,
         [
           min_amount || null,
           max_amount || null,
@@ -594,13 +621,19 @@ router.put(
           offer_type || null,
           token || null,
           id,
+          networkId,
         ]
       );
+      
       if (result.length === 0) {
         res.status(404).json({ error: 'Offer not found' });
         return;
       }
-      res.json({ id: result[0].id });
+      
+      res.json({ 
+        network: req.network!.name,
+        offer: result[0] 
+      });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
@@ -610,21 +643,23 @@ router.put(
 // Delete an offer (restricted to creator)
 router.delete(
   '/offers/:id',
+  requireNetwork,
   restrictToOwner('offer', 'id'),
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
+    const networkId = req.networkId!;
     try {
       // First check if the offer exists and is owned by the caller
-      const offerCheck = await query('SELECT id FROM offers WHERE id = $1', [id]);
+      const offerCheck = await query('SELECT id FROM offers WHERE id = $1 AND network_id = $2', [id, networkId]);
       if (offerCheck.length === 0) {
         res.status(404).json({ error: 'Offer not found' });
         return;
       }
 
-      // Check for active trades referencing this offer
+      // Check for active trades referencing this offer on this network
       const activeTrades = await query(
-        "SELECT id FROM trades WHERE leg1_offer_id = $1 AND overall_status NOT IN ('COMPLETED', 'CANCELLED')",
-        [id]
+        "SELECT id FROM trades WHERE leg1_offer_id = $1 AND network_id = $2 AND overall_status NOT IN ('COMPLETED', 'CANCELLED')",
+        [id, networkId]
       );
 
       if (activeTrades.length > 0) {
@@ -636,7 +671,7 @@ router.delete(
       }
 
       // Proceed with deletion
-      const result = await query('DELETE FROM offers WHERE id = $1 RETURNING id', [id]);
+      const result = await query('DELETE FROM offers WHERE id = $1 AND network_id = $2 RETURNING id', [id, networkId]);
 
       if (result.length === 0) {
         res.status(500).json({ error: 'Unexpected error deleting offer' });
@@ -667,6 +702,7 @@ router.delete(
 // Initiate a trade (requires JWT but no ownership check yet—open to any authenticated user)
 router.post(
   '/trades',
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     console.log('POST /trades - Request body:', JSON.stringify(req.body));
     const {
@@ -679,6 +715,7 @@ router.post(
       from_bank,
       destination_bank,
     } = req.body;
+    const networkId = req.networkId!;
     console.log('Extracted values:', {
       leg1_offer_id,
       leg1_crypto_amount,
@@ -694,7 +731,7 @@ router.post(
       return;
     }
 
-    const leg1Offer = await query('SELECT * FROM offers WHERE id = $1', [leg1_offer_id]);
+    const leg1Offer = await query('SELECT * FROM offers WHERE id = $1 AND network_id = $2', [leg1_offer_id, networkId]);
     console.log(
       'Leg1 offer query result:',
       leg1Offer.length > 0 ? JSON.stringify(leg1Offer[0]) : 'Not found'
@@ -801,11 +838,11 @@ router.post(
         `INSERT INTO trades (
         leg1_offer_id, leg2_offer_id, overall_status, from_fiat_currency, destination_fiat_currency, from_bank, destination_bank,
         leg1_state, leg1_seller_account_id, leg1_buyer_account_id, leg1_crypto_token, leg1_crypto_amount, leg1_fiat_currency, leg1_fiat_amount,
-        leg1_escrow_deposit_deadline, leg1_fiat_payment_deadline
+        leg1_escrow_deposit_deadline, leg1_fiat_payment_deadline, network_id
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-        NOW() + $15::interval, NOW() + $16::interval
-      ) RETURNING id`,
+        NOW() + $15::interval, NOW() + $16::interval, $17
+      ) RETURNING *`,
         [
           leg1_offer_id,
           leg2_offer_id || null,
@@ -823,6 +860,7 @@ router.post(
           leg1_fiat_amount || null,
           leg1Offer[0].escrow_deposit_time_limit, // $15
           leg1Offer[0].fiat_payment_time_limit, // $16
+          networkId, // $17
         ]
       );
 
@@ -851,21 +889,27 @@ router.post(
       );
     }
 
-    res.status(201).json({ id: result[0].id });
+    res.status(201).json({
+      network: req.network!.name,
+      trade: result[0]
+    });
   })
 );
 // List trades for authenticated user
 router.get(
   '/my/trades',
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const jwtWalletAddress = getWalletAddressFromJWT(req);
+    const networkId = req.networkId!;
+    
     if (!jwtWalletAddress) {
       res.status(404).json({ error: 'Wallet address not found in token' });
       return;
     }
     const result = await query(
-      'SELECT t.* FROM trades t JOIN accounts a ON t.leg1_seller_account_id = a.id OR t.leg1_buyer_account_id = a.id WHERE LOWER(a.wallet_address) = LOWER($1)',
-      [jwtWalletAddress]
+      'SELECT t.* FROM trades t JOIN accounts a ON t.leg1_seller_account_id = a.id OR t.leg1_buyer_account_id = a.id WHERE LOWER(a.wallet_address) = LOWER($1) AND t.network_id = $2 ORDER BY t.created_at DESC',
+      [jwtWalletAddress, networkId]
     );
     
     // Find the most recently updated trade
@@ -898,7 +942,10 @@ router.get(
     res.setHeader('Last-Modified', lastModifiedStr);
     res.setHeader('Cache-Control', 'private, must-revalidate');
     
-    res.json(result);
+    res.json({
+      network: req.network!.name,
+      trades: result
+    });
   })
 );
 
@@ -1141,8 +1188,10 @@ router.get(
 // Get trade details (restricted to participants)
 router.get(
   '/trades/:id',
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
+    const networkId = req.networkId!;
     const requesterWalletAddress = getWalletAddressFromJWT(req);
 
     if (!requesterWalletAddress) {
@@ -1154,8 +1203,8 @@ router.get(
     try {
       // Fetch trade data including all potential participant account IDs
       const tradeResult = await query(
-        'SELECT *, leg1_seller_account_id, leg1_buyer_account_id, leg2_seller_account_id, leg2_buyer_account_id FROM trades WHERE id = $1',
-        [id]
+        'SELECT *, leg1_seller_account_id, leg1_buyer_account_id, leg2_seller_account_id, leg2_buyer_account_id FROM trades WHERE id = $1 AND network_id = $2',
+        [id, networkId]
       );
       if (tradeResult.length === 0) {
         res.status(404).json({ error: 'Trade not found' });
@@ -1224,7 +1273,10 @@ router.get(
         res.setHeader('Cache-Control', 'private, must-revalidate');
         
         // Requester is a participant, return full trade details
-        res.json(tradeData);
+        res.json({
+          network: req.network!.name,
+          trade: tradeData
+        });
       } else {
         // Requester is not a participant, return 403 Forbidden
         res.status(403).json({ error: 'Forbidden: You are not authorized to view this trade' });
@@ -1239,9 +1291,11 @@ router.get(
 // Update trade info (restricted to trade participants)
 router.put(
   '/trades/:id',
+  requireNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const { leg1_state, overall_status, fiat_paid } = req.body;
+    const networkId = req.networkId!;
 
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     if (!jwtWalletAddress) {
@@ -1249,7 +1303,7 @@ router.put(
       return;
     }
 
-    const trade = await query('SELECT * FROM trades WHERE id = $1', [id]);
+    const trade = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [id, networkId]);
     if (trade.length === 0) {
       res.status(404).json({ error: 'Trade not found' });
       return;
@@ -1399,7 +1453,7 @@ router.post(
       }
 
       // Verify the trade exists
-      const tradeCheck = await query('SELECT id FROM trades WHERE id = $1', [trade_id]);
+      const tradeCheck = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [trade_id, networkId]);
       if (tradeCheck.length === 0) {
         res.status(404).json({ error: 'Trade not found' });
         return;

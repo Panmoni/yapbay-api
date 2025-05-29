@@ -46,6 +46,48 @@ export async function query(text: string, params?: unknown[]) {
   throw lastError;
 }
 
+// Balance synchronization functions
+export async function syncEscrowBalance(onchainEscrowId: string, contractBalance: string, reason?: string) {
+  const balanceInDecimal = parseFloat(contractBalance);
+  await query(
+    'UPDATE escrows SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2',
+    [balanceInDecimal, onchainEscrowId]
+  );
+  
+  if (reason) {
+    console.log(`[DB] Synced balance for escrow ${onchainEscrowId}: ${contractBalance} USDC (${reason})`);
+  }
+}
+
+export async function getEscrowsWithBalanceMismatch() {
+  return await query(`
+    SELECT 
+      e.onchain_escrow_id,
+      e.current_balance as db_balance,
+      e.state,
+      e.amount as original_amount
+    FROM escrows e
+    WHERE e.onchain_escrow_id IS NOT NULL
+      AND e.state IN ('FUNDED', 'DISPUTED')
+    ORDER BY e.created_at DESC
+  `);
+}
+
+export async function recordBalanceValidation(onchainEscrowId: string, storedBalance: string, calculatedBalance: string, dbBalance: number) {
+  await query(`
+    INSERT INTO contract_auto_cancellations (escrow_id, status, error_message)
+    VALUES ($1, 'BALANCE_CHECK', $2)
+  `, [
+    parseInt(onchainEscrowId),
+    JSON.stringify({
+      stored_balance: storedBalance,
+      calculated_balance: calculatedBalance,
+      db_balance: dbBalance,
+      timestamp: new Date().toISOString()
+    })
+  ]);
+}
+
 export default pool;
 
 import { logError } from './logger'; // Assuming logger is set up

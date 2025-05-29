@@ -1,5 +1,7 @@
 # YapBay API Notes
 
+update routes for multi-network
+
 ## api contracts
 enable these to be pulled from the api so can be shown on app. maybe return them as part of /health?
 
@@ -11,6 +13,8 @@ Will need to record referrals, will need a table for that, route, migration... p
 ## refactor
 1639 src/routes.ts
 759 src/transactionRoutes.ts
+
+one command to start api, listener, backend monitoring service
 
 ## restart
 clear db to start over

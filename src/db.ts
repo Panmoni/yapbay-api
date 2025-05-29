@@ -117,6 +117,7 @@ export interface TransactionData {
   error_message?: string | null;
   related_trade_id?: number | null;
   related_escrow_db_id?: number | null;
+  network_id: number;
 }
 
 /**
@@ -137,6 +138,7 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
     error_message,
     related_trade_id,
     related_escrow_db_id,
+    network_id,
   } = data;
 
   // Convert BigInts to strings if necessary for DB insertion
@@ -149,9 +151,9 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
     INSERT INTO transactions (
       transaction_hash, status, type, block_number, sender_address,
       receiver_or_contract_address, gas_used, error_message,
-      related_trade_id, related_escrow_db_id
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    ON CONFLICT (transaction_hash) DO UPDATE SET
+      related_trade_id, related_escrow_db_id, network_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    ON CONFLICT (transaction_hash, network_id) DO UPDATE SET
       status = EXCLUDED.status,
       block_number = EXCLUDED.block_number,
       gas_used = EXCLUDED.gas_used,
@@ -173,6 +175,7 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
     error_message,
     related_trade_id,
     related_escrow_db_id,
+    network_id,
   ];
 
   try {
@@ -183,8 +186,9 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
     }
     // If ON CONFLICT DO UPDATE happened but didn't return ID (less common)
     // Try fetching the ID based on the hash
-    const fetchResult = await query('SELECT id FROM transactions WHERE transaction_hash = $1', [
+    const fetchResult = await query('SELECT id FROM transactions WHERE transaction_hash = $1 AND network_id = $2', [
       transaction_hash,
+      network_id,
     ]);
     if (fetchResult.length > 0) {
       console.log(

@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
-import { provider } from '../celo';
+import { CeloService } from '../celo';
+import { NetworkService } from './networkService';
 import { YapBayEscrow } from '../types/YapBayEscrow';
-import YapBayEscrowABI from '../contract/YapBayEscrow.json';
+
 import pool, { syncEscrowBalance, recordBalanceValidation } from '../db';
 import * as dotenv from 'dotenv';
 
@@ -35,27 +36,32 @@ interface AutoCancellationResult {
  * Service to monitor blockchain escrows and automatically cancel expired ones
  */
 export class EscrowMonitoringService {
-  private contract: YapBayEscrow;
-  private arbitratorWallet: ethers.Wallet;
+  private contract!: YapBayEscrow;
+  private arbitratorWallet!: ethers.Wallet;
 
   constructor() {
-    // Initialize contract with arbitrator wallet for auto-cancellation
+    // This constructor is deprecated - use createForNetwork instead
+    console.warn('⚠️  WARNING: Using deprecated constructor. Use EscrowMonitoringService.createForNetwork() instead.');
+  }
+
+  static async createForNetwork(networkId: number): Promise<EscrowMonitoringService> {
     const arbitratorPrivateKey = process.env.PRIVATE_KEY;
     if (!arbitratorPrivateKey) {
       throw new Error('PRIVATE_KEY not set in environment variables');
     }
     
-    const contractAddress = process.env.CONTRACT_ADDRESS;
-    if (!contractAddress) {
-      throw new Error('CONTRACT_ADDRESS not set in environment variables');
+    const network = await NetworkService.getNetworkById(networkId);
+    if (!network) {
+      throw new Error(`Network with ID ${networkId} not found`);
     }
     
-    this.arbitratorWallet = new ethers.Wallet(arbitratorPrivateKey, provider);
-    this.contract = new ethers.Contract(
-      contractAddress,
-      YapBayEscrowABI.abi,
-      this.arbitratorWallet
-    ) as unknown as YapBayEscrow;
+    const provider = await CeloService.getProviderForNetwork(networkId);
+    const service = new EscrowMonitoringService();
+    
+    service.arbitratorWallet = new ethers.Wallet(arbitratorPrivateKey, provider);
+    service.contract = await CeloService.getContractForNetwork(networkId, service.arbitratorWallet);
+    
+    return service;
   }
 
   /**
@@ -85,7 +91,7 @@ export class EscrowMonitoringService {
       }
 
     } catch (error) {
-      console.error('[EscrowMonitor] Error in monitorAndCancelExpiredEscrows:', error);
+      console.error(`[ERROR] Failed to start escrow monitoring:`, error);
       throw error;
     }
   }

@@ -1,22 +1,23 @@
 # YapBay API Notes
 
 ## multi network
-~8 major routes** need network middleware + query updates
-2. **Deadline service** needs multi-network processing
-3. **Admin routes** may need network awareness
-4. **Testing** network isolation end-to-end
+tests
 
 ## api contracts
 enable these to be pulled from the api so can be shown on app. maybe return them as part of /health?
 
 select * from networks
 
+build number or version
+
 ## Referrals
 Will need to record referrals, will need a table for that, route, migration... pending full integration of divvi into frontend
 
 ## refactor
-1639 src/routes.ts
-759 src/transactionRoutes.ts
+1659 src/routes.ts
+763 src/transactionRoutes.ts
+659 src/listener/events.ts
+466 src/listener/multiNetworkEvents.ts
 
 one command to start api, listener, backend monitoring service
 

@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { CeloService } from '../celo';
 import { NetworkService } from '../services/networkService';
+import { NetworkConfig } from '../types/networks';
 import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
 
@@ -10,8 +11,8 @@ describe('Blockchain Contract Integration', function() {
   // These tests require a connection to the Celo Alfajores testnet
   // and will be skipped if the environment variables are not set
   
-  let defaultNetwork: any;
-  let provider: any;
+  let defaultNetwork: NetworkConfig;
+  let provider: ethers.JsonRpcProvider;
   let contract: any;
   
   before(async function() {

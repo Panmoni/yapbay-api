@@ -926,15 +926,239 @@ router.get(
       }
 
       const escrow = escrowResult[0];
-      res.json({
-        escrow_id: escrow.id,
-        onchain_escrow_id: escrow.onchain_escrow_id,
-        current_balance: escrow.current_balance,
-        original_amount: escrow.amount,
-        state: escrow.state
-      });
+
+      // Get contract balance data
+      const contract = new ethers.Contract(
+        process.env.CONTRACT_ADDRESS || '',
+        YapBayEscrowABI.abi,
+        provider
+      );
+
+      try {
+        const [storedBalance, calculatedBalance] = await Promise.all([
+          contract.getStoredEscrowBalance(onchainEscrowId),
+          contract.getCalculatedEscrowBalance(onchainEscrowId)
+        ]);
+
+        res.json({
+          escrow_id: escrow.id,
+          onchain_escrow_id: escrow.onchain_escrow_id,
+          database_balance: escrow.current_balance,
+          contract_stored_balance: ethers.formatUnits(storedBalance, 6),
+          contract_calculated_balance: ethers.formatUnits(calculatedBalance, 6),
+          original_amount: escrow.amount,
+          state: escrow.state
+        });
+      } catch (contractError) {
+        // Fallback to database data if contract call fails
+        console.warn('Contract balance call failed, using database data:', contractError);
+        res.json({
+          escrow_id: escrow.id,
+          onchain_escrow_id: escrow.onchain_escrow_id,
+          database_balance: escrow.current_balance,
+          contract_stored_balance: null,
+          contract_calculated_balance: null,
+          original_amount: escrow.amount,
+          state: escrow.state,
+          warning: 'Contract balance data unavailable'
+        });
+      }
     } catch (error) {
       console.error('Error fetching escrow balance:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  })
+);
+
+// Get stored escrow balance from contract
+router.get(
+  '/escrows/:onchainEscrowId/stored-balance',
+  requireJWT,
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const { onchainEscrowId } = req.params;
+    const jwtWalletAddress = getWalletAddressFromJWT(req);
+    
+    if (!jwtWalletAddress) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    try {
+      // Verify user has access to this escrow
+      const escrowResult = await query(
+        `SELECT e.id FROM escrows e
+         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
+         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
+        [onchainEscrowId, jwtWalletAddress]
+      );
+
+      if (escrowResult.length === 0) {
+        res.status(404).json({ error: 'Escrow not found or access denied' });
+        return;
+      }
+
+      // Call contract function
+      const contract = new ethers.Contract(
+        process.env.CONTRACT_ADDRESS || '',
+        YapBayEscrowABI.abi,
+        provider
+      );
+
+      const storedBalance = await contract.getStoredEscrowBalance(onchainEscrowId);
+      
+      res.json({
+        onchain_escrow_id: onchainEscrowId,
+        stored_balance: ethers.formatUnits(storedBalance, 6),
+        stored_balance_raw: storedBalance.toString()
+      });
+    } catch (error) {
+      console.error('Error fetching stored escrow balance:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  })
+);
+
+// Get calculated escrow balance from contract
+router.get(
+  '/escrows/:onchainEscrowId/calculated-balance',
+  requireJWT,
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const { onchainEscrowId } = req.params;
+    const jwtWalletAddress = getWalletAddressFromJWT(req);
+    
+    if (!jwtWalletAddress) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    try {
+      // Verify user has access to this escrow
+      const escrowResult = await query(
+        `SELECT e.id FROM escrows e
+         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
+         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
+        [onchainEscrowId, jwtWalletAddress]
+      );
+
+      if (escrowResult.length === 0) {
+        res.status(404).json({ error: 'Escrow not found or access denied' });
+        return;
+      }
+
+      // Call contract function
+      const contract = new ethers.Contract(
+        process.env.CONTRACT_ADDRESS || '',
+        YapBayEscrowABI.abi,
+        provider
+      );
+
+      const calculatedBalance = await contract.getCalculatedEscrowBalance(onchainEscrowId);
+      
+      res.json({
+        onchain_escrow_id: onchainEscrowId,
+        calculated_balance: ethers.formatUnits(calculatedBalance, 6),
+        calculated_balance_raw: calculatedBalance.toString()
+      });
+    } catch (error) {
+      console.error('Error fetching calculated escrow balance:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  })
+);
+
+// Get sequential escrow information
+router.get(
+  '/escrows/:onchainEscrowId/sequential-info',
+  requireJWT,
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const { onchainEscrowId } = req.params;
+    const jwtWalletAddress = getWalletAddressFromJWT(req);
+    
+    if (!jwtWalletAddress) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    try {
+      // Verify user has access to this escrow
+      const escrowResult = await query(
+        `SELECT e.id FROM escrows e
+         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
+         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
+        [onchainEscrowId, jwtWalletAddress]
+      );
+
+      if (escrowResult.length === 0) {
+        res.status(404).json({ error: 'Escrow not found or access denied' });
+        return;
+      }
+
+      // Call contract function
+      const contract = new ethers.Contract(
+        process.env.CONTRACT_ADDRESS || '',
+        YapBayEscrowABI.abi,
+        provider
+      );
+
+      const sequentialInfo = await contract.getSequentialEscrowInfo(onchainEscrowId);
+      
+      res.json({
+        onchain_escrow_id: onchainEscrowId,
+        is_sequential: sequentialInfo.isSequential,
+        sequential_address: sequentialInfo.sequentialAddress,
+        sequential_balance: ethers.formatUnits(sequentialInfo.sequentialBalance, 6),
+        sequential_balance_raw: sequentialInfo.sequentialBalance.toString(),
+        was_released: sequentialInfo.wasReleased
+      });
+    } catch (error) {
+      console.error('Error fetching sequential escrow info:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  })
+);
+
+// Check if escrow is eligible for auto-cancellation
+router.get(
+  '/escrows/:onchainEscrowId/auto-cancel-eligible',
+  requireJWT,
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const { onchainEscrowId } = req.params;
+    const jwtWalletAddress = getWalletAddressFromJWT(req);
+    
+    if (!jwtWalletAddress) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    try {
+      // Verify user has access to this escrow
+      const escrowResult = await query(
+        `SELECT e.id FROM escrows e
+         JOIN accounts a ON e.seller_address = a.wallet_address OR e.buyer_address = a.wallet_address
+         WHERE e.onchain_escrow_id = $1 AND LOWER(a.wallet_address) = LOWER($2)`,
+        [onchainEscrowId, jwtWalletAddress]
+      );
+
+      if (escrowResult.length === 0) {
+        res.status(404).json({ error: 'Escrow not found or access denied' });
+        return;
+      }
+
+      // Call contract function
+      const contract = new ethers.Contract(
+        process.env.CONTRACT_ADDRESS || '',
+        YapBayEscrowABI.abi,
+        provider
+      );
+
+      const isEligible = await contract.isEligibleForAutoCancel(onchainEscrowId);
+      
+      res.json({
+        onchain_escrow_id: onchainEscrowId,
+        is_eligible_for_auto_cancel: isEligible
+      });
+    } catch (error) {
+      console.error('Error checking auto-cancel eligibility:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   })

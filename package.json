@@ -11,7 +11,6 @@
     "test:deadline": "ts-node scripts/test-deadline.ts",
     "test:connection": "ts-node scripts/test-connection.ts",
     "test:escrow-monitoring": "ts-node scripts/test-escrow-monitoring.ts",
-    "test:escrow-monitoring-both": "ts-node scripts/test-escrow-monitoring-both-networks.ts",
     "start": "ts-node src/server.ts",
     "start:dev": "nodemon --exec 'ts-node --project tsconfig.json --files' src/server.ts",
     "build": "tsc",

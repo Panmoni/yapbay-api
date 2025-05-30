@@ -404,13 +404,23 @@ export async function monitorExpiredEscrows(): Promise<void> {
   }
 
   try {
-    const service = new EscrowMonitoringService();
-    await service.monitorAndCancelExpiredEscrows();
+    // Get all networks and monitor each one
+    const networks = await NetworkService.getAllNetworks();
     
-    // Run balance validation every 10th monitoring cycle (approximately every 10 minutes if running every minute)
-    const shouldValidateBalances = Math.random() < 0.1; // 10% chance each run
-    if (shouldValidateBalances) {
-      await service.validateAllEscrowBalances();
+    for (const network of networks) {
+      try {
+        const service = await EscrowMonitoringService.createForNetwork(network.id);
+        await service.monitorAndCancelExpiredEscrows();
+        
+        // Run balance validation every 10th monitoring cycle (approximately every 10 minutes if running every minute)
+        const shouldValidateBalances = Math.random() < 0.1; // 10% chance each run
+        if (shouldValidateBalances) {
+          await service.validateAllEscrowBalances();
+        }
+      } catch (networkError) {
+        console.error(`[EscrowMonitor] Error monitoring network ${network.name} (ID: ${network.id}):`, networkError);
+        // Continue with other networks
+      }
     }
   } catch (error) {
     console.error('[EscrowMonitor] Critical error in monitoring service:', error);

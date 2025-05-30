@@ -10,6 +10,7 @@ import axios from 'axios';
 import { ethers } from 'ethers';
 import YapBayEscrowABI from './contract/YapBayEscrow.json'; // Import ABI
 import { getWalletAddressFromJWT, CustomJwtPayload, signJwt } from './utils/jwtUtils'; // Import from new util file
+import { getVersionInfo } from './utils/versionUtils';
 import bcrypt from 'bcrypt';
 import adminRouter from './adminRoutes';
 import { withErrorHandling } from './middleware/errorHandler';
@@ -362,6 +363,7 @@ router.get(
       timestamp: new Date().toISOString(),
       userWallet: walletAddress || 'Not Found',
       dbStatus: dbOk ? 'Connected' : 'Error',
+      version: getVersionInfo(),
       networks: networksStatus,
       summary: {
         totalNetworks: networksStatus.length,

@@ -3,7 +3,6 @@ import * as dotenv from 'dotenv';
 import YapBayEscrowABI from './contract/YapBayEscrow.json';
 import { YapBayEscrow } from './types/YapBayEscrow';
 import { NetworkService } from './services/networkService';
-
 dotenv.config();
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;

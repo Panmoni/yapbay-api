@@ -3,7 +3,7 @@ import { CeloService } from '../celo';
 import { NetworkService } from '../services/networkService';
 import { NetworkConfig } from '../types/networks';
 import { ethers } from 'ethers';
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -20,14 +20,15 @@ describe('Blockchain Contract Integration', function() {
       defaultNetwork = await NetworkService.getDefaultNetwork();
       provider = await CeloService.getProviderForNetwork(defaultNetwork.id);
       contract = await CeloService.getContractForNetwork(defaultNetwork.id);
-    } catch {
+    } catch (error) {
+      console.log('Skipping blockchain tests - network not available:', error);
       this.skip();
     }
   });
   
-  it('should connect to the Celo Alfajores testnet', async function() {
+  it('should connect to the Celo network', async function() {
     const network = await provider.getNetwork();
-    expect(network.name).to.equal('alfajores');
+    expect(network.chainId).to.equal(BigInt(defaultNetwork.chainId));
   });
   
   it('should load the YapBayEscrow contract', function() {

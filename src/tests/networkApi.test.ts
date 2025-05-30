@@ -5,6 +5,8 @@ import pool from '../db';
 import routes from '../routes';
 import { NetworkService } from '../services/networkService';
 import { NetworkType, NetworkConfig } from '../types/networks';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('Network API Integration Tests', function() {
   let app: express.Application;
@@ -37,12 +39,14 @@ describe('Network API Integration Tests', function() {
       // Create test account
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        ['0xApiTest1234567890123456789012345678901234', 'apitest', 'apitest@example.com']
+        ['0x1234567890123456789012345678901234567890', 'apitest', 'apitest@example.com']
       );
       testAccountId = accountResult.rows[0].id;
 
-      // Mock JWT token (simplified for testing)
-      authToken = 'Bearer mock-jwt-token';
+      // Read JWT token from file
+      const jwtPath = path.join(__dirname, '../../jwt.txt');
+      const jwtToken = fs.readFileSync(jwtPath, 'utf8').trim();
+      authToken = `Bearer ${jwtToken}`;
       
     } catch (error) {
       console.error('Failed to setup API tests:', error);

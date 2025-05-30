@@ -1694,4 +1694,249 @@ router.post(
   })
 );
 
+// Divvi Referrals Routes
+
+// POST /divvi-referrals - Submit a referral to Divvi and store the result
+router.post(
+  '/divvi-referrals',
+  requireJWT,
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const { transactionHash, chainId, tradeId } = req.body;
+    const walletAddress = getWalletAddressFromJWT(req);
+
+    if (!walletAddress) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    if (!transactionHash || !chainId) {
+      res.status(400).json({ error: 'transactionHash and chainId are required' });
+      return;
+    }
+
+    // Validate transaction hash format
+    if (!/^0x[a-fA-F0-9]{64}$/.test(transactionHash)) {
+      res.status(400).json({ error: 'Invalid transaction hash format' });
+      return;
+    }
+
+    try {
+      // Check if referral already exists for this transaction
+      const existingReferral = await query(
+        'SELECT id FROM divvi_referrals WHERE transaction_hash = $1 AND chain_id = $2',
+        [transactionHash, chainId]
+      );
+
+      if (existingReferral.length > 0) {
+        res.status(409).json({ 
+          error: 'Referral already exists for this transaction',
+          referralId: existingReferral[0].id
+        });
+        return;
+      }
+
+      // Validate trade_id if provided
+      if (tradeId) {
+        const tradeExists = await query('SELECT id FROM trades WHERE id = $1', [tradeId]);
+        if (tradeExists.length === 0) {
+          res.status(400).json({ error: 'Trade not found' });
+          return;
+        }
+      }
+
+      let submissionStatus: number | null = null;
+      let submissionResponse: any = null;
+      let submittedProvidersWithExistingReferral: any = null;
+      let errorMessage: string | null = null;
+      let submittedAt: Date | null = null;
+
+      try {
+        // Import submitReferral dynamically to avoid build issues if package isn't available
+        const { submitReferral } = await import('@divvi/referral-sdk');
+        
+        submittedAt = new Date();
+        const divviResponse = await submitReferral({ 
+          txHash: transactionHash, 
+          chainId: chainId 
+        });
+
+        // Divvi SDK doesn't return HTTP status codes directly, so we assume 200 if no error
+        submissionStatus = 200;
+        submissionResponse = divviResponse;
+        
+        // Extract the specific field we're interested in
+        if (divviResponse && divviResponse.data && divviResponse.data.submittedProvidersWithExistingReferral) {
+          submittedProvidersWithExistingReferral = divviResponse.data.submittedProvidersWithExistingReferral;
+        }
+
+      } catch (divviError: any) {
+        console.error('Divvi submission error:', divviError);
+        
+        // Try to extract status code from error
+        if (divviError.response && divviError.response.status) {
+          submissionStatus = divviError.response.status;
+          submissionResponse = divviError.response.data;
+        } else if (divviError.status) {
+          submissionStatus = divviError.status;
+          submissionResponse = divviError;
+        } else {
+          submissionStatus = 500; // Default to server error
+          submissionResponse = { error: divviError.message || 'Unknown error' };
+        }
+        
+        errorMessage = divviError.message || 'Divvi submission failed';
+      }
+
+      // Store the referral attempt regardless of success/failure
+      const result = await query(
+        `INSERT INTO divvi_referrals 
+         (wallet_address, transaction_hash, chain_id, trade_id, submission_status, 
+          submission_response, submitted_providers_with_existing_referral, 
+          error_message, submitted_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+         RETURNING *`,
+        [
+          walletAddress,
+          transactionHash,
+          chainId,
+          tradeId || null,
+          submissionStatus,
+          submissionResponse ? JSON.stringify(submissionResponse) : null,
+          submittedProvidersWithExistingReferral ? JSON.stringify(submittedProvidersWithExistingReferral) : null,
+          errorMessage,
+          submittedAt
+        ]
+      );
+
+      const referral = result[0];
+
+      // Return appropriate response based on submission status
+      if (submissionStatus === 200) {
+        res.status(201).json({
+          success: true,
+          message: 'Referral submitted successfully',
+          referral: referral,
+          hasExistingReferrals: submittedProvidersWithExistingReferral && submittedProvidersWithExistingReferral.length > 0
+        });
+      } else {
+        res.status(submissionStatus || 500).json({
+          success: false,
+          message: 'Referral submission failed',
+          referral: referral,
+          error: errorMessage
+        });
+      }
+
+    } catch (error) {
+      console.error('Error in divvi-referrals endpoint:', error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        details: (error as Error).message 
+      });
+    }
+  })
+);
+
+// GET /divvi-referrals - Get user's referrals
+router.get(
+  '/divvi-referrals',
+  requireJWT,
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const walletAddress = getWalletAddressFromJWT(req);
+    
+    if (!walletAddress) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 100); // Cap at 100
+    const offset = (page - 1) * limit;
+
+    try {
+      // Get referrals with optional trade information
+      const referrals = await query(
+        `SELECT dr.*, t.id as trade_exists 
+         FROM divvi_referrals dr 
+         LEFT JOIN trades t ON dr.trade_id = t.id 
+         WHERE dr.wallet_address = $1 
+         ORDER BY dr.created_at DESC 
+         LIMIT $2 OFFSET $3`,
+        [walletAddress, limit, offset]
+      );
+
+      // Get total count for pagination
+      const countResult = await query(
+        'SELECT COUNT(*) FROM divvi_referrals WHERE wallet_address = $1',
+        [walletAddress]
+      );
+
+      const totalCount = parseInt(countResult[0].count);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      res.json({
+        success: true,
+        data: referrals,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages,
+          hasNext: page < totalPages,
+          hasPrev: page > 1
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching divvi referrals:', error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        details: (error as Error).message 
+      });
+    }
+  })
+);
+
+// GET /divvi-referrals/:id - Get specific referral
+router.get(
+  '/divvi-referrals/:id',
+  requireJWT,
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    const walletAddress = getWalletAddressFromJWT(req);
+    
+    if (!walletAddress) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    try {
+      const result = await query(
+        `SELECT dr.*, t.id as trade_exists 
+         FROM divvi_referrals dr 
+         LEFT JOIN trades t ON dr.trade_id = t.id 
+         WHERE dr.id = $1 AND dr.wallet_address = $2`,
+        [id, walletAddress]
+      );
+
+      if (result.length === 0) {
+        res.status(404).json({ error: 'Referral not found' });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: result[0]
+      });
+
+    } catch (error) {
+      console.error('Error fetching divvi referral:', error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        details: (error as Error).message 
+      });
+    }
+  })
+);
+
 export default router;

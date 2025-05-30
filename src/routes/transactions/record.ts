@@ -1,41 +1,19 @@
-import express, { Response, Router, Request, NextFunction } from 'express';
-import { query, recordTransaction, TransactionType, TransactionStatus } from './db';
-import { logError } from './logger';
-import { getWalletAddressFromJWT } from './utils/jwtUtils';
-import { withErrorHandling } from './middleware/errorHandler';
-import { requireNetwork } from './middleware/networkMiddleware';
-import { CustomJwtPayload } from './utils/jwtUtils';
+import express, { Response } from 'express';
+import { query, recordTransaction, TransactionType, TransactionStatus } from '../../db';
+import { requireNetwork } from '../../middleware/networkMiddleware';
+import { withErrorHandling } from '../../middleware/errorHandler';
+import { logError } from '../../logger';
+import { AuthenticatedRequest } from '../../middleware/auth';
+import { validateTransactionRecord } from './validation';
 
-// Extend Express Request interface to match the one in routes.ts
-interface ExtendedRequest extends Request {
-  user?: CustomJwtPayload;
-}
-
-const router: Router = express.Router();
-
-// Global error handler for the router
-const routerErrorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(`[CRITICAL] Transaction router error:`, err);
-  logError('Transaction router error', err);
-  
-  // Only send response if headers haven't been sent yet
-  if (!res.headersSent) {
-    res.status(500).json({
-      error: 'Internal server error in transaction router',
-      message: err.message
-    });
-  }
-  next(err);
-};
-
-// Apply the error handler to all routes in this router
-router.use(routerErrorHandler);
+const router = express.Router();
 
 // Record a new transaction
 router.post(
-  '/record',
+  '/',
   requireNetwork,
-  withErrorHandling(async (req: ExtendedRequest, res: Response): Promise<void> => {
+  validateTransactionRecord,
+  withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     console.log('[DEBUG] /transactions/record endpoint hit with body:', JSON.stringify(req.body, null, 2));
     const {
       trade_id,
@@ -44,44 +22,12 @@ router.post(
       transaction_type,
       from_address,
       to_address,
-      // These variables are extracted but not used in this function
-      // They're kept in the destructuring for documentation of the API
-      // and future use
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      amount: _amount,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      token_type: _token_type,
+
       block_number,
       metadata,
-      status = 'PENDING' // Default to PENDING if not provided
+      status = 'PENDING'
     } = req.body;
     const networkId = req.networkId!;
-
-    // Collect validation errors to provide more comprehensive feedback
-    const validationErrors: { field: string; message: string }[] = [];
-
-    // Validate required fields
-    if (!transaction_hash) validationErrors.push({ field: 'transaction_hash', message: 'Transaction hash is required' });
-    if (!transaction_type) validationErrors.push({ field: 'transaction_type', message: 'Transaction type is required' });
-    if (!from_address) validationErrors.push({ field: 'from_address', message: 'From address is required' });
-    if (!trade_id) validationErrors.push({ field: 'trade_id', message: 'Trade ID is required' });
-
-    // Special validation for to_address based on transaction_type
-    if (transaction_type === 'FUND_ESCROW' && (!to_address || to_address === '')) {
-      console.log('[WARN] FUND_ESCROW transaction missing to_address, will attempt to use contract address from environment');
-      // We'll handle this later by using the contract address from environment
-    }
-    
-    // If we have validation errors, return them all at once
-    if (validationErrors.length > 0) {
-      console.log(`[ERROR] Validation failed for /transactions/record: ${JSON.stringify(validationErrors)}`);
-      res.status(400).json({
-        error: 'Validation failed',
-        details: 'One or more required fields are missing or invalid',
-        validationErrors
-      });
-      return;
-    }
 
     try {
       // Defensive: If transaction_type is 'OTHER', check metadata for a more specific type
@@ -104,25 +50,6 @@ router.post(
           // Log parse errors for debugging, fallback to 'OTHER'
           logError('Failed to parse metadata when inferring transaction type in /transactions/record', e as Error);
         }
-      }
-      // Verify the transaction type is valid
-      const validTransactionTypes: string[] = ['CREATE_ESCROW', 'FUND_ESCROW', 'MARK_FIAT_PAID', 'RELEASE_ESCROW', 'CANCEL_ESCROW', 'DISPUTE_ESCROW', 'OPEN_DISPUTE', 'RESPOND_DISPUTE', 'RESOLVE_DISPUTE', 'OTHER'];
-      if (!validTransactionTypes.includes(finalTransactionType)) {
-        res.status(400).json({
-          error: 'Invalid transaction type',
-          details: `Transaction type must be one of: ${validTransactionTypes.join(', ')}`
-        });
-        return;
-      }
-
-      // Verify the status is valid if provided
-      const validStatuses: string[] = ['PENDING', 'SUCCESS', 'FAILED'];
-      if (status && !validStatuses.includes(status)) {
-        res.status(400).json({
-          error: 'Invalid transaction status',
-          details: `Status must be one of: ${validStatuses.join(', ')}`
-        });
-        return;
       }
 
       // Extract sender/receiver addresses from metadata if not provided directly
@@ -575,186 +502,6 @@ router.post(
         error: error.message,
         details: 'Error occurred while recording transaction',
         errorInfo: errorDetails
-      });
-    }
-  })
-);
-
-// Get transactions for a specific trade
-router.get(
-  '/trade/:id',
-  withErrorHandling(async (req: ExtendedRequest, res: Response): Promise<void> => {
-    const { id } = req.params;
-    const { type } = req.query;
-
-    try {
-      // Verify trade exists
-      const tradeResult = await query('SELECT id FROM trades WHERE id = $1', [id]);
-      if (tradeResult.length === 0) {
-        res.status(404).json({
-          error: 'Trade not found',
-          details: `No trade found with ID ${id}`
-        });
-        return;
-      }
-
-      // Build the query to get all transactions for this trade
-      let sql = `
-        SELECT 
-          t.id, 
-          t.transaction_hash, 
-          t.status, 
-          t.type as transaction_type, 
-          t.block_number, 
-          t.sender_address as from_address, 
-          t.receiver_or_contract_address as to_address, 
-          t.gas_used, 
-          t.error_message, 
-          t.related_trade_id as trade_id, 
-          t.related_escrow_db_id as escrow_id, 
-          t.created_at,
-          tr.leg1_crypto_amount as amount,
-          tr.leg1_crypto_token as token_type
-        FROM 
-          transactions t
-        LEFT JOIN
-          trades tr ON t.related_trade_id = tr.id
-        WHERE 
-          t.related_trade_id = $1
-      `;
-      
-      const params: (string | number)[] = [id];
-      let paramIndex = 2;
-
-      // Add type filter if provided
-      if (type) {
-        sql += ` AND t.type = $${paramIndex}`;
-        params.push(type as string);
-        paramIndex++;
-      }
-
-      // Order by creation date, newest first
-      sql += ' ORDER BY t.created_at DESC';
-
-      const result = await query(sql, params);
-      
-      // Process results to parse any metadata stored in error_message
-      const transactions = result.map(tx => {
-        let metadata = null;
-        if (tx.error_message && tx.status !== 'FAILED') {
-          try {
-            metadata = JSON.parse(tx.error_message);
-            tx.error_message = null; // Clear error_message if it was used for metadata
-          } catch (error) {
-            // Not valid JSON, leave as is (probably an actual error message)
-            console.debug(`Could not parse metadata from error_message: ${(error as Error).message}`);
-          }
-        }
-        
-        return {
-          ...tx,
-          metadata,
-          transaction_type: tx.transaction_type // Ensure transaction_type is explicitly included
-        };
-      });
-
-      res.json(transactions);
-    } catch (err) {
-      logError(`Error in /transactions/trade/${id} endpoint`, err as Error);
-      res.status(500).json({
-        error: (err as Error).message,
-        details: 'Error occurred while fetching trade transactions'
-      });
-    }
-  })
-);
-
-// Get transactions for the authenticated user
-router.get(
-  '/user',
-  withErrorHandling(async (req: ExtendedRequest, res: Response): Promise<void> => {
-    const walletAddress = getWalletAddressFromJWT(req);
-    const { type, limit = 50, offset = 0 } = req.query;
-
-    if (!walletAddress) {
-      res.status(401).json({
-        error: 'Authentication required',
-        details: 'Valid JWT with wallet address is required'
-      });
-      return;
-    }
-
-    try {
-      // Build the query to get transactions where the user is either sender or receiver
-      let sql = `
-        SELECT 
-          t.id, 
-          t.transaction_hash, 
-          t.status, 
-          t.type as transaction_type, 
-          t.block_number, 
-          t.sender_address as from_address, 
-          t.receiver_or_contract_address as to_address, 
-          t.gas_used, 
-          t.error_message, 
-          t.related_trade_id as trade_id, 
-          t.related_escrow_db_id as escrow_id, 
-          t.created_at,
-          tr.leg1_crypto_amount as amount,
-          tr.leg1_crypto_token as token_type
-        FROM 
-          transactions t
-        LEFT JOIN
-          trades tr ON t.related_trade_id = tr.id
-        WHERE 
-          (t.sender_address = $1 OR t.receiver_or_contract_address = $1)
-      `;
-      
-      const params: (string | number)[] = [walletAddress];
-      let paramIndex = 2;
-
-      // Add type filter if provided
-      if (type) {
-        sql += ` AND t.type = $${paramIndex}`;
-        params.push(type as string);
-        paramIndex++;
-      }
-
-      // Order by creation date, newest first
-      sql += ' ORDER BY t.created_at DESC';
-      
-      // Add pagination
-      sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-      params.push(Number(limit));
-      params.push(Number(offset));
-
-      const result = await query(sql, params);
-      
-      // Process results to parse any metadata stored in error_message
-      const transactions = result.map(tx => {
-        let metadata = null;
-        if (tx.error_message && tx.status !== 'FAILED') {
-          try {
-            metadata = JSON.parse(tx.error_message);
-            tx.error_message = null; // Clear error_message if it was used for metadata
-          } catch (error) {
-            // Not valid JSON, leave as is (probably an actual error message)
-            console.debug(`Could not parse metadata from error_message: ${(error as Error).message}`);
-          }
-        }
-        
-        return {
-          ...tx,
-          metadata
-        };
-      });
-
-      res.json(transactions);
-    } catch (err) {
-      logError(`Error in /transactions/user endpoint for wallet ${walletAddress}`, err as Error);
-      res.status(500).json({
-        error: (err as Error).message,
-        details: 'Error occurred while fetching user transactions'
       });
     }
   })

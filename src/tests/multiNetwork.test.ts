@@ -107,10 +107,11 @@ describe('Multi-Network Integration Tests', function() {
 
   describe('Data Isolation', function() {
     it('should isolate offers by network', async function() {
-      // Create test account
+      // Create test account with unique wallet address
+      const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '0')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        ['0x1234567890123456789012345678901234567890', 'testuser', 'test@example.com']
+        [uniqueWallet, `testuser_${Date.now()}`, `test_${Date.now()}@example.com`]
       );
       const accountId = accountResult.rows[0].id;
 
@@ -126,15 +127,15 @@ describe('Multi-Network Integration Tests', function() {
         [accountId, 'SELL', 150, 300, 600, 1.03, mainnetNetwork.id]
       );
 
-      // Query offers by network
+      // Query offers by network AND account to ensure we only get our test data
       const alfajoresOffers = await client.query(
-        'SELECT * FROM offers WHERE network_id = $1',
-        [alfajoresNetwork.id]
+        'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
+        [alfajoresNetwork.id, accountId]
       );
       
       const mainnetOffers = await client.query(
-        'SELECT * FROM offers WHERE network_id = $1',
-        [mainnetNetwork.id]
+        'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
+        [mainnetNetwork.id, accountId]
       );
 
       // Verify isolation
@@ -147,10 +148,11 @@ describe('Multi-Network Integration Tests', function() {
     });
 
     it('should isolate trades by network', async function() {
-      // Create test account
+      // Create test account with unique wallet address
+      const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '1')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        ['0x1234567890123456789012345678901234567891', 'testuser2', 'test2@example.com']
+        [uniqueWallet, `testuser2_${Date.now()}`, `test2_${Date.now()}@example.com`]
       );
       const accountId = accountResult.rows[0].id;
 
@@ -163,6 +165,7 @@ describe('Multi-Network Integration Tests', function() {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         ['IN_PROGRESS', 'USD', 'USD', 'CREATED', accountId, accountId, 100, 'USD', alfajoresNetwork.id]
       );
+      const alfajoresTradeId = alfajoresTrade.rows[0].id;
 
       // Create trade on Mainnet
       const mainnetTrade = await client.query(
@@ -173,37 +176,39 @@ describe('Multi-Network Integration Tests', function() {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         ['IN_PROGRESS', 'EUR', 'EUR', 'FUNDED', accountId, accountId, 200, 'EUR', mainnetNetwork.id]
       );
+      const mainnetTradeId = mainnetTrade.rows[0].id;
 
-      // Query trades by network
+      // Query trades by network AND specific IDs to ensure we only get our test data
       const alfajoresTrades = await client.query(
-        'SELECT * FROM trades WHERE network_id = $1',
-        [alfajoresNetwork.id]
+        'SELECT * FROM trades WHERE network_id = $1 AND id = $2',
+        [alfajoresNetwork.id, alfajoresTradeId]
       );
       
       const mainnetTrades = await client.query(
-        'SELECT * FROM trades WHERE network_id = $1',
-        [mainnetNetwork.id]
+        'SELECT * FROM trades WHERE network_id = $1 AND id = $2',
+        [mainnetNetwork.id, mainnetTradeId]
       );
 
       // Verify isolation
       expect(alfajoresTrades.rows).to.have.length(1);
       expect(mainnetTrades.rows).to.have.length(1);
-      expect(alfajoresTrades.rows[0].id).to.equal(alfajoresTrade.rows[0].id);
-      expect(mainnetTrades.rows[0].id).to.equal(mainnetTrade.rows[0].id);
+      expect(alfajoresTrades.rows[0].id).to.equal(alfajoresTradeId);
+      expect(mainnetTrades.rows[0].id).to.equal(mainnetTradeId);
       expect(alfajoresTrades.rows[0].leg1_state).to.equal('CREATED');
       expect(mainnetTrades.rows[0].leg1_state).to.equal('FUNDED');
     });
 
     it('should isolate escrows by network', async function() {
-      // Create test account
+      // Create test account with unique wallet address
+      const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '2')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        ['0x1234567890123456789012345678901234567892', 'testuser3', 'test3@example.com']
+        [uniqueWallet, `testuser3_${Date.now()}`, `test3_${Date.now()}@example.com`]
       );
       const accountId = accountResult.rows[0].id;
 
-      // Create trade first
-      const tradeResult = await client.query(
+      // Create trade for Alfajores
+      const alfajoresTradeResult = await client.query(
         `INSERT INTO trades (
           overall_status, from_fiat_currency, destination_fiat_currency,
           leg1_state, leg1_seller_account_id, leg1_buyer_account_id,
@@ -211,54 +216,67 @@ describe('Multi-Network Integration Tests', function() {
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
         ['IN_PROGRESS', 'USD', 'USD', 'CREATED', accountId, accountId, 100, 'USD', alfajoresNetwork.id]
       );
-      const tradeId = tradeResult.rows[0].id;
+      const alfajoresTradeId = alfajoresTradeResult.rows[0].id;
+
+      // Create trade for Mainnet
+      const mainnetTradeResult = await client.query(
+        `INSERT INTO trades (
+          overall_status, from_fiat_currency, destination_fiat_currency,
+          leg1_state, leg1_seller_account_id, leg1_buyer_account_id,
+          leg1_crypto_amount, leg1_fiat_currency, network_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        ['IN_PROGRESS', 'EUR', 'EUR', 'FUNDED', accountId, accountId, 200, 'EUR', mainnetNetwork.id]
+      );
+      const mainnetTradeId = mainnetTradeResult.rows[0].id;
 
       // Create escrow on Alfajores
-      await client.query(
+      const alfajoresEscrowResult = await client.query(
         `INSERT INTO escrows (
           trade_id, escrow_address, onchain_escrow_id, seller_address, buyer_address,
           arbitrator_address, amount, current_balance, state, sequential,
           sequential_escrow_address, network_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
         [
-          tradeId, alfajoresNetwork.contractAddress, '1', 
-          '0x1234567890123456789012345678901234567892', '0x1234567890123456789012345678901234567893',
-          '0x1234567890123456789012345678901234567894', 100, 0, 'CREATED', false,
+          alfajoresTradeId, alfajoresNetwork.contractAddress, '1', 
+          uniqueWallet, '0x1234567890123456789012345678901234567893',
+          '0x1234567890123456789012345678901234567894', 50.0, 0, 'CREATED', false,
           null, alfajoresNetwork.id
         ]
       );
+      const alfajoresEscrowId = alfajoresEscrowResult.rows[0].id;
 
       // Create escrow on Mainnet  
-      await client.query(
+      const mainnetEscrowResult = await client.query(
         `INSERT INTO escrows (
           trade_id, escrow_address, onchain_escrow_id, seller_address, buyer_address,
           arbitrator_address, amount, current_balance, state, sequential,
           sequential_escrow_address, network_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
         [
-          tradeId, mainnetNetwork.contractAddress, '1', 
+          mainnetTradeId, mainnetNetwork.contractAddress, '1', 
           '0x1234567890123456789012345678901234567895', '0x1234567890123456789012345678901234567896',
-          '0x1234567890123456789012345678901234567897', 200, 100, 'FUNDED', true,
+          '0x1234567890123456789012345678901234567897', 75.0, 50.0, 'FUNDED', true,
           '0x1234567890123456789012345678901234567898', mainnetNetwork.id
         ]
       );
+      const mainnetEscrowId = mainnetEscrowResult.rows[0].id;
 
-      // Query escrows by network
+      // Query escrows by network AND specific IDs to ensure we only get our test data
       const alfajoresEscrows = await client.query(
-        'SELECT * FROM escrows WHERE network_id = $1',
-        [alfajoresNetwork.id]
+        'SELECT * FROM escrows WHERE network_id = $1 AND id = $2',
+        [alfajoresNetwork.id, alfajoresEscrowId]
       );
       
       const mainnetEscrows = await client.query(
-        'SELECT * FROM escrows WHERE network_id = $1',
-        [mainnetNetwork.id]
+        'SELECT * FROM escrows WHERE network_id = $1 AND id = $2',
+        [mainnetNetwork.id, mainnetEscrowId]
       );
 
       // Verify isolation
       expect(alfajoresEscrows.rows).to.have.length(1);
       expect(mainnetEscrows.rows).to.have.length(1);
-      expect(alfajoresEscrows.rows[0].escrow_address).to.equal(alfajoresNetwork.contractAddress);
-      expect(mainnetEscrows.rows[0].escrow_address).to.equal(mainnetNetwork.contractAddress);
+      expect(alfajoresEscrows.rows[0].amount.toString()).to.equal('50.000000');
+      expect(mainnetEscrows.rows[0].amount.toString()).to.equal('75.000000');
       expect(alfajoresEscrows.rows[0].state).to.equal('CREATED');
       expect(mainnetEscrows.rows[0].state).to.equal('FUNDED');
     });
@@ -266,10 +284,11 @@ describe('Multi-Network Integration Tests', function() {
 
   describe('Multi-Network Deadline Processing', function() {
     it('should process deadlines separately per network', async function() {
-      // Create test account
+      // Create test account with unique wallet address
+      const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '5')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        ['0x1234567890123456789012345678901234567893', 'deadlineuser', 'deadline@example.com']
+        [uniqueWallet, `deadlineuser_${Date.now()}`, `deadline_${Date.now()}@example.com`]
       );
       const accountId = accountResult.rows[0].id;
 
@@ -327,33 +346,35 @@ describe('Multi-Network Integration Tests', function() {
 
   describe('Cross-Network Data Integrity', function() {
     it('should not find offers from other networks in filtered queries', async function() {
-      // Create test account
+      // Create test account with unique wallet address
+      const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '3')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        ['0x1234567890123456789012345678901234567894', 'crossuser', 'cross@example.com']
+        [uniqueWallet, `testuser4_${Date.now()}`, `test4_${Date.now()}@example.com`]
       );
       const accountId = accountResult.rows[0].id;
 
-      // Create offer on Alfajores
+      // Create offer on Alfajores only
       await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
         [accountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
       );
 
-      // Query for offers on Mainnet (should find none)
+      // Query for offers on Mainnet for this specific account (should find none)
       const mainnetOffers = await client.query(
-        'SELECT * FROM offers WHERE network_id = $1',
-        [mainnetNetwork.id]
+        'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
+        [mainnetNetwork.id, accountId]
       );
 
       expect(mainnetOffers.rows).to.have.length(0);
     });
 
     it('should maintain referential integrity within networks', async function() {
-      // Create test account
+      // Create test account with unique wallet address
+      const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '4')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        ['0x1234567890123456789012345678901234567895', 'refuser', 'ref@example.com']
+        [uniqueWallet, `testuser5_${Date.now()}`, `test5_${Date.now()}@example.com`]
       );
       const accountId = accountResult.rows[0].id;
 
@@ -364,27 +385,29 @@ describe('Multi-Network Integration Tests', function() {
       );
       const offerId = offerResult.rows[0].id;
 
-      // Create trade referencing the offer (same network)
-      await client.query(
+      // Create trade using the offer (same network)
+      const tradeResult = await client.query(
         `INSERT INTO trades (
-          leg1_offer_id, overall_status, from_fiat_currency, destination_fiat_currency,
+          overall_status, from_fiat_currency, destination_fiat_currency,
           leg1_state, leg1_seller_account_id, leg1_buyer_account_id,
-          leg1_crypto_amount, leg1_fiat_currency, network_id
+          leg1_crypto_amount, leg1_fiat_currency, leg1_offer_id, network_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-        [offerId, 'IN_PROGRESS', 'USD', 'USD', 'CREATED', accountId, accountId, 100, 'USD', alfajoresNetwork.id]
+        ['IN_PROGRESS', 'USD', 'USD', 'CREATED', accountId, accountId, 100, 'USD', offerId, alfajoresNetwork.id]
       );
+      const tradeId = tradeResult.rows[0].id;
 
-      // Query should return the trade with proper offer reference
-      const tradeQuery = await client.query(
+      // Query trades that reference offers on the same network for this specific trade
+      const trades = await client.query(
         `SELECT t.*, o.offer_type 
          FROM trades t 
          JOIN offers o ON t.leg1_offer_id = o.id 
-         WHERE t.network_id = $1 AND o.network_id = $1`,
-        [alfajoresNetwork.id]
+         WHERE t.network_id = $1 AND o.network_id = $1 AND t.id = $2`,
+        [alfajoresNetwork.id, tradeId]
       );
 
-      expect(tradeQuery.rows).to.have.length(1);
-      expect(tradeQuery.rows[0].offer_type).to.equal('BUY');
+      expect(trades.rows).to.have.length(1);
+      expect(trades.rows[0].leg1_offer_id).to.equal(offerId);
+      expect(trades.rows[0].offer_type).to.equal('BUY');
     });
   });
 });

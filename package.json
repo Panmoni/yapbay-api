@@ -6,7 +6,7 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "mocha -r ts-node/register 'src/tests/**/*.test.ts'",
+    "test": "mocha",
     "test:blockchain": "mocha -r ts-node/register 'src/tests/blockchain.test.ts'",
     "test:deadline": "ts-node scripts/test-deadline.ts",
     "test:connection": "ts-node scripts/test-connection.ts",
@@ -32,7 +32,7 @@
   "license": "MIT",
   "description": "API for YapBay Escrow on Celo Alfajores testnet",
   "devDependencies": {
-    "@types/chai": "^5.2.1",
+    "@types/chai": "^4.3.19",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.1",
     "@types/jsonwebtoken": "^9.0.9",
@@ -44,7 +44,7 @@
     "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^8.31.0",
     "@typescript-eslint/parser": "^8.31.0",
-    "chai": "^5.2.0",
+    "chai": "^4.5.0",
     "eslint": "^9.24.0",
     "mocha": "^11.1.0",
     "nodemon": "^3.1.9",

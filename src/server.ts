@@ -5,12 +5,28 @@ import routes from './routes';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { startEventListener } from './listener/events';
+import { startMultiNetworkEventListener } from './listener/multiNetworkEvents';
 import cron from 'node-cron';
 import { expireDeadlines } from './services/deadlineService';
 import { monitorExpiredEscrows } from './services/escrowMonitoringService';
 
 dotenv.config();
-startEventListener();
+
+// Start appropriate event listener based on environment
+if (process.env.NODE_ENV === 'development') {
+  console.log('🚀 Starting multi-network event listener for development...');
+  const multiListener = startMultiNetworkEventListener();
+  multiListener.startAllListeners().then(() => {
+    console.log('✅ Multi-network event listener started successfully');
+  }).catch((error) => {
+    console.error('❌ Failed to start multi-network event listener:', error);
+    // Fallback to single network listener
+    console.log('🔄 Falling back to single network event listener...');
+    startEventListener();
+  });
+} else {
+  startEventListener();
+}
 
 const deadlineSchedule = process.env.DEADLINE_CRON_SCHEDULE;
 if (deadlineSchedule) {

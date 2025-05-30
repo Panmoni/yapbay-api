@@ -305,11 +305,10 @@ router.get(
   optionalNetwork,
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const walletAddress = getWalletAddressFromJWT(req);
-    const networkId = req.networkId!;
     let dbOk = false;
-    let celoNetwork: ethers.Network | null = null;
-    let celoError: string | null = null;
+    const networksStatus: any[] = [];
 
+    // Check database connectivity
     try {
       await query('SELECT 1');
       dbOk = true;
@@ -317,12 +316,45 @@ router.get(
       logError('Health check DB query failed', dbErr as Error);
     }
 
+    // Get all networks and check their status
     try {
-      const provider = await CeloService.getProviderForNetwork(networkId);
-      celoNetwork = await provider.getNetwork();
-    } catch (celoErr) {
-      logError('Health check Celo provider failed', celoErr as Error);
-      celoError = (celoErr as Error).message;
+      const allNetworks = await NetworkService.getAllNetworks();
+      
+      for (const network of allNetworks) {
+        const networkStatus: any = {
+          id: network.id,
+          name: network.name,
+          chainId: network.chainId,
+          rpcUrl: network.rpcUrl,
+          wsUrl: network.wsUrl,
+          contractAddress: network.contractAddress,
+          isTestnet: network.isTestnet,
+          isActive: network.isActive,
+          status: 'Unknown',
+          error: null
+        };
+
+        try {
+          const provider = await CeloService.getProviderForNetwork(network.id);
+          const celoNetwork = await provider.getNetwork();
+          networkStatus.status = 'Connected';
+          networkStatus.providerChainId = Number(celoNetwork.chainId);
+          networkStatus.providerName = celoNetwork.name;
+          
+          // Check if chain IDs match
+          if (Number(celoNetwork.chainId) !== network.chainId) {
+            networkStatus.warning = `Chain ID mismatch: expected ${network.chainId}, got ${celoNetwork.chainId}`;
+          }
+        } catch (networkErr) {
+          networkStatus.status = 'Error';
+          networkStatus.error = (networkErr as Error).message;
+          logError(`Health check failed for network ${network.name}`, networkErr as Error);
+        }
+
+        networksStatus.push(networkStatus);
+      }
+    } catch (networksErr) {
+      logError('Health check failed to retrieve networks', networksErr as Error);
     }
 
     res.json({
@@ -330,9 +362,13 @@ router.get(
       timestamp: new Date().toISOString(),
       userWallet: walletAddress || 'Not Found',
       dbStatus: dbOk ? 'Connected' : 'Error',
-      celoProviderStatus: celoNetwork
-        ? `Connected (${celoNetwork.name}, ChainID: ${celoNetwork.chainId})`
-        : `Error (${celoError || 'Unknown'})`,
+      networks: networksStatus,
+      summary: {
+        totalNetworks: networksStatus.length,
+        activeNetworks: networksStatus.filter(n => n.isActive).length,
+        connectedNetworks: networksStatus.filter(n => n.status === 'Connected').length,
+        errorNetworks: networksStatus.filter(n => n.status === 'Error').length
+      }
     });
   })
 );

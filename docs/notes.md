@@ -1,14 +1,6 @@
 # YapBay API Notes
 
-## multi network
-tests
 
-## api contracts
-enable these to be pulled from the api so can be shown on app. maybe return them as part of /health?
-
-select * from networks
-
-build number or version
 
 ## Referrals
 Will need to record referrals, will need a table for that, route, migration... pending full integration of divvi into frontend
@@ -24,6 +16,8 @@ one command to start api, listener, backend monitoring service
 ## restart
 clear db to start over
 
+escrow monitoring service will keep throwing errors until I clear the db and start over
+
 ## Testing
 update frontend, then create some new escrows, then npm run test:escrow-monitoring to test on both
 
@@ -34,6 +28,8 @@ test the new balance api routes
 test auto cancel recording in db
 
 test divvi referral recording in db
+
+get tests working again with a clean db.
 
 ## Ref
 ### Migrations

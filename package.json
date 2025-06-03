@@ -12,7 +12,7 @@
     "test:connection": "ts-node scripts/test-connection.ts",
     "test:escrow-monitoring": "ts-node scripts/test-escrow-monitoring.ts",
     "start": "ts-node src/server.ts",
-    "start:events": "ts-node src/startEventListener.ts",
+    "start:events": "ts-node scripts/start-event-listener.ts",
     "start:dev": "nodemon --exec 'ts-node --project tsconfig.json --files' src/server.ts",
     "build": "tsc",
     "serve": "node dist/server.js",

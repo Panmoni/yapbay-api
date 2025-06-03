@@ -1,4 +1,4 @@
-import { startMultiNetworkEventListener } from './listener/multiNetworkEvents';
+import { startMultiNetworkEventListener } from '../src/listener/multiNetworkEvents';
 
 async function main() {
   console.log('🚀 Starting multi-network event listener...');
@@ -29,4 +29,4 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+main().catch(console.error); 

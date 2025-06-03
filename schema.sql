@@ -136,6 +136,7 @@ CREATE TABLE escrows (
     fiat_deadline TIMESTAMP WITH TIME ZONE,
     dispute_id INTEGER,
     completed_at TIMESTAMP WITH TIME ZONE,
+    version VARCHAR(50), -- The version of the escrow contract that created this escrow
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

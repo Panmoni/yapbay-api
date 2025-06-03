@@ -50,7 +50,10 @@ router.post(
 
     try {
       // Verify the trade exists
-      const tradeCheck = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [trade_id, networkId]);
+      const tradeCheck = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [
+        trade_id,
+        networkId,
+      ]);
       if (tradeCheck.length === 0) {
         res.status(404).json({ error: 'Trade not found' });
         return;
@@ -82,6 +85,7 @@ router.post(
         // Parse logs to verify EscrowCreated event
         let escrowCreatedEvent = false;
         let verifiedEscrowId: string | null = null;
+        let contractVersion: string | null = null;
 
         if (txReceipt.logs) {
           const escrowCreatedInterface = new ethers.Interface(YapBayEscrowABI.abi);
@@ -99,6 +103,7 @@ router.post(
                   // Get the numeric value of the escrow ID from the transaction
                   const txEscrowIdBigInt = parsedLog.args.escrowId;
                   verifiedEscrowId = txEscrowIdBigInt.toString();
+                  contractVersion = parsedLog.args.version;
 
                   // Convert the provided escrow_id to a number for comparison
                   const providedEscrowIdNum = BigInt(escrow_id);
@@ -150,10 +155,9 @@ router.post(
         );
 
         // Check if an escrow with this onchain_escrow_id already exists
-        const existingEscrow = await query(
-          'SELECT id FROM escrows WHERE onchain_escrow_id = $1',
-          [verifiedEscrowId]
-        );
+        const existingEscrow = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [
+          verifiedEscrowId,
+        ]);
 
         let escrowDbId;
 
@@ -161,14 +165,16 @@ router.post(
           // Escrow already exists - update it instead of creating a duplicate
           escrowDbId = existingEscrow[0].id;
           await query(
-            'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-            ['FUNDED', escrowDbId]
+            'UPDATE escrows SET state = $1, version = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+            ['FUNDED', contractVersion, escrowDbId]
           );
-          console.log(`Updated existing escrow id=${escrowDbId} with onchain_escrow_id=${verifiedEscrowId} to state=FUNDED`);
+          console.log(
+            `Updated existing escrow id=${escrowDbId} with onchain_escrow_id=${verifiedEscrowId} to state=FUNDED`
+          );
         } else {
           // Record the escrow in the database and get its ID
           const escrowInsertResult = await query(
-            'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id',
+            'INSERT INTO escrows (trade_id, escrow_address, seller_address, buyer_address, arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address, onchain_escrow_id, version) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id',
             [
               trade_id,
               CONTRACT_ADDRESS, // Using the main contract address as the escrow identifier for now
@@ -181,6 +187,7 @@ router.post(
               sequential || false,
               sequential_escrow_address || null,
               verifiedEscrowId, // Store the blockchain escrow ID in the new column
+              contractVersion, // Store the contract version from the event
             ]
           );
 
@@ -261,7 +268,7 @@ router.get(
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     const networkId = req.networkId!;
-    
+
     const result = await query(
       `SELECT e.* FROM escrows e
        WHERE e.network_id = $1 

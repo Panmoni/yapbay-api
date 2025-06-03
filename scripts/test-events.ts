@@ -3,22 +3,32 @@
 // npm run test-events -- --persist to grab history
 
 import * as dotenv from 'dotenv';
-import { provider, getContract } from '../src/celo';
+import { CeloService } from '../src/celo';
 import { query, recordTransaction } from '../src/db';
+import { NetworkService } from '../src/services/networkService';
 
 dotenv.config();
 // DB insert only when --persist flag is provided
 const persist = process.argv.includes('--persist');
 
 const main = async () => {
-  const contract = getContract(provider);
-  // const address = process.env.CONTRACT_ADDRESS!;
-  const fromBlock = process.env.FROM_BLOCK ? Number(process.env.FROM_BLOCK) : 0;
+  // Get default network and provider
+  const defaultNetwork = await NetworkService.getDefaultNetwork();
+  const provider = await CeloService.getProviderForNetwork(defaultNetwork.id);
+  const contract = await CeloService.getContractForNetwork(defaultNetwork.id, provider);
+  
+  // Determine network and appropriate FROM_BLOCK
+  const isMainnet = defaultNetwork.id === 42220; // Celo Mainnet chainId
+  const fromBlock = isMainnet 
+    ? (process.env.FROM_BLOCK_MAINNET ? Number(process.env.FROM_BLOCK_MAINNET) : 0)
+    : (process.env.FROM_BLOCK_TESTNET ? Number(process.env.FROM_BLOCK_TESTNET) : 0);
+    
+  console.log(`Network: ${defaultNetwork.name} (ChainId: ${defaultNetwork.id})`);
   console.log(`Fetching events from block ${fromBlock} to latest...`);
 
   // fetch all events for this contract
   const logs = await provider.getLogs({
-    address: process.env.CONTRACT_ADDRESS!,
+    address: defaultNetwork.contractAddress,
     fromBlock,
     toBlock: 'latest',
   });
@@ -73,11 +83,12 @@ const main = async () => {
         type: 'OTHER',
         block_number: evt.blockNumber,
         related_trade_id: tradeIdValue,
+        network_id: defaultNetwork.id
       });
       const insertSql = `
         INSERT INTO contract_events
-          (event_name, block_number, transaction_hash, log_index, args, trade_id, transaction_id)
-        VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+          (event_name, block_number, transaction_hash, log_index, args, trade_id, transaction_id, network_id)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
         ON CONFLICT DO NOTHING;
       `;
       await query(insertSql, [
@@ -88,6 +99,7 @@ const main = async () => {
         JSON.stringify(argsObj),
         tradeIdValue,
         transactionId,
+        defaultNetwork.id
       ]);
       console.log(`Inserted event ${name} tx=${evt.transactionHash} logIndex=${logIndex} trade=${tradeIdValue}`);
     }

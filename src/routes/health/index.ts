@@ -39,12 +39,12 @@ router.get(
     // Get all networks and check their status
     try {
       const allNetworks = await NetworkService.getAllNetworks();
-      
+
       for (const network of allNetworks) {
         const networkStatus: NetworkStatus = {
           ...network,
           status: 'Unknown',
-          error: null
+          error: null,
         };
 
         try {
@@ -53,7 +53,7 @@ router.get(
           networkStatus.status = 'Connected';
           networkStatus.providerChainId = Number(celoNetwork.chainId);
           networkStatus.providerName = celoNetwork.name;
-          
+
           // Check if chain IDs match
           if (Number(celoNetwork.chainId) !== network.chainId) {
             networkStatus.warning = `Chain ID mismatch: expected ${network.chainId}, got ${celoNetwork.chainId}`;
@@ -75,14 +75,15 @@ router.get(
       timestamp: new Date().toISOString(),
       userWallet: walletAddress || 'Not Found',
       dbStatus: dbOk ? 'Connected' : 'Error',
-      version: getVersionInfo(),
+      apiVersion: getVersionInfo(),
+      contractVersion: process.env.CONTRACT_VERSION || 'unknown',
       networks: networksStatus,
       summary: {
         totalNetworks: networksStatus.length,
         activeNetworks: networksStatus.filter(n => n.isActive).length,
         connectedNetworks: networksStatus.filter(n => n.status === 'Connected').length,
-        errorNetworks: networksStatus.filter(n => n.status === 'Error').length
-      }
+        errorNetworks: networksStatus.filter(n => n.status === 'Error').length,
+      },
     });
   })
 );

@@ -1,8 +1,5 @@
 # YapBay API Notes
 
-## update api-ref.md
-
-to reflect major changes made
 
 ## restart
 
@@ -21,6 +18,7 @@ get tests working again with a clean db and the refactored routes/middleware
 - test the new balance api routes
 - test divvi referral recording in db
 - test auto cancel recording in db
+- test updating of legacy events with test-events script
 
 ## Refactor
 

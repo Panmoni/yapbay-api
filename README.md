@@ -16,7 +16,7 @@ YapBay is a platform that supports both single-leg trades (simple crypto-to-fiat
 
 The YapBay platform consists of the following key components:
 
-1. **Smart Contract Layer**: Ethereum/Celo-based escrow contracts that handle the secure holding and release of cryptocurrency funds
+1. **Smart Contract Layer**: Solana-based escrow contracts that handle the secure holding and release of cryptocurrency funds
 2. **Database Layer**: PostgreSQL database that stores user accounts, trade information, and dispute records
 3. **API Layer**: Node.js/Express backend that connects the blockchain and database layers
 4. **Client Applications**: Web and mobile interfaces that interact with the API
@@ -24,35 +24,39 @@ The YapBay platform consists of the following key components:
 ### API Functionality
 
 The YapBay API provides endpoints for:
+
 - User account management
 - Creating and managing offers
 - Initiating and completing trades
 - Escrow operations (create, fund, release, cancel)
 - Dispute handling and resolution
-- Interacting with the YapBayEscrow smart contract on Celo Alfajores testnet
+- Interacting with the YapBayEscrow smart contract on Solana devnet
 
 ## Prerequisites
 
 - Node.js (v18 or higher)
 - PostgreSQL database
-- Celo Alfajores testnet account with USDC tokens
-- Private key for a funded Celo Alfajores account
+- Solana testnet account with USDC tokens
+- Private key for a funded Solana account
 
 ## Setup
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/Panmoni/yapbay-api.git
 cd yapbay-api
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Set up environment variables:
-Create a `.env` file in the root directory with the following variables:
+   Create a `.env` file in the root directory with the following variables:
+
 ```
 CELO_RPC_URL=https://alfajores-forno.celo-testnet.org
 CONTRACT_ADDRESS=0xC8BFB8a31fFbAF5c85bD97a1728aC43418B5871C
@@ -64,29 +68,36 @@ PORT=3000
 ```
 
 4. Set up the database:
+
 ```bash
 psql -U your_username -d your_database -a -f schema.sql
 ```
 
 5. Test the Celo connection:
+
 ```bash
 npm run test:connection
 ```
 
 6. Build the project:
+
 ```bash
 npm run build
 ```
+
 7. Start the server:
+
 ```bash
 # Start the server
 npm start
 ```
 
 For development:
+
 ```bash
 npm run start:dev
 ```
+
 ```
 
 ## API Endpoints
@@ -95,8 +106,10 @@ npm run start:dev
 
 All authenticated endpoints require a JWT token in the Authorization header:
 ```
+
 Authorization: Bearer your-jwt-token
-```
+
+````
 
 ### Accounts
 
@@ -166,7 +179,7 @@ npm run test:blockchain
 
 # Test blockchain connection
 npm run test:connection
-```
+````
 
 ### Linting
 

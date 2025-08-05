@@ -58,9 +58,9 @@ npm install
    Create a `.env` file in the root directory with the following variables:
 
 ```
-CELO_RPC_URL=https://alfajores-forno.celo-testnet.org
-CONTRACT_ADDRESS=0xC8BFB8a31fFbAF5c85bD97a1728aC43418B5871C
-ARBITRATOR_ADDRESS=0x6d2dAaA22a90AC8721D1f9C207D817AB7C490383
+RPC_URL=
+CONTRACT_ADDRESS=
+ARBITRATOR_ADDRESS=
 POSTGRES_URL=postgres://username:password@localhost:5432/yapbay
 JWT_SECRET=your-jwt-secret
 PRIVATE_KEY=your-private-key
@@ -73,7 +73,7 @@ PORT=3000
 psql -U your_username -d your_database -a -f schema.sql
 ```
 
-5. Test the Celo connection:
+5. Test the blockchain connection:
 
 ```bash
 npm run test:connection
@@ -146,7 +146,7 @@ Authorization: Bearer your-jwt-token
 
 ## Smart Contract Interaction
 
-The API interacts with the YapBayEscrow smart contract deployed on the Celo Alfajores testnet using ethers.js. The contract handles:
+The API interacts with the YapBayEscrow smart contract. The contract handles:
 
 - Creating escrows between buyers and sellers
 - Funding escrows with USDC

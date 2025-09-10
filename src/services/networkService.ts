@@ -1,11 +1,12 @@
 import { query } from '../db';
-import { 
-  NetworkConfig, 
-  NetworkType, 
-  NetworkRow, 
+import {
+  NetworkConfig,
+  NetworkType,
+  NetworkFamily,
+  NetworkRow,
   NetworkNotFoundError,
   NetworkInactiveError,
-  InvalidNetworkError
+  InvalidNetworkError,
 } from '../types/networks';
 
 export class NetworkService {
@@ -24,11 +25,15 @@ export class NetworkService {
       chainId: row.chain_id,
       rpcUrl: row.rpc_url,
       wsUrl: row.ws_url || undefined,
-      contractAddress: row.contract_address,
+      contractAddress: row.contract_address || undefined,
+      programId: row.program_id || undefined,
+      usdcMint: row.usdc_mint || undefined,
+      arbitratorAddress: row.arbitrator_address || '',
       isTestnet: row.is_testnet,
       isActive: row.is_active,
+      networkFamily: row.network_family as NetworkFamily,
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
     };
   }
 
@@ -37,16 +42,16 @@ export class NetworkService {
    */
   private static async loadNetworks(): Promise<void> {
     const rows = await query('SELECT * FROM networks ORDER BY id');
-    
+
     this.networkCache.clear();
     this.networkNameCache.clear();
-    
+
     for (const row of rows) {
       const config = this.rowToConfig(row as NetworkRow);
       this.networkCache.set(config.id, config);
       this.networkNameCache.set(config.name, config);
     }
-    
+
     this.lastCacheUpdate = Date.now();
   }
 
@@ -72,7 +77,7 @@ export class NetworkService {
    */
   static async getNetworkByName(name: NetworkType | string): Promise<NetworkConfig | null> {
     await this.ensureFreshCache();
-    
+
     // Handle string input
     if (typeof name === 'string') {
       if (!Object.values(NetworkType).includes(name as NetworkType)) {
@@ -80,7 +85,7 @@ export class NetworkService {
       }
       name = name as NetworkType;
     }
-    
+
     return this.networkNameCache.get(name as NetworkType) || null;
   }
 
@@ -101,26 +106,60 @@ export class NetworkService {
   }
 
   /**
-   * Get the default network (Alfajores for development, Mainnet for production)
+   * Get networks by family
+   */
+  static async getNetworksByFamily(family: NetworkFamily): Promise<NetworkConfig[]> {
+    await this.ensureFreshCache();
+    return Array.from(this.networkCache.values()).filter(n => n.networkFamily === family);
+  }
+
+  /**
+   * Get Solana networks
+   */
+  static async getSolanaNetworks(): Promise<NetworkConfig[]> {
+    return this.getNetworksByFamily(NetworkFamily.SOLANA);
+  }
+
+  /**
+   * Get EVM networks
+   */
+  static async getEVMNetworks(): Promise<NetworkConfig[]> {
+    return this.getNetworksByFamily(NetworkFamily.EVM);
+  }
+
+  /**
+   * Get network family for a given network ID
+   */
+  static async getNetworkFamily(networkId: number): Promise<NetworkFamily> {
+    const network = await this.getNetworkById(networkId);
+    return network.networkFamily;
+  }
+
+  /**
+   * Get the default network (Solana Devnet for development, Solana Mainnet for production)
    */
   static async getDefaultNetwork(): Promise<NetworkConfig> {
     const isProduction = process.env.NODE_ENV === 'production';
-    const defaultNetworkName = isProduction ? NetworkType.CELO_MAINNET : NetworkType.CELO_ALFAJORES;
-    
+    const defaultNetworkName = isProduction
+      ? NetworkType.SOLANA_MAINNET
+      : NetworkType.SOLANA_DEVNET;
+
     const network = await this.getNetworkByName(defaultNetworkName);
     if (!network) {
       throw new NetworkNotFoundError(defaultNetworkName);
     }
-    
+
     return network;
   }
 
   /**
    * Get network from request headers
    */
-  static async getNetworkFromRequest(req: { headers: { [key: string]: string | string[] | undefined } }): Promise<NetworkConfig> {
+  static async getNetworkFromRequest(req: {
+    headers: { [key: string]: string | string[] | undefined };
+  }): Promise<NetworkConfig> {
     const networkName = req.headers['x-network-name'] as string;
-    
+
     if (!networkName) {
       // Return default network if no header specified
       return await this.getDefaultNetwork();
@@ -157,31 +196,39 @@ export class NetworkService {
   /**
    * Create a new network (admin only)
    */
-  static async createNetwork(config: Omit<NetworkConfig, 'id' | 'createdAt' | 'updatedAt'>): Promise<NetworkConfig> {
-    const result = await query(`
+  static async createNetwork(
+    config: Omit<NetworkConfig, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<NetworkConfig> {
+    const result = await query(
+      `
       INSERT INTO networks (name, chain_id, rpc_url, ws_url, contract_address, is_testnet, is_active)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
-    `, [
-      config.name,
-      config.chainId,
-      config.rpcUrl,
-      config.wsUrl || null,
-      config.contractAddress,
-      config.isTestnet,
-      config.isActive
-    ]);
+    `,
+      [
+        config.name,
+        config.chainId,
+        config.rpcUrl,
+        config.wsUrl || null,
+        config.contractAddress,
+        config.isTestnet,
+        config.isActive,
+      ]
+    );
 
     // Clear cache to force reload
     this.lastCacheUpdate = 0;
-    
+
     return this.rowToConfig(result[0] as NetworkRow);
   }
 
   /**
    * Update network configuration (admin only)
    */
-  static async updateNetwork(id: number, updates: Partial<Omit<NetworkConfig, 'id' | 'createdAt' | 'updatedAt'>>): Promise<NetworkConfig | null> {
+  static async updateNetwork(
+    id: number,
+    updates: Partial<Omit<NetworkConfig, 'id' | 'createdAt' | 'updatedAt'>>
+  ): Promise<NetworkConfig | null> {
     const setClauses: string[] = [];
     const values: (string | number | boolean)[] = [];
     let paramIndex = 1;
@@ -220,12 +267,15 @@ export class NetworkService {
     }
 
     values.push(id);
-    const result = await query(`
+    const result = await query(
+      `
       UPDATE networks 
       SET ${setClauses.join(', ')}, updated_at = CURRENT_TIMESTAMP
       WHERE id = $${paramIndex}
       RETURNING *
-    `, values);
+    `,
+      values
+    );
 
     if (result.length === 0) {
       return null;
@@ -233,7 +283,7 @@ export class NetworkService {
 
     // Clear cache to force reload
     this.lastCacheUpdate = 0;
-    
+
     return this.rowToConfig(result[0] as NetworkRow);
   }
 
@@ -241,15 +291,18 @@ export class NetworkService {
    * Deactivate a network (soft delete)
    */
   static async deactivateNetwork(id: number): Promise<boolean> {
-    await query(`
+    await query(
+      `
       UPDATE networks 
       SET is_active = false, updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
-    `, [id]);
+    `,
+      [id]
+    );
 
     // Clear cache to force reload
     this.lastCacheUpdate = 0;
-    
+
     // query() returns an array, so we assume success if no error was thrown
     return true;
   }
@@ -276,14 +329,14 @@ export class NetworkService {
       query('SELECT COUNT(*) as count FROM offers WHERE network_id = $1', [networkId]),
       query('SELECT COUNT(*) as count FROM trades WHERE network_id = $1', [networkId]),
       query('SELECT COUNT(*) as count FROM escrows WHERE network_id = $1', [networkId]),
-      query('SELECT COUNT(*) as count FROM transactions WHERE network_id = $1', [networkId])
+      query('SELECT COUNT(*) as count FROM transactions WHERE network_id = $1', [networkId]),
     ]);
 
     return {
       offers: parseInt(offersResult[0].count),
       trades: parseInt(tradesResult[0].count),
       escrows: parseInt(escrowsResult[0].count),
-      transactions: parseInt(transactionsResult[0].count)
+      transactions: parseInt(transactionsResult[0].count),
     };
   }
 }

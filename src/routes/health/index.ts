@@ -2,13 +2,15 @@ import express, { Response } from 'express';
 import { query } from '../../db';
 import { CeloService } from '../../celo';
 import { NetworkService } from '../../services/networkService';
+import { BlockchainServiceFactory } from '../../services/blockchainService';
 import { optionalNetwork } from '../../middleware/networkMiddleware';
 import { withErrorHandling } from '../../middleware/errorHandler';
 import { logError } from '../../logger';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { getVersionInfo } from '../../utils/versionUtils';
 import { AuthenticatedRequest } from '../../middleware/auth';
-import { NetworkConfig } from '../../types/networks';
+import { NetworkConfig, NetworkFamily } from '../../types/networks';
+import { Connection } from '@solana/web3.js';
 
 const router = express.Router();
 
@@ -25,6 +27,7 @@ router.get(
       providerChainId?: number;
       providerName?: string;
       warning?: string;
+      blockExplorerUrl?: string;
     }
     const networksStatus: NetworkStatus[] = [];
 
@@ -48,15 +51,32 @@ router.get(
         };
 
         try {
-          const provider = await CeloService.getProviderForNetwork(network.id);
-          const celoNetwork = await provider.getNetwork();
-          networkStatus.status = 'Connected';
-          networkStatus.providerChainId = Number(celoNetwork.chainId);
-          networkStatus.providerName = celoNetwork.name;
+          const blockchainService = BlockchainServiceFactory.create(network);
 
-          // Check if chain IDs match
-          if (Number(celoNetwork.chainId) !== network.chainId) {
-            networkStatus.warning = `Chain ID mismatch: expected ${network.chainId}, got ${celoNetwork.chainId}`;
+          if (network.networkFamily === NetworkFamily.EVM) {
+            // EVM network health check
+            const provider = await CeloService.getProviderForNetwork(network.id);
+            const celoNetwork = await provider.getNetwork();
+            networkStatus.status = 'Connected';
+            networkStatus.providerChainId = Number(celoNetwork.chainId);
+            networkStatus.providerName = celoNetwork.name;
+            networkStatus.blockExplorerUrl = blockchainService.getBlockExplorerUrl(
+              '0x0000000000000000000000000000000000000000000000000000000000000000'
+            );
+
+            // Check if chain IDs match
+            if (Number(celoNetwork.chainId) !== network.chainId) {
+              networkStatus.warning = `Chain ID mismatch: expected ${network.chainId}, got ${celoNetwork.chainId}`;
+            }
+          } else if (network.networkFamily === NetworkFamily.SOLANA) {
+            // Solana network health check
+            const connection = new Connection(network.rpcUrl);
+            const version = await connection.getVersion();
+            networkStatus.status = 'Connected';
+            networkStatus.providerName = 'Solana';
+            networkStatus.blockExplorerUrl = blockchainService.getBlockExplorerUrl(
+              '1111111111111111111111111111111111111111111111111111111111111111'
+            );
           }
         } catch (networkErr) {
           networkStatus.status = 'Error';
@@ -83,6 +103,8 @@ router.get(
         activeNetworks: networksStatus.filter(n => n.isActive).length,
         connectedNetworks: networksStatus.filter(n => n.status === 'Connected').length,
         errorNetworks: networksStatus.filter(n => n.status === 'Error').length,
+        evmNetworks: networksStatus.filter(n => n.networkFamily === NetworkFamily.EVM).length,
+        solanaNetworks: networksStatus.filter(n => n.networkFamily === NetworkFamily.SOLANA).length,
       },
     });
   })

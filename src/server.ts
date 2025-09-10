@@ -13,18 +13,23 @@ import { monitorExpiredEscrows } from './services/escrowMonitoringService';
 dotenv.config();
 
 // Start appropriate event listener based on environment
+// Note: Celo networks are disabled, only Solana networks will have active listeners
 if (process.env.NODE_ENV === 'development') {
   console.log('🚀 Starting multi-network event listener for development...');
+  console.log('📝 Note: Celo networks are disabled, only Solana networks will be monitored');
   const multiListener = startMultiNetworkEventListener();
-  multiListener.startAllListeners().then(() => {
-    console.log('✅ Multi-network event listener started successfully');
-  }).catch((error) => {
-    console.error('❌ Failed to start multi-network event listener:', error);
-    // Fallback to single network listener
-    console.log('🔄 Falling back to single network event listener...');
-    startEventListener();
-  });
+  multiListener
+    .startAllListeners()
+    .then(() => {
+      console.log('✅ Multi-network event listener started successfully');
+    })
+    .catch(error => {
+      console.error('❌ Failed to start multi-network event listener:', error);
+      console.log('⚠️  No active networks found or all networks are disabled');
+    });
 } else {
+  console.log('🚀 Starting single network event listener for production...');
+  console.log('📝 Note: Celo networks are disabled, only Solana networks will be monitored');
   startEventListener();
 }
 
@@ -56,7 +61,9 @@ if (escrowMonitorEnabled) {
   });
   console.log(`[Scheduler] Scheduled escrow monitoring job: ${escrowMonitorSchedule}`);
 } else {
-  console.log(`[Scheduler] Escrow monitoring disabled (ESCROW_MONITOR_ENABLED=${process.env.ESCROW_MONITOR_ENABLED})`);
+  console.log(
+    `[Scheduler] Escrow monitoring disabled (ESCROW_MONITOR_ENABLED=${process.env.ESCROW_MONITOR_ENABLED})`
+  );
 }
 
 const app = express();

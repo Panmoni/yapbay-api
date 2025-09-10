@@ -1,6 +1,16 @@
 export enum NetworkType {
+  // EVM Networks
   CELO_ALFAJORES = 'celo-alfajores',
-  CELO_MAINNET = 'celo-mainnet'
+  CELO_MAINNET = 'celo-mainnet',
+
+  // Solana Networks
+  SOLANA_DEVNET = 'solana-devnet',
+  SOLANA_MAINNET = 'solana-mainnet',
+}
+
+export enum NetworkFamily {
+  EVM = 'evm',
+  SOLANA = 'solana',
 }
 
 export interface NetworkConfig {
@@ -9,9 +19,13 @@ export interface NetworkConfig {
   chainId: number;
   rpcUrl: string;
   wsUrl?: string;
-  contractAddress: string;
+  contractAddress?: string; // EVM only
+  programId?: string; // Solana only
+  usdcMint?: string; // Solana only
+  arbitratorAddress: string;
   isTestnet: boolean;
   isActive: boolean;
+  networkFamily: NetworkFamily;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,9 +47,13 @@ export interface NetworkRow {
   chain_id: number;
   rpc_url: string;
   ws_url: string | null;
-  contract_address: string;
+  contract_address: string | null;
+  program_id: string | null;
+  usdc_mint: string | null;
+  arbitrator_address: string | null;
   is_testnet: boolean;
   is_active: boolean;
+  network_family: string;
   created_at: Date;
   updated_at: Date;
 }

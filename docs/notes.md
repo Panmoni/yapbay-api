@@ -1,8 +1,7 @@
 # YapBay API Notes
 
 - tests
-- increment versions as appropriate
-- update env.production with new env vars
+- increment versions as appropriate once tests pass again
 
 ## Phase 4: Event Handling Microservice
 

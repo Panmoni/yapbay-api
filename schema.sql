@@ -570,7 +570,7 @@ ALTER TABLE trades
 
 ALTER TABLE escrows
     ADD CONSTRAINT fk_dispute FOREIGN KEY (dispute_id) REFERENCES disputes(id),
-    ADD CONSTRAINT escrows_trade_id_escrow_id_unique UNIQUE (trade_id, escrow_id);
+    ADD CONSTRAINT escrows_trade_id_id_unique UNIQUE (trade_id, id);
 
 -- Network-aware unique constraints
 -- Ensure escrow onchain IDs are unique within a network
@@ -597,9 +597,9 @@ INSERT INTO networks (name, chain_id, rpc_url, ws_url, contract_address, is_test
 -- Celo networks (disabled temporarily)
 ('celo-alfajores', 44787, 'https://alfajores-forno.celo-testnet.org', 'wss://alfajores-forno.celo-testnet.org/ws', '0xE68cf67df40B3d93Be6a10D0A18d0846381Cbc0E', true, false, 'evm', NULL, NULL, '0x6d2dAaA22a90AC8721D1f9C207D817AB7C490383'),
 ('celo-mainnet', 42220, 'https://forno.celo.org', 'wss://forno.celo.org/ws', '0xf8C832021350133769EE5E0605a9c40c1765ace7', false, false, 'evm', NULL, NULL, '0x6d2dAaA22a90AC8721D1f9C207D817AB7C490383'),
--- Solana networks
-('solana-devnet', 0, 'https://distinguished-chaotic-bird.solana-devnet.quiknode.pro/483d675967ac17c1970a9b07fdba88abe17d421e/', NULL, NULL, true, true, 'solana', '4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 'GGrXhNVxUZXaA2uMopsa5q23aPmoNvQF14uxqo8qENUr'),
-('solana-mainnet', 0, 'https://api.mainnet-beta.solana.com', NULL, NULL, false, false, 'solana', '', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'GGrXhNVxUZXaA2uMopsa5q23aPmoNvQF14uxqo8qENUr');
+-- Solana networks (using unique chain_ids since Solana doesn't use traditional chain IDs)
+('solana-devnet', 101, 'https://distinguished-chaotic-bird.solana-devnet.quiknode.pro/483d675967ac17c1970a9b07fdba88abe17d421e/', NULL, NULL, true, true, 'solana', '4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x', '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU', 'GGrXhNVxUZXaA2uMopsa5q23aPmoNvQF14uxqo8qENUr'),
+('solana-mainnet', 102, 'https://api.mainnet-beta.solana.com', NULL, NULL, false, false, 'solana', '', 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'GGrXhNVxUZXaA2uMopsa5q23aPmoNvQF14uxqo8qENUr');
 
 -- Add comments explaining the network support
 COMMENT ON TABLE networks IS 'Configuration for supported blockchain networks';

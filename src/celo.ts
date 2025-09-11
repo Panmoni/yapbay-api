@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
-import YapBayEscrowABI from './contract/YapBayEscrow.json';
+import YapBayEscrowABI from './contracts/evm/YapBayEscrow.json';
 import { YapBayEscrow } from './types/YapBayEscrow';
 import { NetworkService } from './services/networkService';
 dotenv.config();
@@ -30,6 +30,11 @@ export class CeloService {
       throw new Error(`Network with ID ${networkId} not found`);
     }
 
+    // Only create providers for EVM networks
+    if (network.networkFamily !== 'evm') {
+      throw new Error(`Provider creation not supported for ${network.networkFamily} networks`);
+    }
+
     const celoNetwork = {
       name: network.name,
       chainId: network.chainId,
@@ -37,7 +42,7 @@ export class CeloService {
 
     const provider = new ethers.JsonRpcProvider(network.rpcUrl, celoNetwork);
     this.providers.set(networkId, provider);
-    
+
     console.log(`Created provider for ${network.name}: ${network.rpcUrl}`);
     return provider;
   }
@@ -55,6 +60,13 @@ export class CeloService {
       throw new Error(`Network with ID ${networkId} not found`);
     }
 
+    // Only create WebSocket providers for EVM networks
+    if (network.networkFamily !== 'evm') {
+      throw new Error(
+        `WebSocket provider creation not supported for ${network.networkFamily} networks`
+      );
+    }
+
     if (!network.wsUrl) {
       throw new Error(`WebSocket URL not configured for network ${network.name}`);
     }
@@ -66,7 +78,7 @@ export class CeloService {
 
     const wsProvider = new ethers.WebSocketProvider(network.wsUrl, celoNetwork);
     this.wsProviders.set(networkId, wsProvider);
-    
+
     console.log(`Created WebSocket provider for ${network.name}: ${network.wsUrl}`);
     return wsProvider;
   }
@@ -74,14 +86,26 @@ export class CeloService {
   /**
    * Get contract instance for a specific network
    */
-  static async getContractForNetwork(networkId: number, signerOrProvider?: ethers.ContractRunner): Promise<YapBayEscrow> {
+  static async getContractForNetwork(
+    networkId: number,
+    signerOrProvider?: ethers.ContractRunner
+  ): Promise<YapBayEscrow> {
     const network = await NetworkService.getNetworkById(networkId);
     if (!network) {
       throw new Error(`Network with ID ${networkId} not found`);
     }
 
-    const runner = signerOrProvider || await this.getProviderForNetwork(networkId);
-    
+    // Only create contracts for EVM networks
+    if (network.networkFamily !== 'evm') {
+      throw new Error(`Contract creation not supported for ${network.networkFamily} networks`);
+    }
+
+    if (!network.contractAddress) {
+      throw new Error(`Contract address not configured for network ${network.name}`);
+    }
+
+    const runner = signerOrProvider || (await this.getProviderForNetwork(networkId));
+
     return new ethers.Contract(
       network.contractAddress,
       YapBayEscrowABI.abi,
@@ -99,7 +123,7 @@ export class CeloService {
 
     const provider = await this.getProviderForNetwork(networkId);
     const signer = new ethers.Wallet(PRIVATE_KEY, provider);
-    
+
     return await this.getContractForNetwork(networkId, signer);
   }
 
@@ -132,16 +156,19 @@ export class CeloService {
   /**
    * Get escrow balance for a specific network and escrow ID
    */
-  static async getEscrowBalance(networkId: number, escrowId: number): Promise<{stored: string, calculated: string}> {
+  static async getEscrowBalance(
+    networkId: number,
+    escrowId: number
+  ): Promise<{ stored: string; calculated: string }> {
     const contract = await this.getContractForNetwork(networkId);
     const [stored, calculated] = await Promise.all([
       contract.getStoredEscrowBalance(escrowId),
-      contract.getCalculatedEscrowBalance(escrowId)
+      contract.getCalculatedEscrowBalance(escrowId),
     ]);
-    
+
     return {
       stored: ethers.formatUnits(stored, 6),
-      calculated: ethers.formatUnits(calculated, 6)
+      calculated: ethers.formatUnits(calculated, 6),
     };
   }
 
@@ -151,12 +178,12 @@ export class CeloService {
   static async getSequentialInfo(networkId: number, escrowId: number) {
     const contract = await this.getContractForNetwork(networkId);
     const info = await contract.getSequentialEscrowInfo(escrowId);
-    
+
     return {
       isSequential: info.isSequential,
       sequentialAddress: info.sequentialAddress,
       sequentialBalance: ethers.formatUnits(info.sequentialBalance, 6),
-      wasReleased: info.wasReleased
+      wasReleased: info.wasReleased,
     };
   }
 
@@ -189,7 +216,9 @@ export const getDefaultWsProvider = async (): Promise<ethers.WebSocketProvider> 
   return CeloService.getWsProviderForNetwork(defaultNetwork.id);
 };
 
-export const getDefaultContract = async (signerOrProvider?: ethers.ContractRunner): Promise<YapBayEscrow> => {
+export const getDefaultContract = async (
+  signerOrProvider?: ethers.ContractRunner
+): Promise<YapBayEscrow> => {
   const defaultNetwork = await NetworkService.getDefaultNetwork();
   return CeloService.getContractForNetwork(defaultNetwork.id, signerOrProvider);
 };

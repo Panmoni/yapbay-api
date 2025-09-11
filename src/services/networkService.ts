@@ -132,6 +132,9 @@ export class NetworkService {
    */
   static async getNetworkFamily(networkId: number): Promise<NetworkFamily> {
     const network = await this.getNetworkById(networkId);
+    if (!network) {
+      throw new NetworkNotFoundError(`Network with ID ${networkId} not found`);
+    }
     return network.networkFamily;
   }
 

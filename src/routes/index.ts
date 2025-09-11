@@ -12,7 +12,6 @@ import accountsRouter from './accounts';
 import offersRouter from './offers';
 import tradesRouter from './trades';
 import escrowsRouter from './escrows';
-import referralsRouter from './referrals';
 
 const router = express.Router();
 
@@ -43,7 +42,6 @@ router.use('/accounts', accountsRouter);
 router.use('/offers', offersRouter);
 router.use('/trades', tradesRouter);
 router.use('/escrows', escrowsRouter);
-router.use('/', referralsRouter);
 
 // Mount existing admin and transaction routes (authenticated)
 router.use('/admin', requireAdmin, adminRouter);

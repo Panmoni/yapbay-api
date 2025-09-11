@@ -1,9 +1,8 @@
 # YapBay API Notes
 
-- clear db and start fresh
-- remove divvi routes
 - tests
 - increment versions as appropriate
+- update env.production with new env vars
 
 ## Phase 4: Event Handling Microservice
 
@@ -28,6 +27,35 @@ get tests working again with a clean db and the refactored routes/middleware
 - test updating of legacy events with test-events script
 
 ## Ref
+
+### Clean DB Reset
+
+DROP DATABASE IF EXISTS yapbay;
+CREATE DATABASE yapbay;
+GRANT ALL PRIVILEGES ON DATABASE yapbay TO yapbay;
+
+-- Set schema permissions
+\c yapbay
+GRANT USAGE, CREATE ON SCHEMA public TO yapbay;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO yapbay;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO yapbay;
+\q
+
+psql postgres://yapbay:PASSWD@localhost:5432/yapbay -f schema.sql
+
+#### check
+
+-- Check all tables exist
+\dt
+
+-- Verify networks were inserted
+SELECT name, chain_id, is_active FROM networks;
+
+-- Check total table count (should be 13 tables)
+SELECT count(\*) FROM information_schema.tables WHERE table_schema = 'public';
+
+-- Check indexes were created
+SELECT count(\*) FROM pg_indexes WHERE schemaname = 'public';
 
 ### Migrations
 

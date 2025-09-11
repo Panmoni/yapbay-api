@@ -3,35 +3,37 @@ import pool from '../db';
 import { NetworkService } from '../services/networkService';
 import { NetworkType, NetworkConfig } from '../types/networks';
 
-describe('Simple Multi-Network Tests', function() {
+describe.skip('Simple Multi-Network Tests (Celo - DISABLED)', function () {
+  // DISABLED: Celo networks are currently inactive, focusing on Solana
+  // These tests will be re-enabled when Celo networks are reactivated
   let client: any;
-  
-  before(async function() {
+
+  before(async function () {
     this.timeout(10000);
     client = await pool.connect();
   });
 
-  after(async function() {
+  after(async function () {
     if (client) {
       await client.release();
     }
   });
 
-  describe('Network Configuration', function() {
-    it('should have active networks configured', async function() {
+  describe('Network Configuration', function () {
+    it('should have active networks configured', async function () {
       const networks = await NetworkService.getActiveNetworks();
       expect(networks).to.be.an('array');
       expect(networks.length).to.be.greaterThan(0);
-      
+
       const networkNames = networks.map((n: NetworkConfig) => n.name);
       expect(networkNames).to.include('celo-alfajores');
       expect(networkNames).to.include('celo-mainnet');
     });
 
-    it('should get network by name', async function() {
+    it('should get network by name', async function () {
       const alfajores = await NetworkService.getNetworkByName(NetworkType.CELO_ALFAJORES);
       const mainnet = await NetworkService.getNetworkByName(NetworkType.CELO_MAINNET);
-      
+
       expect(alfajores).to.not.be.null;
       expect(mainnet).to.not.be.null;
       expect(alfajores?.chainId).to.equal(44787);
@@ -39,16 +41,16 @@ describe('Simple Multi-Network Tests', function() {
     });
   });
 
-  describe('Database Network Isolation', function() {
-    beforeEach(async function() {
+  describe('Database Network Isolation', function () {
+    beforeEach(async function () {
       await client.query('BEGIN');
     });
 
-    afterEach(async function() {
+    afterEach(async function () {
       await client.query('ROLLBACK');
     });
 
-    it('should isolate offers by network', async function() {
+    it('should isolate offers by network', async function () {
       const alfajores = await NetworkService.getNetworkByName(NetworkType.CELO_ALFAJORES);
       const mainnet = await NetworkService.getNetworkByName(NetworkType.CELO_MAINNET);
 
@@ -81,7 +83,7 @@ describe('Simple Multi-Network Tests', function() {
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
         [alfajores.id, accountId]
       );
-      
+
       const mainnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
         [mainnet.id, accountId]
@@ -94,7 +96,7 @@ describe('Simple Multi-Network Tests', function() {
       expect(mainnetOffers.rows[0].offer_type).to.equal('SELL');
     });
 
-    it('should isolate trades by network', async function() {
+    it('should isolate trades by network', async function () {
       const alfajores = await NetworkService.getNetworkByName(NetworkType.CELO_ALFAJORES);
       const mainnet = await NetworkService.getNetworkByName(NetworkType.CELO_MAINNET);
 
@@ -129,7 +131,7 @@ describe('Simple Multi-Network Tests', function() {
         'SELECT * FROM trades WHERE network_id = $1 AND id = $2',
         [alfajores.id, alfajoresTradeId]
       );
-      
+
       const mainnetTrades = await client.query(
         'SELECT * FROM trades WHERE network_id = $1 AND id = $2',
         [mainnet.id, mainnetTradeId]
@@ -143,16 +145,16 @@ describe('Simple Multi-Network Tests', function() {
     });
   });
 
-  describe('Cross-Network Data Prevention', function() {
-    beforeEach(async function() {
+  describe('Cross-Network Data Prevention', function () {
+    beforeEach(async function () {
       await client.query('BEGIN');
     });
 
-    afterEach(async function() {
+    afterEach(async function () {
       await client.query('ROLLBACK');
     });
 
-    it('should not find offers from other networks', async function() {
+    it('should not find offers from other networks', async function () {
       const alfajores = await NetworkService.getNetworkByName(NetworkType.CELO_ALFAJORES);
       const mainnet = await NetworkService.getNetworkByName(NetworkType.CELO_MAINNET);
 

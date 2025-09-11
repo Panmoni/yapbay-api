@@ -8,7 +8,9 @@ import { NetworkType, NetworkConfig } from '../types/networks';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Network API Integration Tests', function() {
+describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
+  // DISABLED: Celo networks are currently inactive, focusing on Solana
+  // These tests will be re-enabled when Celo networks are reactivated
   let app: express.Application;
   let client: any;
   let alfajoresNetwork: NetworkConfig;
@@ -16,22 +18,26 @@ describe('Network API Integration Tests', function() {
   let testAccountId: number;
   let authToken: string;
 
-  before(async function() {
+  before(async function () {
     this.timeout(10000);
-    
+
     // Setup express app
     app = express();
     app.use(express.json());
     app.use('/api', routes);
-    
+
     // Setup database
     client = await pool.connect();
-    
+
     try {
       // Get network configurations
-      alfajoresNetwork = await NetworkService.getNetworkByName(NetworkType.CELO_ALFAJORES) as NetworkConfig;
-      mainnetNetwork = await NetworkService.getNetworkByName(NetworkType.CELO_MAINNET) as NetworkConfig;
-      
+      alfajoresNetwork = (await NetworkService.getNetworkByName(
+        NetworkType.CELO_ALFAJORES
+      )) as NetworkConfig;
+      mainnetNetwork = (await NetworkService.getNetworkByName(
+        NetworkType.CELO_MAINNET
+      )) as NetworkConfig;
+
       if (!alfajoresNetwork || !mainnetNetwork) {
         throw new Error('Networks not properly configured');
       }
@@ -47,29 +53,28 @@ describe('Network API Integration Tests', function() {
       const jwtPath = path.join(__dirname, '../../jwt.txt');
       const jwtToken = fs.readFileSync(jwtPath, 'utf8').trim();
       authToken = `Bearer ${jwtToken}`;
-      
     } catch (error) {
       console.error('Failed to setup API tests:', error);
       this.skip();
     }
   });
 
-  beforeEach(async function() {
+  beforeEach(async function () {
     await client.query('BEGIN');
   });
 
-  afterEach(async function() {
+  afterEach(async function () {
     await client.query('ROLLBACK');
   });
 
-  after(async function() {
+  after(async function () {
     if (client) {
       await client.release();
     }
   });
 
-  describe('Network Header Validation', function() {
-    it('should reject requests with invalid network names', async function() {
+  describe('Network Header Validation', function () {
+    it('should reject requests with invalid network names', async function () {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'invalid-network')
@@ -80,16 +85,14 @@ describe('Network API Integration Tests', function() {
       expect(response.body.validNetworks).to.include('celo-mainnet');
     });
 
-    it('should use default network when no header provided', async function() {
-      const response = await request(app)
-        .get('/api/health')
-        .expect(200);
+    it('should use default network when no header provided', async function () {
+      const response = await request(app).get('/api/health').expect(200);
 
       expect(response.body.network).to.exist;
       expect(['celo-alfajores', 'celo-mainnet']).to.include(response.body.network.name);
     });
 
-    it('should accept valid network names', async function() {
+    it('should accept valid network names', async function () {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'celo-alfajores')
@@ -99,21 +102,21 @@ describe('Network API Integration Tests', function() {
     });
   });
 
-  describe('Offers API Network Isolation', function() {
-    beforeEach(async function() {
+  describe('Offers API Network Isolation', function () {
+    beforeEach(async function () {
       // Create test offers on different networks
       await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
         [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
       );
-      
+
       await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
         [testAccountId, 'SELL', 150, 300, 600, 1.03, mainnetNetwork.id]
       );
     });
 
-    it('should return offers only for specified network', async function() {
+    it('should return offers only for specified network', async function () {
       // Test Alfajores
       const alfajoresResponse = await request(app)
         .get('/api/offers')
@@ -135,12 +138,11 @@ describe('Network API Integration Tests', function() {
       expect(mainnetResponse.body.offers[0].offer_type).to.equal('SELL');
     });
 
-    it('should not find offers from other networks by ID', async function() {
+    it('should not find offers from other networks by ID', async function () {
       // Get an offer ID from Alfajores
-      const alfajoresOffers = await client.query(
-        'SELECT id FROM offers WHERE network_id = $1',
-        [alfajoresNetwork.id]
-      );
+      const alfajoresOffers = await client.query('SELECT id FROM offers WHERE network_id = $1', [
+        alfajoresNetwork.id,
+      ]);
       const alfajoresOfferId = alfajoresOffers.rows[0].id;
 
       // Try to access it from Mainnet
@@ -153,11 +155,11 @@ describe('Network API Integration Tests', function() {
     });
   });
 
-  describe('Trades API Network Isolation', function() {
+  describe('Trades API Network Isolation', function () {
     let alfajoresOfferId: number;
     let mainnetOfferId: number;
 
-    beforeEach(async function() {
+    beforeEach(async function () {
       // Create test offers
       const alfajoresOffer = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
@@ -174,16 +176,36 @@ describe('Network API Integration Tests', function() {
       // Create test trades
       await client.query(
         'INSERT INTO trades (overall_status, from_fiat_currency, destination_fiat_currency, leg1_state, leg1_seller_account_id, leg1_buyer_account_id, leg1_crypto_amount, leg1_fiat_currency, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-        ['IN_PROGRESS', 'USD', 'USD', 'CREATED', testAccountId, testAccountId, 100, 'USD', alfajoresNetwork.id]
+        [
+          'IN_PROGRESS',
+          'USD',
+          'USD',
+          'CREATED',
+          testAccountId,
+          testAccountId,
+          100,
+          'USD',
+          alfajoresNetwork.id,
+        ]
       );
-      
+
       await client.query(
         'INSERT INTO trades (overall_status, from_fiat_currency, destination_fiat_currency, leg1_state, leg1_seller_account_id, leg1_buyer_account_id, leg1_crypto_amount, leg1_fiat_currency, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-        ['IN_PROGRESS', 'EUR', 'EUR', 'FUNDED', testAccountId, testAccountId, 200, 'EUR', mainnetNetwork.id]
+        [
+          'IN_PROGRESS',
+          'EUR',
+          'EUR',
+          'FUNDED',
+          testAccountId,
+          testAccountId,
+          200,
+          'EUR',
+          mainnetNetwork.id,
+        ]
       );
     });
 
-    it('should return trades only for specified network', async function() {
+    it('should return trades only for specified network', async function () {
       // Test Alfajores
       const alfajoresResponse = await request(app)
         .get('/api/my/trades')
@@ -207,7 +229,7 @@ describe('Network API Integration Tests', function() {
       expect(mainnetResponse.body.trades[0].from_fiat_currency).to.equal('EUR');
     });
 
-    it('should reject trade creation with offer from different network', async function() {
+    it('should reject trade creation with offer from different network', async function () {
       // Try to create trade on Mainnet using Alfajores offer
       const response = await request(app)
         .post('/api/trades')
@@ -218,14 +240,14 @@ describe('Network API Integration Tests', function() {
           leg1_crypto_amount: 100,
           leg1_fiat_amount: 100,
           from_fiat_currency: 'USD',
-          destination_fiat_currency: 'USD'
+          destination_fiat_currency: 'USD',
         })
         .expect(404);
 
       expect(response.body.error).to.equal('Leg 1 offer not found');
     });
 
-    it('should successfully create trade with offer from same network', async function() {
+    it('should successfully create trade with offer from same network', async function () {
       // Create trade on Mainnet using Mainnet offer
       const response = await request(app)
         .post('/api/trades')
@@ -236,7 +258,7 @@ describe('Network API Integration Tests', function() {
           leg1_crypto_amount: 150,
           leg1_fiat_amount: 150,
           from_fiat_currency: 'EUR',
-          destination_fiat_currency: 'EUR'
+          destination_fiat_currency: 'EUR',
         })
         .expect(201);
 
@@ -245,8 +267,8 @@ describe('Network API Integration Tests', function() {
     });
   });
 
-  describe('Health Endpoint Network Awareness', function() {
-    it('should return network information in health check', async function() {
+  describe('Health Endpoint Network Awareness', function () {
+    it('should return network information in health check', async function () {
       const response = await request(app)
         .get('/api/health')
         .set('X-Network-Name', 'celo-alfajores')
@@ -258,7 +280,7 @@ describe('Network API Integration Tests', function() {
       expect(response.body.network.status).to.exist;
     });
 
-    it('should test different networks independently', async function() {
+    it('should test different networks independently', async function () {
       // Test Alfajores
       const alfajoresResponse = await request(app)
         .get('/api/health')
@@ -276,8 +298,8 @@ describe('Network API Integration Tests', function() {
     });
   });
 
-  describe('Network Response Headers', function() {
-    it('should include network information in response headers', async function() {
+  describe('Network Response Headers', function () {
+    it('should include network information in response headers', async function () {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'celo-alfajores')
@@ -289,8 +311,8 @@ describe('Network API Integration Tests', function() {
     });
   });
 
-  describe('Error Handling', function() {
-    it('should handle network service errors gracefully', async function() {
+  describe('Error Handling', function () {
+    it('should handle network service errors gracefully', async function () {
       // Test with a network that might be inactive
       const response = await request(app)
         .get('/api/offers')
@@ -300,19 +322,16 @@ describe('Network API Integration Tests', function() {
       expect(response.body.error).to.equal('Invalid network specified');
     });
 
-    it('should provide helpful error messages for missing network', async function() {
-      const response = await request(app)
-        .get('/api/offers')
-        .set('X-Network-Name', '')
-        .expect(400);
+    it('should provide helpful error messages for missing network', async function () {
+      const response = await request(app).get('/api/offers').set('X-Network-Name', '').expect(400);
 
       expect(response.body.error).to.equal('Invalid network specified');
       expect(response.body.validNetworks).to.exist;
     });
   });
 
-  describe('Cross-Network Data Leakage Prevention', function() {
-    it('should not allow access to resources from different networks', async function() {
+  describe('Cross-Network Data Leakage Prevention', function () {
+    it('should not allow access to resources from different networks', async function () {
       // Create offer on Alfajores
       const offerResult = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
@@ -329,7 +348,7 @@ describe('Network API Integration Tests', function() {
       expect(response.body.error).to.equal('Offer not found');
     });
 
-    it('should enforce network isolation in update operations', async function() {
+    it('should enforce network isolation in update operations', async function () {
       // Create offer on Alfajores
       const offerResult = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
@@ -343,7 +362,7 @@ describe('Network API Integration Tests', function() {
         .set('X-Network-Name', 'celo-mainnet')
         .set('Authorization', authToken)
         .send({
-          min_amount: 150
+          min_amount: 150,
         })
         .expect(404);
 

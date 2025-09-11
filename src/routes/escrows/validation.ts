@@ -52,6 +52,10 @@ export const validateEscrowRecord = async (
 
   try {
     const network = await NetworkService.getNetworkById(networkId);
+    if (!network) {
+      res.status(400).json({ error: 'Invalid network' });
+      return;
+    }
     const networkFamily = network.networkFamily;
 
     // Network-specific transaction validation
@@ -116,11 +120,9 @@ export const validateEscrowRecord = async (
       sequential_escrow_address &&
       !NetworkValidator.validateAddress(sequential_escrow_address, networkFamily)
     ) {
-      res
-        .status(400)
-        .json({
-          error: `sequential_escrow_address must be a valid ${networkFamily.toUpperCase()} address`,
-        });
+      res.status(400).json({
+        error: `sequential_escrow_address must be a valid ${networkFamily.toUpperCase()} address`,
+      });
       return;
     }
 

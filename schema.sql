@@ -15,7 +15,6 @@ DROP TABLE IF EXISTS escrow_id_mapping CASCADE;
 DROP TABLE IF EXISTS escrows CASCADE;
 DROP TABLE IF EXISTS transactions CASCADE;
 DROP TABLE IF EXISTS trade_cancellations CASCADE;
-DROP TABLE IF EXISTS divvi_referrals CASCADE;
 DROP TABLE IF EXISTS trades CASCADE;
 DROP TABLE IF EXISTS offers CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
@@ -385,7 +384,6 @@ CREATE INDEX idx_dispute_evidence_network_id ON dispute_evidence(network_id);
 CREATE INDEX idx_dispute_resolutions_network_id ON dispute_resolutions(network_id);
 CREATE INDEX idx_trade_cancellations_network_id ON trade_cancellations(network_id);
 CREATE INDEX idx_escrow_id_mapping_network_id ON escrow_id_mapping(network_id);
-CREATE INDEX idx_divvi_referrals_network_id ON divvi_referrals(network_id);
 
 -- Solana-specific indexes
 CREATE INDEX idx_escrows_network_family ON escrows(network_family);
@@ -500,40 +498,8 @@ CREATE TRIGGER update_contract_auto_cancellations_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- 14. divvi_referrals: Track Divvi referral submissions
-CREATE TABLE divvi_referrals (
-    id SERIAL PRIMARY KEY,
-    wallet_address VARCHAR(42) NOT NULL,
-    transaction_hash VARCHAR(66) NOT NULL,
-    chain_id INTEGER NOT NULL,
-    network_id INTEGER NOT NULL REFERENCES networks(id),
-    trade_id INTEGER REFERENCES trades(id),
-    submission_status INTEGER, -- 200, 400, 500 from Divvi API
-    submission_response JSONB, -- Full Divvi API response
-    submitted_providers_with_existing_referral JSONB, -- Array from response.data.submittedProvidersWithExistingReferral
-    error_message TEXT,
-    submitted_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
 
--- Indexes for divvi_referrals
-CREATE INDEX idx_divvi_referrals_wallet_address ON divvi_referrals(wallet_address);
-CREATE INDEX idx_divvi_referrals_transaction_hash ON divvi_referrals(transaction_hash);
-CREATE INDEX idx_divvi_referrals_chain_id ON divvi_referrals(chain_id);
-CREATE INDEX idx_divvi_referrals_submission_status ON divvi_referrals(submission_status);
-CREATE INDEX idx_divvi_referrals_trade_id ON divvi_referrals(trade_id);
-CREATE INDEX idx_divvi_referrals_created_at ON divvi_referrals(created_at);
-
--- Unique constraint to prevent duplicate submissions for same transaction
-CREATE UNIQUE INDEX idx_divvi_referrals_unique_tx ON divvi_referrals(transaction_hash, chain_id);
-
-CREATE TRIGGER update_divvi_referrals_updated_at 
-    BEFORE UPDATE ON divvi_referrals 
-    FOR EACH ROW 
-    EXECUTE FUNCTION update_updated_at_column();
-
--- 11. enforce trade deadlines: block state updates past deadlines
+-- 14. enforce trade deadlines: block state updates past deadlines
 CREATE OR REPLACE FUNCTION enforce_trade_deadlines()
 RETURNS TRIGGER AS $$
 BEGIN

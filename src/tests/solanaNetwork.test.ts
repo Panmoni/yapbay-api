@@ -48,11 +48,12 @@ describe('Solana Network Tests', function () {
     });
 
     it('should have valid program IDs', function () {
+      // Only test devnet since mainnet is not active yet
       expect(solanaDevnetNetwork.programId).to.be.a('string');
       expect(solanaDevnetNetwork.programId.length).to.equal(44); // Base58 encoded public key
-
-      expect(solanaMainnetNetwork.programId).to.be.a('string');
-      expect(solanaMainnetNetwork.programId.length).to.equal(44);
+      expect(solanaDevnetNetwork.programId).to.equal(
+        '4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x'
+      );
     });
 
     it('should have valid USDC mint addresses', function () {
@@ -106,9 +107,8 @@ describe('Solana Network Tests', function () {
 
   describe('Solana Address Validation', function () {
     it('should validate Solana program IDs', function () {
-      // Test valid program ID
+      // Test valid program ID - only test devnet since mainnet is not active yet
       expect(() => new PublicKey(solanaDevnetNetwork.programId)).to.not.throw();
-      expect(() => new PublicKey(solanaMainnetNetwork.programId)).to.not.throw();
     });
 
     it('should validate Solana USDC mint addresses', function () {

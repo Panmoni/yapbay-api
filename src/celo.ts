@@ -5,10 +5,10 @@ import { YapBayEscrow } from './types/YapBayEscrow';
 import { NetworkService } from './services/networkService';
 dotenv.config();
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const CELO_PRIVATE_KEY = process.env.CELO_PRIVATE_KEY;
 
-if (!PRIVATE_KEY) {
-  console.warn('Warning: PRIVATE_KEY not set in environment variables');
+if (!CELO_PRIVATE_KEY) {
+  console.warn('Warning: CELO_PRIVATE_KEY not set in environment variables');
 }
 
 // Network-aware Celo service
@@ -117,12 +117,12 @@ export class CeloService {
    * Get signed contract instance for a specific network
    */
   static async getSignedContractForNetwork(networkId: number): Promise<YapBayEscrow> {
-    if (!PRIVATE_KEY) {
-      throw new Error('PRIVATE_KEY not set in environment variables');
+    if (!CELO_PRIVATE_KEY) {
+      throw new Error('CELO_PRIVATE_KEY not set in environment variables');
     }
 
     const provider = await this.getProviderForNetwork(networkId);
-    const signer = new ethers.Wallet(PRIVATE_KEY, provider);
+    const signer = new ethers.Wallet(CELO_PRIVATE_KEY, provider);
 
     return await this.getContractForNetwork(networkId, signer);
   }
@@ -131,12 +131,12 @@ export class CeloService {
    * Get signer for a specific network
    */
   static async getSignerForNetwork(networkId: number): Promise<ethers.Wallet> {
-    if (!PRIVATE_KEY) {
-      throw new Error('PRIVATE_KEY not set in environment variables');
+    if (!CELO_PRIVATE_KEY) {
+      throw new Error('CELO_PRIVATE_KEY not set in environment variables');
     }
 
     const provider = await this.getProviderForNetwork(networkId);
-    return new ethers.Wallet(PRIVATE_KEY, provider);
+    return new ethers.Wallet(CELO_PRIVATE_KEY, provider);
   }
 
   /**

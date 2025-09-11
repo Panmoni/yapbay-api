@@ -1,97 +1,54 @@
-import { ethers } from 'ethers';
-import { EscrowMonitoringService } from '../src/services/escrowMonitoringService';
-import { YapBayEscrow } from '../src/types/YapBayEscrow';
-import YapBayEscrowABI from '../src/contract/YapBayEscrow.json';
+import { NetworkService } from '../src/services/networkService';
+import { BlockchainServiceFactory } from '../src/services/blockchainService';
 import { query } from '../src/db';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-interface NetworkConfig {
-  name: string;
-  rpcUrl: string;
-  wsUrl: string;
-  contractAddress: string;
-  chainId: number;
+async function getAvailableNetworks() {
+  try {
+    const networks = await NetworkService.getActiveNetworks();
+    return networks;
+  } catch (error) {
+    console.error('Error getting networks:', error);
+    return [];
+  }
 }
 
-function getAvailableNetworks(): NetworkConfig[] {
-  const networks: NetworkConfig[] = [];
-  
-  // Check for testnet configuration
-  if (process.env.CONTRACT_ADDRESS_TESTNET && process.env.CELO_RPC_URL_TESTNET) {
-    networks.push({
-      name: 'Alfajores Testnet',
-      rpcUrl: process.env.CELO_RPC_URL_TESTNET,
-      wsUrl: process.env.CELO_WS_URL_TESTNET || 'wss://alfajores-forno.celo-testnet.org/ws',
-      contractAddress: process.env.CONTRACT_ADDRESS_TESTNET,
-      chainId: 44787
-    });
-  }
-  
-  // Check for mainnet configuration
-  if (process.env.CONTRACT_ADDRESS && process.env.CELO_RPC_URL) {
-    networks.push({
-      name: 'Celo Mainnet', 
-      rpcUrl: process.env.CELO_RPC_URL,
-      wsUrl: process.env.CELO_WS_URL || 'https://forno.celo.org/ws',
-      contractAddress: process.env.CONTRACT_ADDRESS,
-      chainId: 42220
-    });
-  }
-  
-  return networks;
-}
-
-async function testNetworkConnectivity(network: NetworkConfig): Promise<void> {
+async function testNetworkConnectivity(network: any): Promise<void> {
   console.log(`\n🌐 Testing ${network.name}`);
   console.log(`   RPC: ${network.rpcUrl}`);
-  console.log(`   Contract: ${network.contractAddress}`);
-  
+  console.log(`   Network Family: ${network.networkFamily}`);
+
   try {
-    // Create provider for this network
-    const provider = new ethers.JsonRpcProvider(network.rpcUrl, {
-      name: network.name.toLowerCase().replace(' ', '-'),
-      chainId: network.chainId
-    });
+    // Create blockchain service for this network
+    const blockchainService = BlockchainServiceFactory.create(network);
 
-    // Test basic connectivity
-    const blockNumber = await provider.getBlockNumber();
-    console.log(`   ✅ Connected - Latest block: ${blockNumber}`);
+    // Test network info
+    const networkInfo = await blockchainService.getNetworkInfo();
+    console.log(`   ✅ Connected - Network info:`, networkInfo);
 
-    // Test contract connectivity
-    const contract = new ethers.Contract(
-      network.contractAddress,
-      YapBayEscrowABI.abi,
-      provider
-    ) as unknown as YapBayEscrow;
+    // Test address validation
+    const testAddress =
+      network.networkFamily === 'solana'
+        ? '11111111111111111111111111111112' // System program
+        : '0x1234567890123456789012345678901234567890';
 
-    // Try to call a read-only function
-    try {
-      const nextEscrowId = await contract.nextEscrowId();
-      console.log(`   ✅ Contract accessible - Next escrow ID: ${nextEscrowId}`);
-      
-      // Test the specific functions our monitoring service needs
-      if (nextEscrowId > 1n) {
-        const testEscrowId = 1;
-        try {
-          const isEligible = await contract.isEligibleForAutoCancel(testEscrowId);
-          console.log(`   ✅ isEligibleForAutoCancel(${testEscrowId}): ${isEligible}`);
-        } catch (error: any) {
-          console.log(`   ⚠️  isEligibleForAutoCancel test failed: ${error.message}`);
-        }
+    const isValidAddress = blockchainService.validateAddress(testAddress);
+    console.log(`   ✅ Address validation: ${isValidAddress}`);
 
-        try {
-          const escrowInfo = await contract.getSequentialEscrowInfo(testEscrowId);
-          console.log(`   ✅ getSequentialEscrowInfo(${testEscrowId}): sequential=${escrowInfo.isSequential}`);
-        } catch (error: any) {
-          console.log(`   ⚠️  getSequentialEscrowInfo test failed: ${error.message}`);
-        }
-      }
-    } catch (error: any) {
-      console.log(`   ❌ Contract call failed: ${error.message}`);
-    }
+    // Test transaction hash validation
+    const testHash =
+      network.networkFamily === 'solana'
+        ? '1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111'
+        : '0x1234567890123456789012345678901234567890123456789012345678901234';
 
+    const isValidHash = blockchainService.validateTransactionHash(testHash);
+    console.log(`   ✅ Transaction hash validation: ${isValidHash}`);
+
+    // Test block explorer URL
+    const explorerUrl = blockchainService.getBlockExplorerUrl(testHash);
+    console.log(`   ✅ Block explorer URL: ${explorerUrl}`);
   } catch (error: any) {
     console.log(`   ❌ Network connection failed: ${error.message}`);
   }
@@ -103,22 +60,22 @@ async function testEscrowMonitoring() {
 
   try {
     // Get available networks
-    const availableNetworks = getAvailableNetworks();
+    const availableNetworks = await getAvailableNetworks();
     console.log(`\n🌐 Detected ${availableNetworks.length} configured network(s):`);
     availableNetworks.forEach(network => {
-      console.log(`   - ${network.name}: ${network.contractAddress}`);
+      console.log(
+        `   - ${network.name}: ${network.networkFamily} (${
+          network.programId || network.contractAddress
+        })`
+      );
     });
-    
+
     if (availableNetworks.length === 0) {
-      console.log('❌ No networks configured. Please check your .env file for:');
-      console.log('   CONTRACT_ADDRESS_TESTNET & CELO_RPC_URL_TESTNET (for testnet)');
-      console.log('   CONTRACT_ADDRESS & CELO_RPC_URL (for mainnet)');
+      console.log('❌ No active networks configured. Please check your database networks table.');
       return;
     }
 
-    // Initialize the monitoring service
-    new EscrowMonitoringService();
-    console.log('✅ EscrowMonitoringService initialized successfully');
+    console.log('✅ Network service initialized successfully');
 
     // Test 1: Check database connection and active escrows
     console.log('\n📊 Test 1: Checking active escrows in database');
@@ -144,7 +101,9 @@ async function testEscrowMonitoring() {
       console.log('   No active escrows found');
     } else {
       activeEscrows.forEach(escrow => {
-        console.log(`   - Trade ${escrow.trade_id}: Leg1=${escrow.leg1_id}(${escrow.leg1_state}), Leg2=${escrow.leg2_id}(${escrow.leg2_state})`);
+        console.log(
+          `   - Trade ${escrow.trade_id}: Leg1=${escrow.leg1_id}(${escrow.leg1_state}), Leg2=${escrow.leg2_id}(${escrow.leg2_state})`
+        );
       });
     }
 
@@ -181,17 +140,18 @@ async function testEscrowMonitoring() {
       console.log(`✅ Auto-cancellation table exists with ${tableCheck[0].count} records`);
     } catch (error) {
       console.error('❌ Auto-cancellation table missing or inaccessible:', error);
-      console.log('📝 Please run the migration: psql -d your_db -f migrations/add_contract_auto_cancellations.sql');
+      console.log(
+        '📝 Please run the migration: psql -d your_db -f migrations/add_contract_auto_cancellations.sql'
+      );
       return;
     }
 
     // Test 3: Environment variables check
     console.log('\n⚙️  Test 3: Environment configuration check');
     const requiredEnvVars = [
-      'PRIVATE_KEY',
-      'CONTRACT_ADDRESS', 
-      'ARBITRATOR_ADDRESS',
-      'CELO_RPC_URL'
+      'SOLANA_RPC_URL_DEVNET',
+      'SOLANA_PROGRAM_ID_DEVNET',
+      'SOLANA_USDC_MINT_DEVNET',
     ];
 
     let envCheckPassed = true;
@@ -212,10 +172,10 @@ async function testEscrowMonitoring() {
     // Test 4: Optional configuration check
     console.log('\n🔧 Test 4: Optional configuration check');
     const optionalConfig = {
-      'ESCROW_MONITOR_ENABLED': process.env.ESCROW_MONITOR_ENABLED || 'false',
-      'ESCROW_MONITOR_CRON_SCHEDULE': process.env.ESCROW_MONITOR_CRON_SCHEDULE || '* * * * *',
-      'ESCROW_MONITOR_BATCH_SIZE': process.env.ESCROW_MONITOR_BATCH_SIZE || '50',
-      'AUTO_CANCEL_DELAY_HOURS': process.env.AUTO_CANCEL_DELAY_HOURS || '1'
+      ESCROW_MONITOR_ENABLED: process.env.ESCROW_MONITOR_ENABLED || 'false',
+      ESCROW_MONITOR_CRON_SCHEDULE: process.env.ESCROW_MONITOR_CRON_SCHEDULE || '* * * * *',
+      ESCROW_MONITOR_BATCH_SIZE: process.env.ESCROW_MONITOR_BATCH_SIZE || '50',
+      AUTO_CANCEL_DELAY_HOURS: process.env.AUTO_CANCEL_DELAY_HOURS || '1',
     };
 
     Object.entries(optionalConfig).forEach(([key, value]) => {
@@ -231,7 +191,7 @@ async function testEscrowMonitoring() {
     // Test 6: Simulate monitoring run (without actual blockchain calls)
     console.log('\n🎭 Test 6: Simulate monitoring service run');
     console.log('This would check for expired escrows and perform auto-cancellations...');
-    
+
     if (process.env.ESCROW_MONITOR_ENABLED === 'true') {
       console.log('✅ Monitoring is ENABLED - service would run automatically');
     } else {
@@ -258,27 +218,26 @@ async function testEscrowMonitoring() {
     console.log(`USE_TESTNET: ${process.env.USE_TESTNET || 'undefined'}`);
 
     // Determine which network the service would actually use
-    const useTestnet = process.env.NODE_ENV === 'development' || process.env.USE_TESTNET === 'true';
-    const activeNetwork = availableNetworks.find(n => useTestnet ? n.chainId === 44787 : n.chainId === 42220);
-    
-    if (activeNetwork) {
-      console.log(`\n🎯 Active Network for Monitoring Service:`);
-      console.log(`   ${activeNetwork.name} (${activeNetwork.contractAddress})`);
-      console.log(`   This is determined by NODE_ENV=${process.env.NODE_ENV} and USE_TESTNET=${process.env.USE_TESTNET}`);
-    } else {
-      console.log(`\n⚠️  Warning: Current environment settings would use ${useTestnet ? 'testnet' : 'mainnet'} but it's not configured!`);
-    }
+    const defaultNetwork = await NetworkService.getDefaultNetwork();
+
+    console.log(`\n🎯 Default Network for Monitoring Service:`);
+    console.log(`   ${defaultNetwork.name} (${defaultNetwork.networkFamily})`);
+    console.log(`   Program ID: ${defaultNetwork.programId || 'N/A'}`);
+    console.log(`   Contract Address: ${defaultNetwork.contractAddress || 'N/A'}`);
+    console.log(`   This is determined by NODE_ENV=${process.env.NODE_ENV}`);
 
     console.log('\n💡 To switch networks:');
-    console.log('   For Testnet: Set NODE_ENV=development or USE_TESTNET=true');
-    console.log('   For Mainnet: Set NODE_ENV=production and USE_TESTNET=false (or unset)');
+    console.log('   For Devnet: Set NODE_ENV=development');
+    console.log('   For Mainnet: Set NODE_ENV=production');
 
     console.log('\n🎉 All tests completed successfully!');
     console.log('\n📋 Summary:');
     console.log(`   - Available networks: ${availableNetworks.length}`);
     console.log(`   - Active escrows for monitoring: ${activeEscrows.length}`);
     console.log(`   - Auto-cancellation attempts: ${autoCancellations.length}`);
-    console.log(`   - Monitoring enabled: ${process.env.ESCROW_MONITOR_ENABLED === 'true' ? 'YES' : 'NO'}`);
+    console.log(
+      `   - Monitoring enabled: ${process.env.ESCROW_MONITOR_ENABLED === 'true' ? 'YES' : 'NO'}`
+    );
     console.log(`   - Check interval: ${optionalConfig.ESCROW_MONITOR_CRON_SCHEDULE}`);
     console.log(`   - Auto-cancel delay: ${optionalConfig.AUTO_CANCEL_DELAY_HOURS} hours`);
     console.log(`   - Batch size: ${optionalConfig.ESCROW_MONITOR_BATCH_SIZE}`);
@@ -287,7 +246,6 @@ async function testEscrowMonitoring() {
       console.log('\n💡 To enable monitoring, add to your .env file:');
       console.log('   ESCROW_MONITOR_ENABLED=true');
     }
-
   } catch (error) {
     console.error('❌ Test failed with error:', error);
     process.exit(1);

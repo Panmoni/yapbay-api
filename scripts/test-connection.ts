@@ -8,6 +8,7 @@ dotenv.config();
 async function testConnection() {
   try {
     console.log('Testing connection to Solana Devnet...');
+    console.log('Note: CELO_PRIVATE_KEY not needed for Solana networks');
 
     // Get default network (should be Solana Devnet)
     const defaultNetwork = await NetworkService.getDefaultNetwork();

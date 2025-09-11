@@ -152,6 +152,7 @@ async function testEscrowMonitoring() {
       'SOLANA_RPC_URL_DEVNET',
       'SOLANA_PROGRAM_ID_DEVNET',
       'SOLANA_USDC_MINT_DEVNET',
+      'SOLANA_ARBITRATOR_KEYPAIR',
     ];
 
     let envCheckPassed = true;

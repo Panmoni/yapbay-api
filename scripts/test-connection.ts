@@ -1,45 +1,50 @@
-import { provider, getContract, formatUSDC, parseUSDC } from '../src/celo';
+import { NetworkService } from '../src/services/networkService';
+import { BlockchainServiceFactory } from '../src/services/blockchainService';
+import { formatUSDC, parseUSDC } from '../src/celo';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 async function testConnection() {
   try {
-    console.log('Testing connection to Celo Alfajores testnet...');
-    
-    // Test provider connection
-    const network = await provider.getNetwork();
-    console.log(`Connected to network: ${network.name} (chainId: ${network.chainId})`);
-    
-    // Get contract
-    const contract = getContract();
-    console.log(`Contract address: ${contract.target}`);
-    
-    // Test reading contract constants
-    const maxAmount = await contract.MAX_AMOUNT();
-    console.log(`MAX_AMOUNT: ${maxAmount} (${parseUSDC(maxAmount)} USDC)`);
-    
-    const depositDuration = await contract.DEPOSIT_DURATION();
-    console.log(`DEPOSIT_DURATION: ${depositDuration} seconds`);
-    
-    const fiatDuration = await contract.FIAT_DURATION();
-    console.log(`FIAT_DURATION: ${fiatDuration} seconds`);
-    
-    // Test reading next escrow ID
-    const nextEscrowId = await contract.nextEscrowId();
-    console.log(`Next escrow ID: ${nextEscrowId}`);
-    
-    // Test reading arbitrator address
-    const arbitrator = await contract.fixedArbitrator();
-    console.log(`Arbitrator address: ${arbitrator}`);
-    
-    // Test USDC formatting
+    console.log('Testing connection to Solana Devnet...');
+
+    // Get default network (should be Solana Devnet)
+    const defaultNetwork = await NetworkService.getDefaultNetwork();
+    console.log(
+      `Default network: ${defaultNetwork.name} (family: ${defaultNetwork.networkFamily})`
+    );
+
+    // Create blockchain service
+    const blockchainService = BlockchainServiceFactory.create(defaultNetwork);
+    console.log(`Network family: ${blockchainService.getNetworkFamily()}`);
+
+    // Test network info
+    const networkInfo = await blockchainService.getNetworkInfo();
+    console.log(`Network info:`, networkInfo);
+
+    // Test address validation
+    const testSolanaAddress = '11111111111111111111111111111112'; // System program
+    const isValidAddress = blockchainService.validateAddress(testSolanaAddress);
+    console.log(`Solana address validation: ${testSolanaAddress} -> ${isValidAddress}`);
+
+    // Test transaction hash validation
+    const testSignature =
+      '1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111';
+    const isValidSignature = blockchainService.validateTransactionHash(testSignature);
+    console.log(`Solana signature validation: ${isValidSignature}`);
+
+    // Test block explorer URL
+    const explorerUrl = blockchainService.getBlockExplorerUrl(testSignature);
+    console.log(`Block explorer URL: ${explorerUrl}`);
+
+    // Test USDC formatting (still works for Solana)
     const testAmount = 10.5;
     const formattedAmount = formatUSDC(testAmount);
     console.log(`Formatting ${testAmount} USDC: ${formattedAmount}`);
     console.log(`Parsing back: ${parseUSDC(formattedAmount)} USDC`);
-    
-    console.log('\nConnection test successful! ✅');
+
+    console.log('\nSolana connection test successful! ✅');
   } catch (error) {
     console.error('Error testing connection:');
     console.error(error);

@@ -16,7 +16,10 @@ router.get(
     const { id } = req.params;
     const networkId = req.networkId!;
     try {
-      const result = await query('SELECT * FROM offers WHERE id = $1 AND network_id = $2', [id, networkId]);
+      const result = await query('SELECT * FROM offers WHERE id = $1 AND network_id = $2', [
+        id,
+        networkId,
+      ]);
       if (result.length === 0) {
         res.status(404).json({ error: 'Offer not found' });
         return;
@@ -49,7 +52,7 @@ router.get(
       }
 
       // If authenticated and requesting own offers
-      const walletAddress = getWalletAddressFromJWT(req);
+      const walletAddress = (req as any).user ? getWalletAddressFromJWT(req as any) : undefined;
       if (owner === 'me' && walletAddress) {
         sql +=
           ' AND creator_account_id IN (SELECT id FROM accounts WHERE LOWER(wallet_address) = LOWER($' +

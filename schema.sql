@@ -131,14 +131,14 @@ CREATE TABLE trades (
     leg1_crypto_amount DECIMAL(15,6) NOT NULL,
     leg1_fiat_amount DECIMAL(15,2),
     leg1_fiat_currency VARCHAR(3) NOT NULL,
-    leg1_escrow_address VARCHAR(42), -- Not unique as all escrows use the same contract address
+    leg1_escrow_address VARCHAR(44), -- Not unique as all escrows use the same contract address
     leg1_created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     leg1_escrow_deposit_deadline TIMESTAMP WITH TIME ZONE,
     leg1_fiat_payment_deadline TIMESTAMP WITH TIME ZONE,
     leg1_fiat_paid_at TIMESTAMP WITH TIME ZONE,
     leg1_released_at TIMESTAMP WITH TIME ZONE,
     leg1_cancelled_at TIMESTAMP WITH TIME ZONE,
-    leg1_cancelled_by VARCHAR(42),
+    leg1_cancelled_by VARCHAR(44),
     leg1_dispute_id INTEGER,
     leg1_escrow_onchain_id VARCHAR(42), -- The on-chain escrow ID (from the EscrowCreated event) for leg 1.
 
@@ -150,14 +150,14 @@ CREATE TABLE trades (
     leg2_crypto_amount DECIMAL(15,6),
     leg2_fiat_amount DECIMAL(15,2),
     leg2_fiat_currency VARCHAR(3),
-    leg2_escrow_address VARCHAR(42), -- Not unique as all escrows use the same contract address
+    leg2_escrow_address VARCHAR(44), -- Not unique as all escrows use the same contract address
     leg2_created_at TIMESTAMP WITH TIME ZONE,
     leg2_escrow_deposit_deadline TIMESTAMP WITH TIME ZONE,
     leg2_fiat_payment_deadline TIMESTAMP WITH TIME ZONE,
     leg2_fiat_paid_at TIMESTAMP WITH TIME ZONE,
     leg2_released_at TIMESTAMP WITH TIME ZONE,
     leg2_cancelled_at TIMESTAMP WITH TIME ZONE,
-    leg2_cancelled_by VARCHAR(42),
+    leg2_cancelled_by VARCHAR(44),
     leg2_dispute_id INTEGER,
     leg2_escrow_onchain_id VARCHAR(42), -- The on-chain escrow ID (from the EscrowCreated event) for leg 2.
     
@@ -172,17 +172,17 @@ CREATE TABLE escrows (
     id SERIAL PRIMARY KEY,
     trade_id INTEGER NOT NULL REFERENCES trades(id),
     network_id INTEGER NOT NULL REFERENCES networks(id),
-    escrow_address VARCHAR(42) NOT NULL, -- Contract address (not unique as all escrows use the same contract)
+    escrow_address VARCHAR(44) NOT NULL, -- Contract address (not unique as all escrows use the same contract)
     onchain_escrow_id VARCHAR(42), -- The escrow ID from the blockchain, which is different from the database ID
-    seller_address VARCHAR(42) NOT NULL,
-    buyer_address VARCHAR(42) NOT NULL,
-    arbitrator_address VARCHAR(42) NOT NULL,
+    seller_address VARCHAR(44) NOT NULL,
+    buyer_address VARCHAR(44) NOT NULL,
+    arbitrator_address VARCHAR(44) NOT NULL,
     token_type VARCHAR(10) NOT NULL DEFAULT 'USDC',
     amount DECIMAL(15,6) NOT NULL CHECK (amount <= 100.0),
     current_balance DECIMAL(15,6),
     state VARCHAR(20) NOT NULL CHECK (state IN ('CREATED', 'FUNDED', 'RELEASED', 'CANCELLED', 'AUTO_CANCELLED', 'DISPUTED', 'RESOLVED')),
     sequential BOOLEAN NOT NULL,
-    sequential_escrow_address VARCHAR(42),
+    sequential_escrow_address VARCHAR(44),
     fiat_paid BOOLEAN NOT NULL DEFAULT FALSE,
     counter INTEGER NOT NULL DEFAULT 0,
     deposit_deadline TIMESTAMP WITH TIME ZONE,
@@ -209,13 +209,13 @@ CREATE TABLE disputes (
     trade_id INTEGER NOT NULL REFERENCES trades(id),
     escrow_id INTEGER NOT NULL REFERENCES escrows(id),
     network_id INTEGER NOT NULL REFERENCES networks(id),
-    initiator_address VARCHAR(42) NOT NULL,
+    initiator_address VARCHAR(44) NOT NULL,
     bond_amount DECIMAL(15,6) NOT NULL CHECK (bond_amount > 0),
     status VARCHAR(20) NOT NULL CHECK (status IN ('OPENED', 'RESPONDED', 'RESOLVED', 'DEFAULTED')),
     initiated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     responded_at TIMESTAMP WITH TIME ZONE,
     resolved_at TIMESTAMP WITH TIME ZONE,
-    winner_address VARCHAR(42),
+    winner_address VARCHAR(44),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -227,7 +227,7 @@ CREATE TABLE dispute_evidence (
     escrow_id INTEGER NOT NULL REFERENCES escrows(id),
     trade_id INTEGER NOT NULL REFERENCES trades(id),
     network_id INTEGER NOT NULL REFERENCES networks(id),
-    submitter_address VARCHAR(42) NOT NULL,
+    submitter_address VARCHAR(44) NOT NULL,
     submission_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     evidence_text TEXT NOT NULL CHECK (LENGTH(evidence_text) <= 1000),
     pdf_s3_path TEXT NOT NULL,
@@ -247,8 +247,8 @@ CREATE TABLE transactions (
     type transaction_type NOT NULL,
     block_number BIGINT, -- EVM block number
     slot BIGINT, -- Solana slot number
-    sender_address VARCHAR(42),
-    receiver_or_contract_address VARCHAR(42),
+    sender_address VARCHAR(44),
+    receiver_or_contract_address VARCHAR(44),
     gas_used DECIMAL(20,0),
     error_message TEXT,
     related_trade_id INTEGER REFERENCES trades(id) ON DELETE SET NULL,
@@ -269,13 +269,13 @@ CREATE TABLE dispute_resolutions (
     dispute_id INTEGER NOT NULL REFERENCES disputes(id),
     escrow_id INTEGER NOT NULL REFERENCES escrows(id),
     network_id INTEGER NOT NULL REFERENCES networks(id),
-    arbitrator_address VARCHAR(42) NOT NULL,
+    arbitrator_address VARCHAR(44) NOT NULL,
     resolution_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     decision BOOLEAN NOT NULL, -- true: buyer wins, false: seller wins
     decision_explanation TEXT NOT NULL CHECK (LENGTH(decision_explanation) <= 2000),
     decision_hash VARCHAR(64) NOT NULL,
-    winner_address VARCHAR(42) NOT NULL,
-    funds_destination VARCHAR(42) NOT NULL,
+    winner_address VARCHAR(44) NOT NULL,
+    funds_destination VARCHAR(44) NOT NULL,
     bond_allocation VARCHAR(100) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP

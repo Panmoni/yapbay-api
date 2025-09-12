@@ -74,7 +74,7 @@ CREATE TABLE networks (
 -- 2. accounts: User profiles and wallet info
 CREATE TABLE accounts (
     id SERIAL PRIMARY KEY,
-    wallet_address VARCHAR(42) UNIQUE NOT NULL, -- EVM address (e.g., 0x...)
+    wallet_address VARCHAR(44) UNIQUE NOT NULL, -- EVM address (0x... = 42 chars) or Solana address (44 chars)
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     telegram_username VARCHAR(50),

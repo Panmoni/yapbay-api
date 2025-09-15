@@ -1,215 +1,356 @@
-# Multi-Network Testing Documentation
+# YapBay API Testing Guide
 
 ## Overview
 
-This document outlines the comprehensive testing strategy for YapBay API's multi-network functionality, covering network isolation, data integrity, and API endpoint validation.
+This document provides comprehensive guidance for testing the YapBay API, with a focus on Solana network integration and multi-network testing capabilities.
 
-## Test Structure
+## Table of Contents
 
-### Core Test Files
+1. [Test Environment Setup](#test-environment-setup)
+2. [Solana Network Testing](#solana-network-testing)
+3. [Test Utilities](#test-utilities)
+4. [Database Testing](#database-testing)
+5. [Multi-Network Testing](#multi-network-testing)
+6. [Environment Variables](#environment-variables)
+7. [Best Practices](#best-practices)
+8. [Troubleshooting](#troubleshooting)
 
-1. **`blockchain.test.ts`** - Basic blockchain connectivity and contract interaction tests
-2. **`deadlineTrigger.test.ts`** - Network-aware deadline processing and cancellation tests  
-3. **`multiNetwork.test.ts`** - Comprehensive multi-network isolation and data integrity tests
-4. **`networkApi.test.ts`** - API endpoint testing with network headers and validation
+## Test Environment Setup
 
-## Test Categories
+### Prerequisites
 
-### 1. Network Service Tests (`multiNetwork.test.ts`)
-
-**Network Configuration:**
-- ✅ Retrieve active networks
-- ✅ Get network by ID and name
-- ✅ Validate network properties (chain ID, contract addresses)
-
-**Celo Service Multi-Network:**
-- ✅ Create separate providers for different networks
-- ✅ Create separate contracts for different networks
-- ✅ Verify different contract addresses per network
-
-### 2. Data Isolation Tests (`multiNetwork.test.ts`)
-
-**Offers Isolation:**
-- ✅ Create offers on different networks
-- ✅ Verify offers are only accessible within their network
-- ✅ Confirm cross-network queries return empty results
-
-**Trades Isolation:**
-- ✅ Create trades on different networks
-- ✅ Verify trades are only accessible within their network
-- ✅ Confirm network-specific trade states and currencies
-
-**Escrows Isolation:**
-- ✅ Create escrows on different networks
-- ✅ Verify escrows use correct contract addresses per network
-- ✅ Confirm escrow states are network-specific
-
-### 3. Deadline Processing Tests (`deadlineTrigger.test.ts`, `multiNetwork.test.ts`)
-
-**Network-Aware Deadline Processing:**
-- ✅ Process expired deadlines for specific networks only
-- ✅ Verify trades on unprocessed networks remain unchanged
-- ✅ Confirm deadline triggers respect network boundaries
-
-**Legacy Compatibility:**
-- ✅ Database triggers still block deadline violations
-- ✅ Auto-cancellation respects uncancelable states
-- ✅ Audit trail includes network context
-
-### 4. API Endpoint Tests (`networkApi.test.ts`)
-
-**Network Header Validation:**
-- ✅ Reject invalid network names with proper error messages
-- ✅ Use default network when no header provided
-- ✅ Accept valid network names and return network context
-
-**Endpoint Network Isolation:**
-- ✅ `/offers` - Return only network-specific offers
-- ✅ `/trades` - Return only network-specific trades
-- ✅ `/my/trades` - Filter user trades by network
-- ✅ Cross-network resource access returns 404
-
-**Error Handling:**
-- ✅ Graceful handling of network service errors
-- ✅ Helpful error messages for missing/invalid networks
-- ✅ Proper validation of network headers
-
-### 5. Cross-Network Data Integrity Tests
-
-**Resource Access Control:**
-- ✅ Prevent access to resources from different networks
-- ✅ Enforce network isolation in update operations
-- ✅ Maintain referential integrity within networks
-
-**Data Leakage Prevention:**
-- ✅ Queries filtered by network_id prevent data leakage
-- ✅ Update operations respect network boundaries
-- ✅ Delete operations limited to correct network
-
-## Running Tests
-
-### Individual Test Suites
-
-```bash
-# Run all tests
-npm run test
-
-# Run specific test files
-npm run test:blockchain
-npm run test:deadline
-
-# Run blockchain connectivity tests
-npx mocha -r ts-node/register 'src/tests/blockchain.test.ts'
-
-# Run multi-network tests
-npx mocha -r ts-node/register 'src/tests/multiNetwork.test.ts'
-
-# Run API tests
-npx mocha -r ts-node/register 'src/tests/networkApi.test.ts'
-
-# Run deadline tests
-npx mocha -r ts-node/register 'src/tests/deadlineTrigger.test.ts'
-```
-
-### Test Scripts
-
-```bash
-# Test deadline service functionality
-npm run test:deadline
-
-# Test database connections
-npm run test:connection
-
-# Test escrow monitoring
-npm run test:escrow-monitoring
-```
-
-## Test Data Requirements
+- Node.js 18+
+- PostgreSQL 13+
+- TypeScript 4.9+
+- Mocha test framework
+- Chai assertion library
 
 ### Database Setup
 
-Tests require active network configurations in the `networks` table:
-- Celo Alfajores (ID: 1, Chain: 44787)
-- Celo Mainnet (ID: 2, Chain: 42220)
+The test suite requires a PostgreSQL database with the complete schema. Use the provided `schema.sql` file:
+
+```bash
+# Reset database to clean state
+psql -h localhost -U your_user -d your_database -f schema.sql
+```
 
 ### Environment Variables
 
-```env
-# Database connection
-POSTGRES_URL=postgres://user:pass@localhost:5432/yapbay
+Create a `.env.test` file with the following variables:
 
-# Network configurations (from database)
-CELO_RPC_URL_TESTNET=https://alfajores-forno.celo-testnet.org
-CELO_RPC_URL=https://forno.celo.org
+```bash
+# Database
+POSTGRES_URL=postgresql://user:password@localhost:5432/yapbay_test
 
-# Contract addresses (from database)
-CONTRACT_ADDRESS_TESTNET=0xE68cf67df40B3d93Be6a10D0A18d0846381Cbc0E
-CONTRACT_ADDRESS=0xf8C832021350133769EE5E0605a9c40c1765ace7
+# Solana Networks
+SOLANA_DEVNET_RPC_URL=https://api.devnet.solana.com
+SOLANA_MAINNET_RPC_URL=https://api.mainnet-beta.solana.com
+
+# Solana Program Configuration
+SOLANA_PROGRAM_ID=4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x
+SOLANA_USDC_MINT_DEVNET=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
+SOLANA_USDC_MINT_MAINNET=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+SOLANA_ARBITRATOR_ADDRESS=GGrXhNVxUZXaA2uMopsa5q23aPmoNvQF14uxqo8qENUr
+
+# Test Configuration
+NODE_ENV=test
+LOG_LEVEL=error
 ```
 
-## Test Coverage
+## Solana Network Testing
 
-### Network Isolation ✅
-- [x] Data separated by network_id
-- [x] Cross-network queries return empty results
-- [x] API endpoints respect network headers
-- [x] Update operations limited to correct network
+### Network Configuration
 
-### Service Layer ✅
-- [x] NetworkService manages configurations correctly
-- [x] CeloService creates separate providers per network
-- [x] DeadlineService processes networks independently
-- [x] Database queries include network filtering
+The test suite supports two Solana networks:
 
-### Error Handling ✅
-- [x] Invalid network names rejected
-- [x] Missing network headers handled gracefully
-- [x] Network service errors don't crash application
-- [x] Helpful error messages provided
+1. **Solana Devnet** (ID: 1, Chain ID: 101)
 
-### Backward Compatibility ✅
-- [x] Existing functions work with multi-network updates
-- [x] Default network fallback functions correctly
-- [x] Database triggers still enforce deadlines
-- [x] Audit trails include network context
+   - Active for testing
+   - Uses test USDC mint
+   - RPC: `https://api.devnet.solana.com`
 
-## Test Scenarios
+2. **Solana Mainnet** (ID: 2, Chain ID: 102)
+   - Inactive by default
+   - Uses real USDC mint
+   - RPC: `https://api.mainnet-beta.solana.com`
 
-### End-to-End Network Isolation
+### Solana-Specific Test Scenarios
 
-1. **Setup**: Create test data on both networks
-2. **Action**: Query data with different network headers
-3. **Verify**: Only network-specific data returned
+#### Address Validation
 
-### Cross-Network Prevention
+```typescript
+import { SolanaBlockchainService } from '../services/blockchainService';
 
-1. **Setup**: Create resource on Network A
-2. **Action**: Try to access from Network B
-3. **Verify**: 404 error returned
+const service = new SolanaBlockchainService();
+const validAddress = '11111111111111111111111111111112'; // Solana System Program
+const invalidAddress = 'invalid-address';
 
-### Deadline Processing Isolation
+expect(service.validateAddress(validAddress)).to.be.true;
+expect(service.validateAddress(invalidAddress)).to.be.false;
+```
 
-1. **Setup**: Create expired trades on both networks
-2. **Action**: Process deadlines for one network only
-3. **Verify**: Other network's trades remain unchanged
+#### Transaction Signature Validation
 
-### API Header Validation
+```typescript
+const validSignature =
+  '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjJfq4MZWMbbKyggtKVEznR3W3HoqKMMyRkACdzh54smHiBJRUxDi';
+const invalidSignature = 'invalid-signature';
 
-1. **Setup**: Valid API endpoint
-2. **Action**: Send request with invalid network header
-3. **Verify**: 400 error with helpful message
+expect(service.validateTransactionHash(validSignature)).to.be.true;
+expect(service.validateTransactionHash(invalidSignature)).to.be.false;
+```
 
-## Known Limitations
+## Test Utilities
 
-- Tests use mock JWT tokens for authentication
-- Some tests require actual blockchain connectivity
-- Database transactions are rolled back after each test
-- Network configurations must exist in database
+### Solana Test Utilities (`src/tests/utils/solanaTestUtils.ts`)
 
-## Future Test Enhancements
+The test utilities provide comprehensive functions for creating and managing test data:
 
-- [ ] Add performance tests for multi-network operations
-- [ ] Test network switching scenarios
-- [ ] Add load testing for concurrent network operations
-- [ ] Test network deactivation/reactivation scenarios
-- [ ] Add integration tests with actual blockchain calls
+#### Account Creation
+
+```typescript
+import { createTestAccount } from './utils/solanaTestUtils';
+
+const account = await createTestAccount(client, {
+  username: 'testuser',
+  email: 'test@example.com',
+});
+```
+
+#### Complete Test Scenario
+
+```typescript
+import { createCompleteTestScenario } from './utils/solanaTestUtils';
+
+const scenario = await createCompleteTestScenario(client, 1, {
+  sellerAccount: { username: 'seller' },
+  buyerAccount: { username: 'buyer' },
+  offer: { token: 'USDC', fiat_currency: 'USD' },
+});
+```
+
+#### Data Cleanup
+
+```typescript
+import { cleanupTestData } from './utils/solanaTestUtils';
+
+await cleanupTestData(client, {
+  accountIds: [account.id],
+  offerIds: [offer.id],
+  tradeIds: [trade.id],
+  escrowIds: [escrow.id],
+});
+```
+
+## Database Testing
+
+### Network Isolation
+
+All database operations must respect network isolation:
+
+```typescript
+// Correct: Filter by network_id
+const offers = await client.query('SELECT * FROM offers WHERE network_id = $1', [networkId]);
+
+// Incorrect: Cross-network data access
+const offers = await client.query('SELECT * FROM offers');
+```
+
+### Address Format Compatibility
+
+Solana addresses are 44 characters, EVM addresses are 42 characters:
+
+```typescript
+// Solana address (44 chars)
+const solanaAddress = '11111111111111111111111111111112';
+
+// EVM address (42 chars)
+const evmAddress = '0x1234567890123456789012345678901234567890';
+
+// Database columns support both formats
+const wallet_address VARCHAR(44) -- Supports both EVM (42) and Solana (44)
+```
+
+## Multi-Network Testing
+
+### Network Service Integration
+
+```typescript
+import { NetworkService } from '../services/networkService';
+
+const networkService = new NetworkService();
+
+// Get all active networks
+const networks = await networkService.getActiveNetworks();
+expect(networks).to.have.length.greaterThan(0);
+
+// Get Solana networks
+const solanaNetworks = await networkService.getNetworksByFamily('solana');
+expect(solanaNetworks.every(n => n.networkFamily === 'solana')).to.be.true;
+```
+
+### Cross-Network Data Isolation
+
+```typescript
+// Create data on different networks
+const devnetOffer = await createTestOffer(client, {
+  creator_account_id: account.id,
+  network_id: 1, // Solana Devnet
+});
+
+const mainnetOffer = await createTestOffer(client, {
+  creator_account_id: account.id,
+  network_id: 2, // Solana Mainnet
+});
+
+// Verify isolation
+const devnetOffers = await client.query('SELECT * FROM offers WHERE network_id = $1', [1]);
+expect(devnetOffers.rows).to.have.length(1);
+expect(devnetOffers.rows[0].id).to.equal(devnetOffer.id);
+```
+
+## Environment Variables
+
+### Required Variables
+
+| Variable                    | Description                 | Example                                        |
+| --------------------------- | --------------------------- | ---------------------------------------------- |
+| `POSTGRES_URL`              | Database connection string  | `postgresql://user:pass@localhost:5432/db`     |
+| `SOLANA_DEVNET_RPC_URL`     | Solana Devnet RPC endpoint  | `https://api.devnet.solana.com`                |
+| `SOLANA_MAINNET_RPC_URL`    | Solana Mainnet RPC endpoint | `https://api.mainnet-beta.solana.com`          |
+| `SOLANA_PROGRAM_ID`         | YapBay program ID           | `4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x` |
+| `SOLANA_USDC_MINT_DEVNET`   | Devnet USDC mint address    | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` |
+| `SOLANA_USDC_MINT_MAINNET`  | Mainnet USDC mint address   | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+| `SOLANA_ARBITRATOR_ADDRESS` | Arbitrator wallet address   | `GGrXhNVxUZXaA2uMopsa5q23aPmoNvQF14uxqo8qENUr` |
+
+## Best Practices
+
+### 1. Network Isolation
+
+Always filter database queries by `network_id`:
+
+```typescript
+// ✅ Good
+const offers = await client.query(
+  'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
+  [networkId, accountId]
+);
+
+// ❌ Bad
+const offers = await client.query('SELECT * FROM offers WHERE creator_account_id = $1', [
+  accountId,
+]);
+```
+
+### 2. Address Validation
+
+Always validate addresses before database operations:
+
+```typescript
+import { SolanaBlockchainService } from '../services/blockchainService';
+
+const service = new SolanaBlockchainService();
+if (!service.validateAddress(address)) {
+  throw new Error('Invalid Solana address');
+}
+```
+
+### 3. Test Data Management
+
+```typescript
+describe('Test Suite', function () {
+  let testData: {
+    accountIds: number[];
+    offerIds: number[];
+    tradeIds: number[];
+    escrowIds: number[];
+  };
+
+  beforeEach(async function () {
+    testData = {
+      accountIds: [],
+      offerIds: [],
+      tradeIds: [],
+      escrowIds: [],
+    };
+  });
+
+  afterEach(async function () {
+    // Clean up all test data
+    await cleanupTestData(client, testData);
+  });
+});
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. Database Connection Errors
+
+**Error**: `Connection terminated unexpectedly`
+
+**Solution**: Check PostgreSQL is running and connection string is correct:
+
+```bash
+# Test connection
+psql -h localhost -U your_user -d your_database -c "SELECT 1;"
+```
+
+#### 2. Network Configuration Errors
+
+**Error**: `Network with ID X not found`
+
+**Solution**: Verify network exists in database:
+
+```sql
+SELECT * FROM networks WHERE id = 1;
+```
+
+#### 3. Address Validation Errors
+
+**Error**: `Invalid Solana address`
+
+**Solution**: Use valid Solana addresses (44 characters, base58):
+
+```typescript
+// Valid Solana System Program address
+const validAddress = '11111111111111111111111111111112';
+```
+
+#### 4. Database Constraint Violations
+
+**Error**: `null value in column "network_id" violates not-null constraint`
+
+**Solution**: Always provide required fields:
+
+```typescript
+const transaction = await createTestTransaction(client, {
+  network_id: 1, // Always provide network_id
+  transaction_hash: '...',
+  status: 'SUCCESS',
+  type: 'CREATE_ESCROW',
+});
+```
+
+## Test Execution
+
+### Running All Tests
+
+```bash
+npm test
+```
+
+### Running Specific Test Suites
+
+```bash
+# Solana network tests
+npm test -- --grep "Solana Network"
+
+# Multi-network tests
+npm test -- --grep "Multi-Network"
+```
+
+## Conclusion
+
+This testing guide provides comprehensive coverage for Solana network integration and multi-network testing. Follow the best practices and use the provided utilities to ensure robust, maintainable tests.

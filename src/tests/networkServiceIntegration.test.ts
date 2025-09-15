@@ -237,15 +237,17 @@ describe('Network Service Integration Tests', function () {
     });
 
     it('should isolate offers by network', async function () {
-      // Query offers for Solana Devnet
-      const devnetOffers = await client.query('SELECT * FROM offers WHERE network_id = $1', [
-        solanaDevnetNetwork.id,
-      ]);
+      // Query offers for Solana Devnet (filter by test account to avoid interference from other tests)
+      const devnetOffers = await client.query(
+        'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
+        [solanaDevnetNetwork.id, testAccountId]
+      );
 
-      // Query offers for Solana Mainnet
-      const mainnetOffers = await client.query('SELECT * FROM offers WHERE network_id = $1', [
-        solanaMainnetNetwork.id,
-      ]);
+      // Query offers for Solana Mainnet (filter by test account to avoid interference from other tests)
+      const mainnetOffers = await client.query(
+        'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
+        [solanaMainnetNetwork.id, testAccountId]
+      );
 
       // Verify isolation
       expect(devnetOffers.rows).to.have.length(1);

@@ -1,6 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { NetworkService } from '../services/networkService';
-import { NetworkConfig, NetworkRequest, InvalidNetworkError, NetworkInactiveError, NetworkNotFoundError } from '../types/networks';
+import {
+  NetworkConfig,
+  NetworkRequest,
+  InvalidNetworkError,
+  NetworkInactiveError,
+  NetworkNotFoundError,
+  NetworkType,
+} from '../types/networks';
 
 // Extend Request interface to include network context
 declare global {
@@ -13,10 +20,21 @@ declare global {
 }
 
 /**
+ * Get all valid network names from the NetworkType enum
+ */
+function getValidNetworks(): string[] {
+  return Object.values(NetworkType);
+}
+
+/**
  * Middleware that requires a network to be specified and validates it
  * Throws error if network is missing, invalid, or inactive
  */
-export async function requireNetwork(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requireNetwork(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
     const network = await NetworkService.getNetworkFromRequest(req);
     req.network = network;
@@ -24,30 +42,30 @@ export async function requireNetwork(req: Request, res: Response, next: NextFunc
     next();
   } catch (error) {
     if (error instanceof InvalidNetworkError) {
-      res.status(400).json({ 
+      res.status(400).json({
         error: 'Invalid network specified',
         message: error.message,
-        validNetworks: ['celo-alfajores', 'celo-mainnet']
+        validNetworks: getValidNetworks(),
       });
       return;
     }
-    
+
     if (error instanceof NetworkInactiveError) {
-      res.status(503).json({ 
+      res.status(503).json({
         error: 'Network unavailable',
-        message: error.message
+        message: error.message,
       });
       return;
     }
-    
+
     if (error instanceof NetworkNotFoundError) {
-      res.status(404).json({ 
+      res.status(404).json({
         error: 'Network not found',
-        message: error.message
+        message: error.message,
       });
       return;
     }
-    
+
     // Unexpected error
     console.error('Network middleware error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -59,7 +77,11 @@ export async function requireNetwork(req: Request, res: Response, next: NextFunc
  * Uses default network if none specified
  * Does not throw errors for missing network header
  */
-export async function optionalNetwork(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function optionalNetwork(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
     const network = await NetworkService.getNetworkFromRequest(req);
     req.network = network;
@@ -88,25 +110,29 @@ export async function optionalNetwork(req: Request, res: Response, next: NextFun
  * Middleware specifically for admin routes that need network context
  * Similar to requireNetwork but with admin-specific error messages
  */
-export async function requireNetworkAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function requireNetworkAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
     const networkName = req.headers['x-network-name'] as string;
-    
+
     if (!networkName) {
-      res.status(400).json({ 
+      res.status(400).json({
         error: 'Network required',
         message: 'X-Network-Name header is required for admin operations',
-        validNetworks: ['celo-alfajores', 'celo-mainnet']
+        validNetworks: getValidNetworks(),
       });
       return;
     }
 
     const network = await NetworkService.getNetworkByName(networkName);
     if (!network) {
-      res.status(400).json({ 
+      res.status(400).json({
         error: 'Invalid network',
         message: `Network '${networkName}' not found`,
-        validNetworks: ['celo-alfajores', 'celo-mainnet']
+        validNetworks: getValidNetworks(),
       });
       return;
     }
@@ -125,23 +151,27 @@ export async function requireNetworkAdmin(req: Request, res: Response, next: Nex
  * Middleware that validates network ID from request parameters
  * Used for routes like /admin/networks/:networkId
  */
-export async function validateNetworkParam(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function validateNetworkParam(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
     const networkId = parseInt(req.params.networkId);
-    
+
     if (isNaN(networkId)) {
-      res.status(400).json({ 
+      res.status(400).json({
         error: 'Invalid network ID',
-        message: 'Network ID must be a valid number'
+        message: 'Network ID must be a valid number',
       });
       return;
     }
 
     const network = await NetworkService.getNetworkById(networkId);
     if (!network) {
-      res.status(404).json({ 
+      res.status(404).json({
         error: 'Network not found',
-        message: `Network with ID ${networkId} not found`
+        message: `Network with ID ${networkId} not found`,
       });
       return;
     }

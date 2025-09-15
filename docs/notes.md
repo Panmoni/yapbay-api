@@ -1,7 +1,8 @@
 # YapBay API Notes
 
-- tests
-- increment versions as appropriate once tests pass again
+clear db, restart it
+
+## tests
 
 ## Phase 4: Event Handling Microservice
 
@@ -11,19 +12,26 @@
 - [ ] Add error handling and retry mechanisms
 - [ ] Test event processing and recovery
 
+Priority 2: Deadline Processing Tests
+Create src/tests/solanaDeadlineProcessing.test.ts to cover:
+Database trigger enforcement for Solana trades
+Auto-cancellation of expired Solana escrows
+Network-specific deadline processing
+
 ## backend monitoring service
 
 to ensure funds not getting left in escrows
 
 ## Tests
 
-get tests working again with a clean db and the refactored routes/middleware
-
+- fix startup errors for api
 - update frontend, then create some new escrows, then npm run test:escrow-monitoring to test on both
 - test escrow backend monitoring service to see if it auto cancels and refunds for trades that have passed the timeout period. it will start when I start the api.
 - test the new balance api routes
 - test auto cancel recording in db
 - test updating of legacy events with test-events script
+
+## Create a new api ref document
 
 ## Ref
 

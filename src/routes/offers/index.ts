@@ -5,11 +5,11 @@ import { requireJWT } from '../../middleware';
 
 const router = express.Router();
 
-// Mount public routes (no authentication required)
-router.use('/', publicRouter);
-
-// Apply authentication middleware for all subsequent routes
+// Apply authentication middleware to ALL routes in this router
 router.use(requireJWT);
+
+// Mount public routes (now authenticated)
+router.use('/', publicRouter);
 
 // Mount authenticated CRUD routes
 router.use('/', crudRouter);

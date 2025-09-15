@@ -163,7 +163,7 @@ export class NetworkService {
   }): Promise<NetworkConfig> {
     const networkName = req.headers['x-network-name'] as string;
 
-    if (!networkName) {
+    if (networkName === undefined || networkName === null) {
       // Return default network if no header specified
       return await this.getDefaultNetwork();
     }

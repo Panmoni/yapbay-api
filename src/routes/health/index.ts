@@ -31,10 +31,40 @@ router.get(
     }
     const networksStatus: NetworkStatus[] = [];
 
-    // Check database connectivity
+    // Check database connectivity and get counts
+    let dbCounts = {
+      accounts: 0,
+      escrows: 0,
+      offers: 0,
+      trades: 0,
+      transactions: 0,
+    };
+
     try {
       await query('SELECT 1');
       dbOk = true;
+
+      // Get database counts
+      try {
+        const [accountsResult, escrowsResult, offersResult, tradesResult, transactionsResult] =
+          await Promise.all([
+            query('SELECT COUNT(*) as count FROM accounts'),
+            query('SELECT COUNT(*) as count FROM escrows'),
+            query('SELECT COUNT(*) as count FROM offers'),
+            query('SELECT COUNT(*) as count FROM trades'),
+            query('SELECT COUNT(*) as count FROM transactions'),
+          ]);
+
+        dbCounts = {
+          accounts: parseInt(accountsResult[0].count),
+          escrows: parseInt(escrowsResult[0].count),
+          offers: parseInt(offersResult[0].count),
+          trades: parseInt(tradesResult[0].count),
+          transactions: parseInt(transactionsResult[0].count),
+        };
+      } catch (countErr) {
+        logError('Health check DB count queries failed', countErr as Error);
+      }
     } catch (dbErr) {
       logError('Health check DB query failed', dbErr as Error);
     }
@@ -98,6 +128,18 @@ router.get(
       apiVersion: getVersionInfo(),
       contractVersion: process.env.CONTRACT_VERSION || 'unknown',
       networks: networksStatus,
+      database: {
+        status: dbOk ? 'Connected' : 'Error',
+        counts: dbCounts,
+        summary: {
+          totalRecords: Object.values(dbCounts).reduce((sum, count) => sum + count, 0),
+          accounts: dbCounts.accounts,
+          escrows: dbCounts.escrows,
+          offers: dbCounts.offers,
+          trades: dbCounts.trades,
+          transactions: dbCounts.transactions,
+        },
+      },
       summary: {
         totalNetworks: networksStatus.length,
         activeNetworks: networksStatus.filter(n => n.isActive).length,

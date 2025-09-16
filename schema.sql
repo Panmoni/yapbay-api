@@ -241,8 +241,8 @@ CREATE TABLE dispute_evidence (
 CREATE TABLE transactions (
     id BIGSERIAL PRIMARY KEY,
     network_id INTEGER NOT NULL REFERENCES networks(id),
-    transaction_hash VARCHAR(66), -- EVM transaction hash
-    signature VARCHAR(88), -- Solana transaction signature
+    transaction_hash VARCHAR(88), -- EVM transaction hash (0x + 64 hex chars = 66 chars) or Solana signature (up to 88 chars)
+    signature VARCHAR(88), -- Solana transaction signature (base58 encoded, up to 88 chars)
     status transaction_status NOT NULL DEFAULT 'PENDING',
     type transaction_type NOT NULL,
     block_number BIGINT, -- EVM block number
@@ -287,7 +287,7 @@ CREATE TABLE contract_events (
     network_id INTEGER NOT NULL REFERENCES networks(id),
     event_name VARCHAR(100) NOT NULL,
     block_number BIGINT NOT NULL,
-    transaction_hash VARCHAR(66) NOT NULL,
+    transaction_hash VARCHAR(88) NOT NULL, -- EVM transaction hash or Solana signature (up to 88 chars)
     log_index INTEGER NOT NULL,
     args JSONB NOT NULL,
     trade_id BIGINT,
@@ -319,7 +319,7 @@ CREATE TABLE contract_auto_cancellations (
     id SERIAL PRIMARY KEY,
     escrow_id INTEGER NOT NULL,
     network_id INTEGER NOT NULL REFERENCES networks(id),
-    transaction_hash VARCHAR(66),
+    transaction_hash VARCHAR(88), -- EVM transaction hash or Solana signature (up to 88 chars)
     gas_used INTEGER,
     gas_price BIGINT,
     status VARCHAR(20) NOT NULL CHECK (status IN ('SUCCESS', 'FAILED', 'PENDING')),
@@ -544,11 +544,16 @@ CREATE UNIQUE INDEX idx_unique_trade_onchain_escrow_network
 ON escrows (trade_id, onchain_escrow_id, network_id) 
 WHERE onchain_escrow_id IS NOT NULL;
 
--- Ensure transaction hashes are unique within a network
-CREATE UNIQUE INDEX idx_transactions_hash_network ON transactions(transaction_hash, network_id) WHERE transaction_hash IS NOT NULL;
+-- Simple unique constraints that work with ON CONFLICT
+-- For EVM networks: transaction_hash must be unique within network
+CREATE UNIQUE INDEX idx_transactions_hash_network ON transactions(transaction_hash, network_id);
 
--- Ensure Solana signatures are unique within a network
-CREATE UNIQUE INDEX idx_transactions_signature_network ON transactions(signature, network_id) WHERE signature IS NOT NULL;
+-- For Solana networks: signature must be unique within network  
+CREATE UNIQUE INDEX idx_transactions_signature_network ON transactions(signature, network_id);
+
+-- Ensure contract events are unique within network
+CREATE UNIQUE INDEX idx_contract_events_unique_tx_log_network 
+ON contract_events(transaction_hash, log_index, network_id);
 
 -- Ensure escrow ID mapping is unique within a network
 CREATE UNIQUE INDEX idx_escrow_id_mapping_blockchain_network 

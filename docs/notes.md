@@ -1,28 +1,53 @@
 # YapBay API Notes
 
-## Coordinate testing with frontend
-
-- clear db, restart it
-- is the event listener getting the events
-- update frontend, then create some new escrows, then npm run test:escrow-monitoring to test on both
-- test escrow backend monitoring service to see if it auto cancels and refunds for trades that have passed the timeout period. it will start when I start the api.
-- test the new balance api routes
-- test auto cancel recording in db
-- test updating of legacy events with test-events script
-
 ## Backend Monitoring Service
 
 to ensure funds not getting left in escrows
 
-Priority 2: Deadline Processing Tests
-Create src/tests/solanaDeadlineProcessing.test.ts to cover:
-Database trigger enforcement for Solana trades
-Auto-cancellation of expired Solana escrows
-Network-specific deadline processing
+- test escrow backend monitoring service to see if it auto cancels and refunds for trades that have passed the timeout period. it will start when I start the api.
+- test auto cancel recording in db
+- npm run test:escrow-monitoring to
 
-consider how to more quickly recover from a listener that failed and recover past events, also give more thought to error handling with events
+### deadline processing tests
 
-## Create a new api ref document
+- Create src/tests/solanaDeadlineProcessing.test.ts to cover:
+  - Database trigger enforcement for Solana trades
+  - Auto-cancellation of expired Solana escrows
+  - Network-specific deadline processing
+
+### balance monitoring
+
+- Create Solana-specific balance querying methods in SolanaService
+- Add network family detection to route handlers to use appropriate service
+- Add comprehensive tests for Solana balance endpoints
+- Implement Solana escrow balance logic using Solana program interactions
+- should balances be updated in the db based on escrow balance change events?
+
+### listener event failure
+
+- consider how to more quickly recover from a listener that failed and recover past events, also give more thought to error handling with events
+
+## Enhance frontend api/index.ts
+
+docs/api.ts is an ideal approach
+docs/current-api.ts is a middle ground for now, may need further changes, which will come from the frontend likely
+
+Add proper error handling with custom error types - Replace generic Axios errors with typed API errors for better debugging and user experience
+Add response type wrappers - Wrap all responses in consistent ApiResponse<T> format to match backend API structure
+Add network validation - Validate network IDs and provide helpful error messages for invalid networks
+Medium Priority (Developer Experience)
+Add request/response logging - Add optional debug logging for API calls to help with development and troubleshooting
+Add retry logic for failed requests - Implement automatic retry for network failures and 5xx errors to improve reliability
+Add request timeout configuration - Add configurable timeouts to prevent hanging requests and improve UX
+Low Priority (Performance & Polish)
+Add request cancellation support - Add AbortController support to cancel in-flight requests when components unmount
+Add response caching - Add simple in-memory caching for GET requests to reduce API calls and improve performance
+Add TypeScript strict mode compliance - Fix any remaining TypeScript issues and add strict type checking
+Add JSDoc documentation - Add comprehensive JSDoc comments to all functions for better developer experience
+
+## New API Ref Doc
+
+comprensive doc, update README, etc
 
 ## Ref
 

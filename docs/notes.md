@@ -1,16 +1,18 @@
 # YapBay API Notes
 
-clear db, restart it
+## Coordinate testing with frontend
 
-## tests
+- clear db, restart it
+- is the event listener getting the events
+- update frontend, then create some new escrows, then npm run test:escrow-monitoring to test on both
+- test escrow backend monitoring service to see if it auto cancels and refunds for trades that have passed the timeout period. it will start when I start the api.
+- test the new balance api routes
+- test auto cancel recording in db
+- test updating of legacy events with test-events script
 
-## Phase 4: Event Handling Microservice
+## Backend Monitoring Service
 
-- [ ] Design microservice architecture
-- [ ] Implement blockchain event monitoring
-- [ ] Create database synchronization logic
-- [ ] Add error handling and retry mechanisms
-- [ ] Test event processing and recovery
+to ensure funds not getting left in escrows
 
 Priority 2: Deadline Processing Tests
 Create src/tests/solanaDeadlineProcessing.test.ts to cover:
@@ -18,18 +20,7 @@ Database trigger enforcement for Solana trades
 Auto-cancellation of expired Solana escrows
 Network-specific deadline processing
 
-## backend monitoring service
-
-to ensure funds not getting left in escrows
-
-## Tests
-
-- fix startup errors for api
-- update frontend, then create some new escrows, then npm run test:escrow-monitoring to test on both
-- test escrow backend monitoring service to see if it auto cancels and refunds for trades that have passed the timeout period. it will start when I start the api.
-- test the new balance api routes
-- test auto cancel recording in db
-- test updating of legacy events with test-events script
+consider how to more quickly recover from a listener that failed and recover past events, also give more thought to error handling with events
 
 ## Create a new api ref document
 

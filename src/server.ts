@@ -13,23 +13,25 @@ import { monitorExpiredEscrows } from './services/escrowMonitoringService';
 dotenv.config();
 
 // Start appropriate event listener based on environment
-// Note: Celo networks are disabled, only Solana networks will have active listeners
+// Note: Currently focused on Solana Devnet only, Celo networks preserved for future re-enablement
 if (process.env.NODE_ENV === 'development') {
   console.log('🚀 Starting multi-network event listener for development...');
-  console.log('📝 Note: Celo networks are disabled, only Solana networks will be monitored');
+  console.log('📝 Note: Currently focused on Solana Devnet only');
+  console.log('📝 Note: Celo networks are preserved but disabled for future re-enablement');
+
   const multiListener = startMultiNetworkEventListener();
   multiListener
     .startAllListeners()
     .then(() => {
-      console.log('✅ Multi-network event listener started successfully');
+      console.log('✅ Multi-network event listener startup completed');
     })
     .catch(error => {
-      console.error('❌ Failed to start multi-network event listener:', error);
-      console.log('⚠️  No active networks found or all networks are disabled');
+      console.error('❌ Event listener startup issues:', error);
+      console.log('⚠️  API will continue running without real-time blockchain monitoring');
     });
 } else {
   console.log('🚀 Starting single network event listener for production...');
-  console.log('📝 Note: Celo networks are disabled, only Solana networks will be monitored');
+  console.log('📝 Note: Currently focused on Solana Devnet only');
   startEventListener();
 }
 
@@ -98,5 +100,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`YapBay API running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Connected to Celo network: ${process.env.CELO_RPC_URL}`);
+  console.log(`Solana RPC: ${process.env.SOLANA_RPC_URL_DEVNET}`);
 });

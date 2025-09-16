@@ -2,10 +2,11 @@ import * as dotenv from 'dotenv';
 import { CeloService } from '../celo';
 import { query, recordTransaction, TransactionType } from '../db';
 import { NetworkService } from '../services/networkService';
-import { NetworkConfig } from '../types/networks';
+import { NetworkConfig, NetworkFamily } from '../types/networks';
 import type { LogDescription, ParamType } from 'ethers';
 import fs from 'fs';
 import path from 'path';
+import { SolanaEventListener } from './solanaEvents';
 
 dotenv.config();
 
@@ -31,7 +32,7 @@ interface ContractInterface {
   };
 }
 
-class NetworkEventListener {
+class EVMNetworkEventListener {
   private network: NetworkConfig;
   private isRunning = false;
 
@@ -48,8 +49,10 @@ class NetworkEventListener {
     try {
       const wsProvider = await CeloService.getWsProviderForNetwork(this.network.id);
       const contract = await CeloService.getContractForNetwork(this.network.id, wsProvider);
-      
-      console.log(`Starting event listener for ${this.network.name} (${this.network.contractAddress})`);
+
+      console.log(
+        `Starting event listener for ${this.network.name} (${this.network.contractAddress})`
+      );
       fileLog(`Starting event listener for ${this.network.name} (${this.network.contractAddress})`);
 
       // Listen to all logs from this contract
@@ -123,12 +126,13 @@ class NetworkEventListener {
       argsObj[input.name] = typeof raw === 'bigint' ? raw.toString() : raw;
     });
 
-    const tradeIdValue = parsed.args.tradeId !== undefined ? Number(parsed.args.tradeId.toString()) : null;
+    const tradeIdValue =
+      parsed.args.tradeId !== undefined ? Number(parsed.args.tradeId.toString()) : null;
 
     // Record transaction with network context
     let senderAddress = null;
     let receiverAddress = null;
-    
+
     switch (parsed.name) {
       case 'EscrowCreated':
         senderAddress = parsed.args.seller as string;
@@ -155,14 +159,18 @@ class NetworkEventListener {
         receiverAddress = this.network.contractAddress;
         break;
     }
-    
+
     const metadataObj: Record<string, unknown> = {};
-    if (parsed.name === 'EscrowCreated' || parsed.name === 'FundsDeposited' || 
-        parsed.name === 'FiatMarkedPaid' || parsed.name === 'EscrowReleased' || 
-        parsed.name === 'EscrowCancelled') {
+    if (
+      parsed.name === 'EscrowCreated' ||
+      parsed.name === 'FundsDeposited' ||
+      parsed.name === 'FiatMarkedPaid' ||
+      parsed.name === 'EscrowReleased' ||
+      parsed.name === 'EscrowCancelled'
+    ) {
       metadataObj.escrow_id = parsed.args.escrowId?.toString();
       metadataObj.network = this.network.name;
-      
+
       if (parsed.args.seller) metadataObj.seller = parsed.args.seller;
       if (parsed.args.buyer) metadataObj.buyer = parsed.args.buyer;
     }
@@ -176,7 +184,7 @@ class NetworkEventListener {
       receiver_or_contract_address: receiverAddress,
       error_message: Object.keys(metadataObj).length > 0 ? JSON.stringify(metadataObj) : null,
       related_trade_id: tradeIdValue,
-      network_id: this.network.id
+      network_id: this.network.id,
     });
 
     // Insert event with network context
@@ -196,13 +204,19 @@ class NetworkEventListener {
       JSON.stringify(argsObj),
       tradeIdValue,
       transactionId,
-      this.network.id
+      this.network.id,
     ];
 
     await query(insertSql, params);
-    
-    console.log(`[${this.network.name}] Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${logIndex}`);
-    fileLog(`[${this.network.name}] Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${logIndex} args=${JSON.stringify(argsObj)}`);
+
+    console.log(
+      `[${this.network.name}] Logged event ${parsed.name} tx=${log.transactionHash} logIndex=${logIndex}`
+    );
+    fileLog(
+      `[${this.network.name}] Logged event ${parsed.name} tx=${
+        log.transactionHash
+      } logIndex=${logIndex} args=${JSON.stringify(argsObj)}`
+    );
 
     // Process event-specific logic
     await this.processEventSpecificLogic(parsed);
@@ -268,8 +282,18 @@ class NetworkEventListener {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 'CREATED', $8, $9, $10, $11, $12)
       RETURNING id`,
       [
-        tradeId, this.network.contractAddress, escrowId, seller, buyer,
-        arbitrator, amountInDecimal, sequential, seqAddr, depositDate, fiatDate, this.network.id
+        tradeId,
+        this.network.contractAddress,
+        escrowId,
+        seller,
+        buyer,
+        arbitrator,
+        amountInDecimal,
+        sequential,
+        seqAddr,
+        depositDate,
+        fiatDate,
+        this.network.id,
       ]
     );
 
@@ -282,7 +306,10 @@ class NetworkEventListener {
     );
 
     // Update trade with escrow information
-    const trade = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [tradeId, this.network.id]);
+    const trade = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [
+      tradeId,
+      this.network.id,
+    ]);
     if (trade.length > 0) {
       if (!trade[0].leg1_escrow_onchain_id) {
         await query(
@@ -340,6 +367,72 @@ class NetworkEventListener {
   }
 }
 
+class NetworkEventListener {
+  private evmListener?: EVMNetworkEventListener;
+  private solanaListener?: SolanaEventListener;
+  private network: NetworkConfig;
+  private isRunning = false;
+
+  constructor(network: NetworkConfig) {
+    this.network = network;
+
+    // Create appropriate listener based on network family
+    if (network.networkFamily === NetworkFamily.EVM) {
+      this.evmListener = new EVMNetworkEventListener(network);
+    } else if (network.networkFamily === NetworkFamily.SOLANA) {
+      this.solanaListener = new SolanaEventListener(network);
+    } else {
+      throw new Error(`Unsupported network family: ${network.networkFamily}`);
+    }
+  }
+
+  async start(): Promise<void> {
+    if (this.isRunning) {
+      console.log(`Event listener for ${this.network.name} is already running`);
+      return;
+    }
+
+    try {
+      if (this.evmListener) {
+        await this.evmListener.start();
+      } else if (this.solanaListener) {
+        await this.solanaListener.start();
+      }
+
+      this.isRunning = true;
+      console.log(
+        `Event listener started for ${this.network.name} (${this.network.networkFamily})`
+      );
+    } catch (error) {
+      console.error(`Failed to start event listener for ${this.network.name}:`, error);
+      throw error;
+    }
+  }
+
+  async stop(): Promise<void> {
+    if (!this.isRunning) {
+      return;
+    }
+
+    try {
+      if (this.evmListener) {
+        await this.evmListener.stop();
+      } else if (this.solanaListener) {
+        await this.solanaListener.stop();
+      }
+
+      this.isRunning = false;
+      console.log(`Event listener stopped for ${this.network.name}`);
+    } catch (error) {
+      console.error(`Error stopping event listener for ${this.network.name}:`, error);
+    }
+  }
+
+  isListening(): boolean {
+    return this.isRunning;
+  }
+}
+
 export class MultiNetworkEventListener {
   private listeners: Map<number, NetworkEventListener> = new Map();
   private isRunning = false;
@@ -352,32 +445,54 @@ export class MultiNetworkEventListener {
 
     try {
       const activeNetworks = await NetworkService.getActiveNetworks();
-      
+
       if (activeNetworks.length === 0) {
-        throw new Error('No active networks found');
+        console.log('⚠️  No active networks found - continuing without event listeners');
+        return; // Don't throw error, just log and continue
       }
 
       console.log(`Starting event listeners for ${activeNetworks.length} networks...`);
       fileLog(`Starting event listeners for ${activeNetworks.length} networks`);
+
+      let successCount = 0;
+      let failureCount = 0;
 
       for (const network of activeNetworks) {
         try {
           const listener = new NetworkEventListener(network);
           await listener.start();
           this.listeners.set(network.id, listener);
-          console.log(`✅ Started listener for ${network.name}`);
+          successCount++;
+          console.log(`✅ Started listener for ${network.name} (${network.networkFamily})`);
         } catch (error) {
+          failureCount++;
           console.error(`❌ Failed to start listener for ${network.name}:`, error);
           fileLog(`Failed to start listener for ${network.name}: ${error}`);
+
+          // Log specific guidance based on network family
+          if (network.networkFamily === 'solana') {
+            console.log(`💡 Note: Solana event listeners are not yet fully implemented`);
+          }
         }
       }
 
       this.isRunning = true;
-      console.log(`Multi-network event listener started with ${this.listeners.size} active listeners`);
-      fileLog(`Multi-network event listener started with ${this.listeners.size} active listeners`);
+      console.log(
+        `Multi-network event listener started with ${successCount} active listeners (${failureCount} failed)`
+      );
+      fileLog(
+        `Multi-network event listener started with ${successCount} active listeners (${failureCount} failed)`
+      );
+
+      if (failureCount > 0) {
+        console.log(`⚠️  Some listeners failed to start, but API will continue running`);
+      }
     } catch (error) {
       console.error('Failed to start multi-network event listener:', error);
-      throw error;
+      // Don't throw - allow API to start without event listeners
+      console.log(
+        '⚠️  Continuing without event listeners - API will function without real-time blockchain monitoring'
+      );
     }
   }
 
@@ -387,7 +502,7 @@ export class MultiNetworkEventListener {
     }
 
     console.log('Stopping all network event listeners...');
-    
+
     for (const [networkId, listener] of this.listeners) {
       try {
         await listener.stop();
@@ -396,7 +511,7 @@ export class MultiNetworkEventListener {
         console.error(`Error stopping listener for network ${networkId}:`, error);
       }
     }
-    
+
     this.listeners.clear();
     this.isRunning = false;
     console.log('All network event listeners stopped');
@@ -422,23 +537,25 @@ export class MultiNetworkEventListener {
     const newListener = new NetworkEventListener(network);
     await newListener.start();
     this.listeners.set(networkId, newListener);
-    
+
     console.log(`Restarted listener for ${network.name}`);
     fileLog(`Restarted listener for ${network.name}`);
   }
 
-  async getListenerStatus(): Promise<{ networkId: number; networkName: string; isRunning: boolean }[]> {
+  async getListenerStatus(): Promise<
+    { networkId: number; networkName: string; isRunning: boolean }[]
+  > {
     const status: { networkId: number; networkName: string; isRunning: boolean }[] = [];
-    
+
     for (const [networkId, listener] of this.listeners) {
       const network = await NetworkService.getNetworkById(networkId);
       status.push({
         networkId,
         networkName: network ? network.name : 'Unknown',
-        isRunning: listener.isListening()
+        isRunning: listener.isListening(),
       });
     }
-    
+
     return status;
   }
 
@@ -449,7 +566,7 @@ export class MultiNetworkEventListener {
 
 export function startMultiNetworkEventListener(): MultiNetworkEventListener {
   const multiListener = new MultiNetworkEventListener();
-  
+
   // Handle graceful shutdown
   process.on('SIGINT', async () => {
     console.log('Received SIGINT, shutting down event listeners...');

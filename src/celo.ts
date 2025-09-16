@@ -1,3 +1,16 @@
+/**
+ * CELO SERVICE - PRESERVED FOR FUTURE RE-ENABLEMENT
+ *
+ * This service is currently disabled but preserved for future use.
+ * To re-enable Celo networks:
+ * 1. Set Celo networks to is_active = true in database
+ * 2. Ensure CELO_* environment variables are configured
+ * 3. Update event listeners to handle both EVM and Solana networks
+ *
+ * Last updated: January 2025
+ * Status: Disabled but functional
+ */
+
 import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
 import YapBayEscrowABI from './contracts/evm/YapBayEscrow.json';
@@ -32,7 +45,10 @@ export class CeloService {
 
     // Only create providers for EVM networks
     if (network.networkFamily !== 'evm') {
-      throw new Error(`Provider creation not supported for ${network.networkFamily} networks`);
+      throw new Error(
+        `Provider creation not supported for ${network.networkFamily} networks. ` +
+          `This network requires a Solana-specific connection. Network: ${network.name} (ID: ${networkId})`
+      );
     }
 
     const celoNetwork = {
@@ -63,7 +79,8 @@ export class CeloService {
     // Only create WebSocket providers for EVM networks
     if (network.networkFamily !== 'evm') {
       throw new Error(
-        `WebSocket provider creation not supported for ${network.networkFamily} networks`
+        `WebSocket provider creation not supported for ${network.networkFamily} networks. ` +
+          `This network requires a Solana-specific event listener. Network: ${network.name} (ID: ${networkId})`
       );
     }
 
@@ -97,7 +114,10 @@ export class CeloService {
 
     // Only create contracts for EVM networks
     if (network.networkFamily !== 'evm') {
-      throw new Error(`Contract creation not supported for ${network.networkFamily} networks`);
+      throw new Error(
+        `Contract creation not supported for ${network.networkFamily} networks. ` +
+          `This network requires a Solana-specific program interface. Network: ${network.name} (ID: ${networkId})`
+      );
     }
 
     if (!network.contractAddress) {

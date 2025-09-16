@@ -74,7 +74,7 @@ const app = express();
 const corsOptions = {
   origin: ['https://app.yapbay.com', 'http://localhost:5173', 'http://localhost:5174'],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-network-name'],
   credentials: true,
 };
 

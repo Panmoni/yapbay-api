@@ -66,6 +66,15 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO yapbay;
 
 psql postgres://yapbay:PASSWD@localhost:5432/yapbay -f schema.sql
 
+Get id from mathesar
+SELECT \* FROM public.mathesar_database;
+
+Delete
+DELETE FROM public.mathesar_userdatabaserolemap WHERE database_id = 9;
+DELETE FROM public.mathesar_database WHERE name = 'yapbay';
+
+re-add to mathesar
+
 #### check
 
 -- Check all tables exist

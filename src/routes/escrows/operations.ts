@@ -61,7 +61,7 @@ router.post(
     }
 
     try {
-      // Verify the trade exists
+      // Verify the trade exists and get deadline information
       const tradeCheck = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [
         trade_id,
         networkId,
@@ -70,6 +70,12 @@ router.post(
         res.status(404).json({ error: 'Trade not found' });
         return;
       }
+
+      const trade = tradeCheck[0];
+      // Get the appropriate deadlines based on which leg this escrow belongs to
+      // For now, we'll use leg1 deadlines as the default (this could be enhanced to determine which leg)
+      const depositDeadline = trade.leg1_escrow_deposit_deadline;
+      const fiatDeadline = trade.leg1_fiat_payment_deadline;
 
       // For now, skip blockchain verification for Solana networks
       // This will be handled by the event monitoring microservice
@@ -119,11 +125,13 @@ router.post(
       if (existingEscrow.length > 0) {
         // Escrow already exists - update it
         escrowDbId = existingEscrow[0].id;
-        await query('UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', [
-          'CREATED',
-          escrowDbId,
-        ]);
-        console.log(`Updated existing escrow id=${escrowDbId} with onchain_escrow_id=${escrow_id}`);
+        await query(
+          'UPDATE escrows SET state = $1, deposit_deadline = $2, fiat_deadline = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
+          ['CREATED', depositDeadline, fiatDeadline, escrowDbId]
+        );
+        console.log(
+          `Updated existing escrow id=${escrowDbId} with onchain_escrow_id=${escrow_id} and deadlines`
+        );
       } else {
         // Insert new escrow record
         const result = await query(
@@ -131,8 +139,8 @@ router.post(
             trade_id, escrow_address, onchain_escrow_id, seller_address, buyer_address,
             arbitrator_address, token_type, amount, state, sequential, sequential_escrow_address,
             network_id, network_family, program_id, escrow_pda, escrow_token_account,
-            escrow_onchain_id, trade_onchain_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            escrow_onchain_id, trade_onchain_id, deposit_deadline, fiat_deadline
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
           RETURNING id`,
           [
             escrowData.trade_id,
@@ -153,6 +161,8 @@ router.post(
             escrowData.escrow_token_account,
             escrowData.escrow_onchain_id,
             escrowData.trade_onchain_id,
+            depositDeadline,
+            fiatDeadline,
           ]
         );
 

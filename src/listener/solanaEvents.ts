@@ -228,7 +228,27 @@ export class SolanaEventListener {
 
         if (discriminator.equals(escrowCreatedDiscriminator)) {
           console.log(`✅ Found EscrowCreated event via Borsh parsing`);
-          await this.processSolanaEvent('EscrowCreated', { raw: eventData }, signature, slot);
+          // Try to parse the event data with Borsh if available
+          let parsedEventData = { raw: eventData.toString('base64') };
+
+          if (this.borshCoder) {
+            try {
+              // Attempt to decode the event data using Borsh
+              const decoded = this.borshCoder.events.decode(eventData.toString('base64'));
+              if (decoded) {
+                // Merge decoded data with raw data
+                parsedEventData = {
+                  ...decoded,
+                  raw: eventData.toString('base64'),
+                };
+                console.log(`📊 Successfully decoded EscrowCreated event data`);
+              }
+            } catch (error) {
+              console.log(`⚠️  Failed to decode event data with Borsh: ${error}`);
+            }
+          }
+
+          await this.processSolanaEvent('EscrowCreated', parsedEventData, signature, slot);
           return true;
         }
       }
@@ -252,8 +272,13 @@ export class SolanaEventListener {
       console.log(`📝 Signature: ${signature}`);
       console.log(`🎰 Slot: ${slot}`);
 
-      // Record transaction
-      await recordTransaction({
+      // Extract trade_id from event data if available
+      console.log(`🔍 Raw event data structure:`, Object.keys(eventData));
+      const tradeIdValue = this.extractTradeId(eventData);
+
+      // Record transaction and capture the returned transaction ID
+      // Note: related_trade_id should be null if the trade doesn't exist in our database
+      const transactionId = await recordTransaction({
         network_id: this.network.id,
         signature: signature,
         status: 'SUCCESS',
@@ -262,14 +287,19 @@ export class SolanaEventListener {
         sender_address: this.extractSenderAddress(eventData),
         receiver_or_contract_address: this.programId?.toBase58(),
         network_family: 'solana',
+        related_trade_id: null, // Always null for Solana events since trades are created separately
       });
 
-      // Record contract event
+      // Serialize event data safely
+      const serializedArgs = this.serializeEventData(eventData);
+
+      // Record contract event with all required fields
       await query(
         `
         INSERT INTO contract_events
-        (network_id, event_name, block_number, transaction_hash, log_index, args)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        (network_id, event_name, block_number, transaction_hash, log_index, args, trade_id, transaction_id)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+        ON CONFLICT (transaction_hash, log_index, network_id) DO NOTHING
       `,
         [
           this.network.id,
@@ -277,12 +307,18 @@ export class SolanaEventListener {
           slot, // Use slot as block_number for Solana
           signature, // Use signature as transaction_hash for Solana
           0, // log_index (Solana doesn't have log index, use 0)
-          JSON.stringify(eventData),
+          serializedArgs,
+          tradeIdValue,
+          transactionId,
         ]
       );
 
       console.log(`✅ Recorded ${eventName} event to database`);
-      fileLog(`Recorded ${eventName} event for ${this.network.name}: ${signature}`);
+      console.log(`📊 Event data: ${JSON.stringify(serializedArgs, null, 2)}`);
+      console.log(`🔍 Extracted trade ID: ${tradeIdValue}`);
+      fileLog(
+        `Recorded ${eventName} event for ${this.network.name}: ${signature}, trade_id: ${tradeIdValue}`
+      );
     } catch (error) {
       console.error(`Error processing Solana event for ${this.network.name}:`, error);
       fileLog(`Error processing Solana event for ${this.network.name}: ${error}`);
@@ -325,6 +361,125 @@ export class SolanaEventListener {
     if (eventData.disputingParty) return eventData.disputingParty;
     if (eventData.respondingParty) return eventData.respondingParty;
     return undefined;
+  }
+
+  /**
+   * Extract trade ID from event data
+   */
+  private extractTradeId(eventData: any): number | null {
+    try {
+      // Try to extract trade_id from common event fields
+      if (eventData.tradeId !== undefined) {
+        return Number(eventData.tradeId.toString());
+      }
+      if (eventData.trade_id !== undefined) {
+        return Number(eventData.trade_id.toString());
+      }
+
+      // For Solana events, try to extract from decoded event data
+      if (eventData && typeof eventData === 'object') {
+        // Check for nested trade ID fields
+        for (const [key, value] of Object.entries(eventData)) {
+          if (key.toLowerCase().includes('trade') && typeof value === 'number') {
+            return Number(value);
+          }
+          if (key.toLowerCase().includes('trade') && typeof value === 'bigint') {
+            return Number(value.toString());
+          }
+        }
+
+        // Try to extract from raw base64 data if available
+        if (eventData.raw && typeof eventData.raw === 'string') {
+          try {
+            const rawBuffer = Buffer.from(eventData.raw, 'base64');
+            console.log(`🔍 Raw buffer length: ${rawBuffer.length} bytes`);
+            console.log(`🔍 Raw buffer hex: ${rawBuffer.toString('hex').substring(0, 64)}...`);
+
+            // Based on the IDL, EscrowCreated event structure is:
+            // - 8 bytes: discriminator
+            // - 32 bytes: object_id (pubkey)
+            // - 8 bytes: escrow_id (u64)
+            // - 8 bytes: trade_id (u64) ← This is at offset 48 bytes from start
+            if (rawBuffer.length >= 56) {
+              const tradeIdBytes = rawBuffer.subarray(48, 56);
+              const tradeId = tradeIdBytes.readBigUInt64LE(0);
+              const tradeIdNum = Number(tradeId.toString());
+
+              console.log(`🔍 Extracted trade ID from correct offset (48): ${tradeIdNum}`);
+
+              // Validate that the trade ID is reasonable
+              if (tradeIdNum > 0 && tradeIdNum < 2147483647) {
+                console.log(`✅ Found valid trade ID: ${tradeIdNum}`);
+                return tradeIdNum;
+              } else {
+                console.log(`⚠️  Trade ID ${tradeIdNum} is out of range for PostgreSQL integer`);
+              }
+            }
+
+            console.log(`⚠️  No reasonable trade ID found in binary data`);
+            return null;
+          } catch (rawError) {
+            console.log(`⚠️  Failed to extract trade ID from raw data: ${rawError}`);
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.log(`⚠️  Error extracting trade ID from event data: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Safely serialize event data to prevent [object Object] issues
+   * This method preserves the good base64 format while handling complex objects
+   */
+  private serializeEventData(eventData: any): any {
+    try {
+      // If eventData is already a plain object, return it
+      if (eventData && typeof eventData === 'object' && !Buffer.isBuffer(eventData)) {
+        // Handle common Solana event data structures
+        const serialized: any = {};
+
+        // Copy all enumerable properties
+        for (const [key, value] of Object.entries(eventData)) {
+          if (value !== undefined && value !== null) {
+            // Handle different value types
+            if (typeof value === 'bigint') {
+              serialized[key] = value.toString();
+            } else if (Buffer.isBuffer(value)) {
+              serialized[key] = value.toString('base64');
+            } else if (typeof value === 'object' && value.constructor === Object) {
+              serialized[key] = this.serializeEventData(value);
+            } else if (Array.isArray(value)) {
+              serialized[key] = value.map(item =>
+                typeof item === 'object' ? this.serializeEventData(item) : item
+              );
+            } else {
+              serialized[key] = value;
+            }
+          }
+        }
+
+        return serialized;
+      }
+
+      // For primitive values or buffers, return as-is or convert
+      if (Buffer.isBuffer(eventData)) {
+        return { raw: eventData.toString('base64') };
+      }
+
+      return eventData;
+    } catch (error) {
+      console.log(`⚠️  Error serializing event data: ${error}`);
+      // Fallback: return a safe representation
+      return {
+        error: 'Failed to serialize event data',
+        type: typeof eventData,
+        hasValue: eventData !== undefined && eventData !== null,
+      };
+    }
   }
 
   /**

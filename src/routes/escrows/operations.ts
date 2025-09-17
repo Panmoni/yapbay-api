@@ -93,10 +93,7 @@ router.post(
         buyer_address: buyer,
         arbitrator_address: network.arbitratorAddress,
         token_type: 'USDC',
-        amount:
-          network.networkFamily === NetworkFamily.EVM
-            ? Number(amount) / 1_000_000
-            : Number(amount) / 1_000_000,
+        amount: Number(amount),
         state: 'CREATED',
         sequential,
         sequential_escrow_address,
@@ -226,7 +223,8 @@ router.get(
     const networkId = req.networkId!;
 
     const result = await query(
-      `SELECT e.* FROM escrows e
+      `SELECT e.*, n.name as network FROM escrows e
+       LEFT JOIN networks n ON e.network_id = n.id
        WHERE e.network_id = $1 
        AND (LOWER(e.seller_address) = LOWER($2) OR LOWER(e.buyer_address) = LOWER($2))
        ORDER BY e.created_at DESC`,

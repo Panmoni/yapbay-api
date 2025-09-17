@@ -34,7 +34,8 @@ router.post(
     const creatorAccount = req.validatedCreatorAccount as Record<string, unknown>;
 
     const amountToSubtract = parseFloat(leg1_crypto_amount || String(leg1Offer.min_amount));
-    const newTotalAvailable = parseFloat(String(leg1Offer.total_available_amount)) - amountToSubtract;
+    const newTotalAvailable =
+      parseFloat(String(leg1Offer.total_available_amount)) - amountToSubtract;
     const maxAmount = parseFloat(String(leg1Offer.max_amount));
     const minAmount = parseFloat(String(leg1Offer.min_amount));
 
@@ -102,8 +103,8 @@ router.post(
           leg1_crypto_amount || String(leg1Offer.min_amount),
           String(leg1Offer.fiat_currency),
           leg1_fiat_amount || null,
-          String(leg1Offer.escrow_deposit_time_limit),
-          String(leg1Offer.fiat_payment_time_limit),
+          leg1Offer.escrow_deposit_time_limit,
+          leg1Offer.fiat_payment_time_limit,
           networkId,
         ]
       );
@@ -135,7 +136,7 @@ router.post(
 
     res.status(201).json({
       network: req.network!.name,
-      trade: result[0]
+      trade: result[0],
     });
   })
 );
@@ -147,7 +148,7 @@ router.get(
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const jwtWalletAddress = getWalletAddressFromJWT(req);
     const networkId = req.networkId!;
-    
+
     if (!jwtWalletAddress) {
       res.status(404).json({ error: 'Wallet address not found in token' });
       return;
@@ -156,18 +157,19 @@ router.get(
       'SELECT t.* FROM trades t JOIN accounts a ON t.leg1_seller_account_id = a.id OR t.leg1_buyer_account_id = a.id WHERE LOWER(a.wallet_address) = LOWER($1) AND t.network_id = $2 ORDER BY t.created_at DESC',
       [jwtWalletAddress, networkId]
     );
-    
+
     // Find the most recently updated trade
-    const lastModifiedTime = result.length > 0 
-      ? Math.max(...result.map(trade => trade.updated_at?.getTime() || 0))
-      : Date.now();
+    const lastModifiedTime =
+      result.length > 0
+        ? Math.max(...result.map(trade => trade.updated_at?.getTime() || 0))
+        : Date.now();
     const lastModified = new Date(lastModifiedTime);
-    
+
     // Check for conditional requests
     if (handleConditionalRequest(req, res, lastModified, result)) {
       return; // 304 Not Modified was sent
     }
-    
+
     sendNetworkResponse(res, result, req.network!.name, 'trades');
   })
 );
@@ -179,15 +181,15 @@ router.get(
   requireTradeParticipant,
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const tradeData = req.tradeData as Record<string, unknown>;
-    
+
     // Get the last modified timestamp
     const lastModified = new Date(String(tradeData.updated_at) || Date.now());
-    
+
     // Check for conditional requests
     if (handleConditionalRequest(req, res, lastModified, tradeData)) {
       return; // 304 Not Modified was sent
     }
-    
+
     sendNetworkResponse(res, tradeData, req.network!.name, 'trade');
   })
 );

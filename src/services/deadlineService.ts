@@ -12,10 +12,30 @@ interface DeadlineConfig {
 const UNCANCELABLE_STATES = ['FIAT_PAID', 'RELEASED', 'DISPUTED', 'RESOLVED'];
 
 const configs: DeadlineConfig[] = [
-  { deadlineField: 'leg1_escrow_deposit_deadline', stateField: 'leg1_state', cancelledAtField: 'leg1_cancelled_at', allowedState: 'CREATED' },
-  { deadlineField: 'leg1_fiat_payment_deadline',  stateField: 'leg1_state', cancelledAtField: 'leg1_cancelled_at', allowedState: 'FUNDED' },
-  { deadlineField: 'leg2_escrow_deposit_deadline', stateField: 'leg2_state', cancelledAtField: 'leg2_cancelled_at', allowedState: 'CREATED' },
-  { deadlineField: 'leg2_fiat_payment_deadline',  stateField: 'leg2_state', cancelledAtField: 'leg2_cancelled_at', allowedState: 'FUNDED' }
+  {
+    deadlineField: 'leg1_escrow_deposit_deadline',
+    stateField: 'leg1_state',
+    cancelledAtField: 'leg1_cancelled_at',
+    allowedState: 'CREATED',
+  },
+  {
+    deadlineField: 'leg1_fiat_payment_deadline',
+    stateField: 'leg1_state',
+    cancelledAtField: 'leg1_cancelled_at',
+    allowedState: 'FUNDED',
+  },
+  {
+    deadlineField: 'leg2_escrow_deposit_deadline',
+    stateField: 'leg2_state',
+    cancelledAtField: 'leg2_cancelled_at',
+    allowedState: 'CREATED',
+  },
+  {
+    deadlineField: 'leg2_fiat_payment_deadline',
+    stateField: 'leg2_state',
+    cancelledAtField: 'leg2_cancelled_at',
+    allowedState: 'FUNDED',
+  },
 ];
 
 /**
@@ -25,24 +45,29 @@ const configs: DeadlineConfig[] = [
 export async function expireDeadlines(): Promise<void> {
   try {
     const activeNetworks = await NetworkService.getActiveNetworks();
-    
+
     if (activeNetworks.length === 0) {
       console.log('[AutoCancel] No active networks found, skipping deadline processing');
       return;
     }
 
     console.log(`[AutoCancel] Processing deadlines for ${activeNetworks.length} networks`);
-    
+
     for (const network of activeNetworks) {
       try {
         await expireDeadlinesForNetwork(network.id);
-        console.log(`[AutoCancel] Completed deadline processing for network ${network.name} (ID: ${network.id})`);
+        console.log(
+          `[AutoCancel] Completed deadline processing for network ${network.name} (ID: ${network.id})`
+        );
       } catch (error) {
-        console.error(`[AutoCancel] Failed to process deadlines for network ${network.name} (ID: ${network.id}):`, error);
+        console.error(
+          `[AutoCancel] Failed to process deadlines for network ${network.name} (ID: ${network.id}):`,
+          error
+        );
         // Continue processing other networks even if one fails
       }
     }
-    
+
     console.log('[AutoCancel] Completed deadline processing for all networks');
   } catch (error) {
     console.error('[AutoCancel] Error getting active networks:', error);
@@ -58,9 +83,9 @@ export async function expireDeadlinesForNetwork(networkId: number): Promise<void
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    
+
     let totalCancelled = 0;
-    
+
     for (const { deadlineField, stateField, cancelledAtField, allowedState } of configs) {
       const { rows } = await client.query(
         `SELECT id, ${deadlineField} AS deadline, ${stateField} AS current_state FROM trades
@@ -71,12 +96,14 @@ export async function expireDeadlinesForNetwork(networkId: number): Promise<void
          FOR UPDATE SKIP LOCKED`,
         ['IN_PROGRESS', allowedState, networkId]
       );
-      
+
       for (const { id, deadline, current_state } of rows) {
         // Check if the trade is in an uncancelable state (extra safety check)
         if (UNCANCELABLE_STATES.includes(current_state)) {
           console.log(
-            `[AutoCancel] Network ${networkId} - Skipping trade ${id}: '${deadlineField}' (${(deadline as Date).toISOString()}) passed but state=${current_state} is uncancelable.`
+            `[AutoCancel] Network ${networkId} - Skipping trade ${id}: '${deadlineField}' (${(
+              deadline as Date
+            ).toISOString()}) passed but state=${current_state} is uncancelable.`
           );
           continue;
         }
@@ -86,30 +113,32 @@ export async function expireDeadlinesForNetwork(networkId: number): Promise<void
              SET overall_status = 'CANCELLED',
                  ${stateField} = 'CANCELLED',
                  ${cancelledAtField} = NOW(),
+                 cancelled = TRUE,
                  updated_at = CURRENT_TIMESTAMP
            WHERE id = $1`,
           [id]
         );
-        
+
         // record audit of auto-cancel with network context
         await client.query(
           'INSERT INTO trade_cancellations (trade_id, actor, deadline_field, network_id) VALUES ($1, $2, $3, $4)',
           [id, 'system', deadlineField, networkId]
         );
-        
+
         totalCancelled++;
         console.log(
-          `[AutoCancel] Network ${networkId} - Trade ${id}: '${deadlineField}' (${(deadline as Date).toISOString()}) passed; marking overall and ${stateField} CANCELLED.`
+          `[AutoCancel] Network ${networkId} - Trade ${id}: '${deadlineField}' (${(
+            deadline as Date
+          ).toISOString()}) passed; marking overall and ${stateField} CANCELLED.`
         );
       }
     }
-    
+
     await client.query('COMMIT');
-    
+
     if (totalCancelled > 0) {
       console.log(`[AutoCancel] Network ${networkId} - Cancelled ${totalCancelled} expired trades`);
     }
-    
   } catch (error) {
     await client.query('ROLLBACK');
     console.error(`[AutoCancel] expireDeadlinesForNetwork ${networkId} error:`, error);
@@ -124,8 +153,10 @@ export async function expireDeadlinesForNetwork(networkId: number): Promise<void
  * @deprecated Use expireDeadlines() instead, which processes all networks.
  */
 export async function expireDeadlinesLegacy(): Promise<void> {
-  console.warn('[AutoCancel] WARNING: Using legacy single-network deadline processing. Consider updating to multi-network version.');
-  
+  console.warn(
+    '[AutoCancel] WARNING: Using legacy single-network deadline processing. Consider updating to multi-network version.'
+  );
+
   try {
     const defaultNetwork = await NetworkService.getDefaultNetwork();
     await expireDeadlinesForNetwork(defaultNetwork.id);
@@ -148,7 +179,7 @@ export async function getDeadlineStats(networkId: number): Promise<{
     const stats = {
       upcomingIn1Hour: 0,
       upcomingIn24Hours: 0,
-      overdue: 0
+      overdue: 0,
     };
 
     for (const { deadlineField, stateField, allowedState } of configs) {
@@ -161,7 +192,7 @@ export async function getDeadlineStats(networkId: number): Promise<{
            AND ${deadlineField} BETWEEN NOW() AND NOW() + INTERVAL '1 hour'`,
         [allowedState, networkId]
       );
-      
+
       // Count deadlines in next 24 hours
       const { rows: dayRows } = await client.query(
         `SELECT COUNT(*) as count FROM trades
@@ -171,7 +202,7 @@ export async function getDeadlineStats(networkId: number): Promise<{
            AND ${deadlineField} BETWEEN NOW() AND NOW() + INTERVAL '24 hours'`,
         [allowedState, networkId]
       );
-      
+
       // Count overdue deadlines
       const { rows: overdueRows } = await client.query(
         `SELECT COUNT(*) as count FROM trades
@@ -202,7 +233,7 @@ export async function getAllNetworksDeadlineStats(): Promise<{
     upcomingIn1Hour: number;
     upcomingIn24Hours: number;
     overdue: number;
-  }
+  };
 }> {
   const activeNetworks = await NetworkService.getActiveNetworks();
   const allStats: {
@@ -211,14 +242,14 @@ export async function getAllNetworksDeadlineStats(): Promise<{
       upcomingIn1Hour: number;
       upcomingIn24Hours: number;
       overdue: number;
-    }
+    };
   } = {};
 
   for (const network of activeNetworks) {
     const stats = await getDeadlineStats(network.id);
     allStats[network.id] = {
       networkName: network.name,
-      ...stats
+      ...stats,
     };
   }
 

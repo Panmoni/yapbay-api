@@ -220,10 +220,20 @@ router.put(
     if (leg1_state !== undefined) {
       updateFields.push(`leg1_state = $${paramIndex++}`);
       updateParams.push(leg1_state);
+
+      // If setting leg1_state to CANCELLED, also set cancelled = TRUE
+      if (leg1_state === 'CANCELLED') {
+        updateFields.push(`cancelled = TRUE`);
+      }
     }
     if (overall_status !== undefined) {
       updateFields.push(`overall_status = $${paramIndex++}`);
       updateParams.push(overall_status);
+
+      // If setting overall_status to CANCELLED, also set cancelled = TRUE
+      if (overall_status === 'CANCELLED') {
+        updateFields.push(`cancelled = TRUE`);
+      }
     }
 
     if (updateFields.length > 0) {

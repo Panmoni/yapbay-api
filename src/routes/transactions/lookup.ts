@@ -20,7 +20,7 @@ router.get(
       if (tradeResult.length === 0) {
         res.status(404).json({
           error: 'Trade not found',
-          details: `No trade found with ID ${id}`
+          details: `No trade found with ID ${id}`,
         });
         return;
       }
@@ -41,15 +41,18 @@ router.get(
           t.related_escrow_db_id as escrow_id, 
           t.created_at,
           tr.leg1_crypto_amount as amount,
-          tr.leg1_crypto_token as token_type
+          tr.leg1_crypto_token as token_type,
+          n.name as network
         FROM 
           transactions t
         LEFT JOIN
           trades tr ON t.related_trade_id = tr.id
+        LEFT JOIN
+          networks n ON t.network_id = n.id
         WHERE 
           t.related_trade_id = $1
       `;
-      
+
       const params: (string | number)[] = [id];
       let paramIndex = 2;
 
@@ -64,7 +67,7 @@ router.get(
       sql += ' ORDER BY t.created_at DESC';
 
       const result = await query(sql, params);
-      
+
       // Process results to parse any metadata stored in error_message
       const transactions = result.map(tx => {
         let metadata = null;
@@ -74,14 +77,16 @@ router.get(
             tx.error_message = null; // Clear error_message if it was used for metadata
           } catch (error) {
             // Not valid JSON, leave as is (probably an actual error message)
-            console.debug(`Could not parse metadata from error_message: ${(error as Error).message}`);
+            console.debug(
+              `Could not parse metadata from error_message: ${(error as Error).message}`
+            );
           }
         }
-        
+
         return {
           ...tx,
           metadata,
-          transaction_type: tx.transaction_type // Ensure transaction_type is explicitly included
+          transaction_type: tx.transaction_type, // Ensure transaction_type is explicitly included
         };
       });
 
@@ -90,7 +95,7 @@ router.get(
       logError(`Error in /transactions/trade/${id} endpoint`, err as Error);
       res.status(500).json({
         error: (err as Error).message,
-        details: 'Error occurred while fetching trade transactions'
+        details: 'Error occurred while fetching trade transactions',
       });
     }
   })
@@ -106,7 +111,7 @@ router.get(
     if (!walletAddress) {
       res.status(401).json({
         error: 'Authentication required',
-        details: 'Valid JWT with wallet address is required'
+        details: 'Valid JWT with wallet address is required',
       });
       return;
     }
@@ -128,15 +133,18 @@ router.get(
           t.related_escrow_db_id as escrow_id, 
           t.created_at,
           tr.leg1_crypto_amount as amount,
-          tr.leg1_crypto_token as token_type
+          tr.leg1_crypto_token as token_type,
+          n.name as network
         FROM 
           transactions t
         LEFT JOIN
           trades tr ON t.related_trade_id = tr.id
+        LEFT JOIN
+          networks n ON t.network_id = n.id
         WHERE 
           (t.sender_address = $1 OR t.receiver_or_contract_address = $1)
       `;
-      
+
       const params: (string | number)[] = [walletAddress];
       let paramIndex = 2;
 
@@ -149,14 +157,14 @@ router.get(
 
       // Order by creation date, newest first
       sql += ' ORDER BY t.created_at DESC';
-      
+
       // Add pagination
       sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
       params.push(Number(limit));
       params.push(Number(offset));
 
       const result = await query(sql, params);
-      
+
       // Process results to parse any metadata stored in error_message
       const transactions = result.map(tx => {
         let metadata = null;
@@ -166,13 +174,15 @@ router.get(
             tx.error_message = null; // Clear error_message if it was used for metadata
           } catch (error) {
             // Not valid JSON, leave as is (probably an actual error message)
-            console.debug(`Could not parse metadata from error_message: ${(error as Error).message}`);
+            console.debug(
+              `Could not parse metadata from error_message: ${(error as Error).message}`
+            );
           }
         }
-        
+
         return {
           ...tx,
-          metadata
+          metadata,
         };
       });
 
@@ -181,7 +191,7 @@ router.get(
       logError(`Error in /transactions/user endpoint for wallet ${walletAddress}`, err as Error);
       res.status(500).json({
         error: (err as Error).message,
-        details: 'Error occurred while fetching user transactions'
+        details: 'Error occurred while fetching user transactions',
       });
     }
   })

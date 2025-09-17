@@ -142,7 +142,7 @@ router.get(
         LEFT JOIN
           networks n ON t.network_id = n.id
         WHERE 
-          (t.sender_address = $1 OR t.receiver_or_contract_address = $1)
+          t.sender_address = $1
       `;
 
       const params: (string | number)[] = [walletAddress];

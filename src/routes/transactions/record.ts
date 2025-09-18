@@ -22,10 +22,10 @@ router.post(
       trade_id,
       escrow_id,
       transaction_hash,
+      signature,
       transaction_type,
       from_address,
       to_address,
-
       block_number,
       metadata,
       status = 'PENDING',
@@ -248,9 +248,11 @@ router.post(
       }
 
       // Record the transaction
-      console.log(`[DEBUG] Recording transaction ${transaction_hash} for trade ${trade_id}`);
+      const transactionIdentifier = transaction_hash || signature;
+      console.log(`[DEBUG] Recording transaction ${transactionIdentifier} for trade ${trade_id}`);
       const transactionId = await recordTransaction({
         transaction_hash,
+        signature,
         status: status as TransactionStatus,
         type: finalTransactionType as TransactionType,
         block_number: block_number || null,
@@ -263,7 +265,7 @@ router.post(
       });
 
       console.log(
-        `[DB] Recorded/Updated transaction ${transaction_hash} with ID: ${transactionId}`
+        `[DB] Recorded/Updated transaction ${transactionIdentifier} with ID: ${transactionId}`
       );
 
       // Handle state updates based on transaction type

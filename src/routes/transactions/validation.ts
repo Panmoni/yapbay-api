@@ -1,53 +1,61 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../../middleware/auth';
 
-export const validateTransactionRecord = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+export const validateTransactionRecord = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void => {
   const {
     trade_id,
     transaction_hash,
+    signature,
     transaction_type,
     from_address,
-    status = 'PENDING'
+    status = 'PENDING',
   } = req.body;
 
   // Collect validation errors to provide comprehensive feedback
   const validationErrors: { field: string; message: string }[] = [];
 
-  // Validate required fields
-  if (!transaction_hash) {
-    validationErrors.push({ field: 'transaction_hash', message: 'Transaction hash is required' });
+  // Validate required fields - accept either transaction_hash (EVM) or signature (Solana)
+  if (!transaction_hash && !signature) {
+    validationErrors.push({
+      field: 'transaction_hash_or_signature',
+      message: 'Either transaction_hash or signature is required',
+    });
   }
-  
+
   if (!transaction_type) {
     validationErrors.push({ field: 'transaction_type', message: 'Transaction type is required' });
   }
-  
+
   if (!from_address) {
     validationErrors.push({ field: 'from_address', message: 'From address is required' });
   }
-  
+
   if (!trade_id) {
     validationErrors.push({ field: 'trade_id', message: 'Trade ID is required' });
   }
 
   // Validate transaction type
   const validTransactionTypes = [
-    'CREATE_ESCROW', 
-    'FUND_ESCROW', 
-    'MARK_FIAT_PAID', 
-    'RELEASE_ESCROW', 
-    'CANCEL_ESCROW', 
-    'DISPUTE_ESCROW', 
-    'OPEN_DISPUTE', 
-    'RESPOND_DISPUTE', 
-    'RESOLVE_DISPUTE', 
-    'OTHER'
+    'CREATE_ESCROW',
+    'FUND_ESCROW',
+    'MARK_FIAT_PAID',
+    'RELEASE_ESCROW',
+    'CANCEL_ESCROW',
+    'DISPUTE_ESCROW',
+    'OPEN_DISPUTE',
+    'RESPOND_DISPUTE',
+    'RESOLVE_DISPUTE',
+    'OTHER',
   ];
-  
+
   if (transaction_type && !validTransactionTypes.includes(transaction_type)) {
     validationErrors.push({
       field: 'transaction_type',
-      message: `Transaction type must be one of: ${validTransactionTypes.join(', ')}`
+      message: `Transaction type must be one of: ${validTransactionTypes.join(', ')}`,
     });
   }
 
@@ -56,7 +64,7 @@ export const validateTransactionRecord = (req: AuthenticatedRequest, res: Respon
   if (status && !validStatuses.includes(status)) {
     validationErrors.push({
       field: 'status',
-      message: `Status must be one of: ${validStatuses.join(', ')}`
+      message: `Status must be one of: ${validStatuses.join(', ')}`,
     });
   }
 
@@ -64,7 +72,7 @@ export const validateTransactionRecord = (req: AuthenticatedRequest, res: Respon
   if (trade_id && !Number.isInteger(Number(trade_id))) {
     validationErrors.push({
       field: 'trade_id',
-      message: 'Trade ID must be an integer'
+      message: 'Trade ID must be an integer',
     });
   }
 
@@ -73,7 +81,7 @@ export const validateTransactionRecord = (req: AuthenticatedRequest, res: Respon
     res.status(400).json({
       error: 'Validation failed',
       details: 'One or more required fields are missing or invalid',
-      validationErrors
+      validationErrors,
     });
     return;
   }

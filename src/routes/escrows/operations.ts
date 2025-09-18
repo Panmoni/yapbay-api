@@ -181,6 +181,7 @@ router.post(
       // Record transaction with network-specific fields
       await recordTransaction({
         transaction_hash: network.networkFamily === NetworkFamily.EVM ? transaction_hash : null,
+        signature: network.networkFamily === NetworkFamily.SOLANA ? signature : null,
         type: 'CREATE_ESCROW',
         sender_address: seller,
         receiver_or_contract_address:
@@ -204,6 +205,7 @@ router.post(
       // Record failed transaction
       await recordTransaction({
         transaction_hash: network.networkFamily === NetworkFamily.EVM ? transaction_hash : null,
+        signature: network.networkFamily === NetworkFamily.SOLANA ? signature : null,
         type: 'CREATE_ESCROW',
         sender_address: seller,
         receiver_or_contract_address:

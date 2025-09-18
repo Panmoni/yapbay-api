@@ -29,7 +29,7 @@ router.get(
       let sql = `
         SELECT 
           t.id, 
-          t.transaction_hash, 
+          COALESCE(t.transaction_hash, t.signature) as transaction_hash, 
           t.status, 
           t.type as transaction_type, 
           t.block_number, 
@@ -121,7 +121,7 @@ router.get(
       let sql = `
         SELECT 
           t.id, 
-          t.transaction_hash, 
+          COALESCE(t.transaction_hash, t.signature) as transaction_hash, 
           t.status, 
           t.type as transaction_type, 
           t.block_number, 

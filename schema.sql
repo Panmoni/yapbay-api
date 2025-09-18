@@ -254,7 +254,8 @@ CREATE TABLE transactions (
     related_trade_id INTEGER REFERENCES trades(id) ON DELETE SET NULL,
     related_escrow_db_id INTEGER REFERENCES escrows(id) ON DELETE SET NULL,
     network_family VARCHAR(10) NOT NULL DEFAULT 'evm' CHECK (network_family IN ('evm', 'solana')),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_transactions_status ON transactions(status);
@@ -262,6 +263,7 @@ CREATE INDEX idx_transactions_type ON transactions(type);
 CREATE INDEX idx_transactions_trade_id ON transactions(related_trade_id);
 CREATE INDEX idx_transactions_escrow_db_id ON transactions(related_escrow_db_id);
 CREATE INDEX idx_transactions_hash ON transactions(transaction_hash);
+CREATE INDEX idx_transactions_updated_at ON transactions(updated_at);
 
 -- 9. dispute_resolutions: Logs arbitration outcomes
 CREATE TABLE dispute_resolutions (

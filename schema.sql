@@ -505,21 +505,33 @@ CREATE TRIGGER update_contract_auto_cancellations_updated_at
 CREATE OR REPLACE FUNCTION enforce_trade_deadlines()
 RETURNS TRIGGER AS $$
 BEGIN
+  -- Allow cancellations and legitimate completions
   IF NEW.overall_status != 'CANCELLED' THEN
+    -- Leg 1 escrow deposit deadline - allow RELEASED and COMPLETED states
     IF NEW.leg1_escrow_deposit_deadline IS NOT NULL
-       AND NEW.leg1_escrow_deposit_deadline <= NOW() THEN
+       AND NEW.leg1_escrow_deposit_deadline <= NOW()
+       AND NEW.leg1_state NOT IN ('RELEASED', 'COMPLETED', 'CANCELLED') THEN
       RAISE EXCEPTION 'Leg1 escrow deposit deadline (% ) passed', NEW.leg1_escrow_deposit_deadline;
     END IF;
+    
+    -- Leg 1 fiat payment deadline - allow RELEASED and COMPLETED states
     IF NEW.leg1_fiat_payment_deadline IS NOT NULL
-       AND NEW.leg1_fiat_payment_deadline <= NOW() THEN
+       AND NEW.leg1_fiat_payment_deadline <= NOW()
+       AND NEW.leg1_state NOT IN ('RELEASED', 'COMPLETED', 'CANCELLED') THEN
       RAISE EXCEPTION 'Leg1 fiat payment deadline (% ) passed', NEW.leg1_fiat_payment_deadline;
     END IF;
+    
+    -- Leg 2 escrow deposit deadline - allow RELEASED and COMPLETED states
     IF NEW.leg2_escrow_deposit_deadline IS NOT NULL
-       AND NEW.leg2_escrow_deposit_deadline <= NOW() THEN
+       AND NEW.leg2_escrow_deposit_deadline <= NOW()
+       AND NEW.leg2_state NOT IN ('RELEASED', 'COMPLETED', 'CANCELLED') THEN
       RAISE EXCEPTION 'Leg2 escrow deposit deadline (% ) passed', NEW.leg2_escrow_deposit_deadline;
     END IF;
+    
+    -- Leg 2 fiat payment deadline - allow RELEASED and COMPLETED states
     IF NEW.leg2_fiat_payment_deadline IS NOT NULL
-       AND NEW.leg2_fiat_payment_deadline <= NOW() THEN
+       AND NEW.leg2_fiat_payment_deadline <= NOW()
+       AND NEW.leg2_state NOT IN ('RELEASED', 'COMPLETED', 'CANCELLED') THEN
       RAISE EXCEPTION 'Leg2 fiat payment deadline (% ) passed', NEW.leg2_fiat_payment_deadline;
     END IF;
   END IF;

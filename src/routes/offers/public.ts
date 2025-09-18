@@ -6,6 +6,14 @@ import { logError } from '../../logger';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { sendNetworkResponse } from '../../utils/routeHelpers';
 
+// Extended request type that includes user property from JWT middleware
+interface AuthenticatedRequest extends Request {
+  user?: {
+    walletAddress?: string;
+    [key: string]: unknown;
+  };
+}
+
 const router = express.Router();
 
 // Get offer details (publicly accessible)
@@ -52,7 +60,9 @@ router.get(
       }
 
       // If authenticated and requesting own offers
-      const walletAddress = (req as any).user ? getWalletAddressFromJWT(req as any) : undefined;
+      const walletAddress = (req as AuthenticatedRequest).user
+        ? getWalletAddressFromJWT(req as AuthenticatedRequest)
+        : undefined;
       if (owner === 'me' && walletAddress) {
         sql +=
           ' AND creator_account_id IN (SELECT id FROM accounts WHERE LOWER(wallet_address) = LOWER($' +

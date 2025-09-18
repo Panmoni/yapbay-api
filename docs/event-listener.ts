@@ -18,17 +18,15 @@
  *   npm run event-listener      # Default: scan last 1 hour of blocks
  */
 
-import * as anchor from "@coral-xyz/anchor";
-import { Connection, PublicKey, ParsedTransactionWithMeta } from "@solana/web3.js";
-import * as dotenv from "dotenv";
-import { BorshCoder, EventParser } from "@coral-xyz/anchor";
-import { LocalsolanaContracts } from "../target/types/localsolana_contracts";
+import { Connection, PublicKey, ParsedTransactionWithMeta } from '@solana/web3.js';
+import * as dotenv from 'dotenv';
+import { BorshCoder, EventParser } from '@coral-xyz/anchor';
 
 dotenv.config();
 
 // Program configuration
-const PROGRAM_ID = new PublicKey("4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x");
-const RPC_ENDPOINT = process.env.ANCHOR_PROVIDER_URL || "https://api.devnet.solana.com";
+const PROGRAM_ID = new PublicKey('4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x');
+const RPC_ENDPOINT = process.env.ANCHOR_PROVIDER_URL || 'https://api.devnet.solana.com';
 
 // Block timing configuration
 const BLOCKS_PER_SECOND = 2; // 0.5 seconds per block = 2 blocks per second
@@ -46,7 +44,7 @@ const EVENT_DISCRIMINATORS = {
   DisputeResolved: Buffer.from([121, 64, 249, 153, 139, 128, 236, 187]),
   DisputeDefaultJudgment: Buffer.from([194, 12, 130, 224, 60, 204, 39, 194]),
   EscrowBalanceChanged: Buffer.from([169, 241, 33, 44, 253, 206, 89, 168]),
-  SequentialAddressUpdated: Buffer.from([205, 6, 123, 144, 102, 253, 81, 133])
+  SequentialAddressUpdated: Buffer.from([205, 6, 123, 144, 102, 253, 81, 133]),
 };
 
 /**
@@ -66,11 +64,11 @@ class EventListener {
   private scanHours: number;
 
   constructor(scanHours: number = 1) {
-    this.connection = new Connection(RPC_ENDPOINT, "confirmed");
+    this.connection = new Connection(RPC_ENDPOINT, 'confirmed');
     this.scanHours = scanHours;
 
     // Create event parser using the program's IDL
-    const idl = require("../target/idl/localsolana_contracts.json");
+    const idl = require('../target/idl/localsolana_contracts.json');
     this.borshCoder = new BorshCoder(idl);
     this.eventParser = new EventParser(PROGRAM_ID, this.borshCoder);
   }
@@ -79,7 +77,7 @@ class EventListener {
    * Format USDC amounts for display
    */
   private formatUsdcAmount(amount: number): string {
-    return (amount / 1_000_000).toFixed(2) + " USDC";
+    return (amount / 1_000_000).toFixed(2) + ' USDC';
   }
 
   /**
@@ -116,18 +114,18 @@ class EventListener {
    * Parse and display an event
    */
   private displayEvent(eventName: string, eventData: any, signature: string, slot: number) {
-    console.log("\n" + "=".repeat(80));
+    console.log('\n' + '='.repeat(80));
     console.log(`🎯 EVENT: ${eventName}`);
     console.log(`📝 Signature: ${signature}`);
     console.log(`🎰 Slot: ${slot}`);
     console.log(`⏰ Time: ${new Date().toISOString()}`);
-    console.log("-".repeat(80));
+    console.log('-'.repeat(80));
 
     // Handle different event data structures - some have nested 'data' property
     const data = eventData.data || eventData;
 
     switch (eventName) {
-      case "EscrowCreated":
+      case 'EscrowCreated': {
         // Convert hex strings to numbers for amounts and IDs
         const escrowId = this.hexToNumber(data.escrow_id);
         const tradeId = this.hexToNumber(data.trade_id);
@@ -135,7 +133,6 @@ class EventListener {
         const fee = this.hexToNumber(data.fee);
         const depositDeadline = this.hexToNumber(data.deposit_deadline);
         const timestamp = this.hexToNumber(data.timestamp);
-
 
         console.log(`🆔 Escrow ID: ${escrowId}`);
         console.log(`🔄 Trade ID: ${tradeId}`);
@@ -145,20 +142,21 @@ class EventListener {
         console.log(`💰 Amount: ${this.formatUsdcAmount(amount)}`);
         console.log(`💸 Fee: ${this.formatUsdcAmount(fee)}`);
         console.log(`⏳ Deposit Deadline: ${this.formatTimestamp(depositDeadline)}`);
-        console.log(`🔄 Sequential: ${data.sequential ? "Yes" : "No"}`);
+        console.log(`🔄 Sequential: ${data.sequential ? 'Yes' : 'No'}`);
         if (data.sequential_escrow_address) {
           console.log(`🔗 Sequential Address: ${data.sequential_escrow_address}`);
         }
         console.log(`⏰ Timestamp: ${this.formatTimestamp(timestamp)}`);
         break;
+      }
 
-      case "FiatMarkedPaid":
+      case 'FiatMarkedPaid':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         console.log(`✅ Fiat payment marked as completed`);
         break;
 
-      case "EscrowReleased":
+      case 'EscrowReleased':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         console.log(`👤 Buyer: ${eventData.buyer.toBase58()}`);
@@ -167,7 +165,7 @@ class EventListener {
         console.log(`🎯 Destination: ${eventData.destination.toBase58()}`);
         break;
 
-      case "EscrowCancelled":
+      case 'EscrowCancelled':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         console.log(`👤 Seller: ${eventData.seller.toBase58()}`);
@@ -175,7 +173,7 @@ class EventListener {
         console.log(`💸 Fee: ${this.formatUsdcAmount(eventData.fee.toNumber())}`);
         break;
 
-      case "FundsDeposited":
+      case 'FundsDeposited':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         console.log(`💰 Amount: ${this.formatUsdcAmount(eventData.amount.toNumber())}`);
@@ -183,7 +181,7 @@ class EventListener {
         console.log(`🔢 Counter: ${eventData.counter.toString()}`);
         break;
 
-      case "DisputeOpened":
+      case 'DisputeOpened':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         console.log(`👤 Disputing Party: ${eventData.disputingParty.toBase58()}`);
@@ -191,7 +189,7 @@ class EventListener {
         console.log(`💰 Bond Amount: ${this.formatUsdcAmount(eventData.bondAmount.toNumber())}`);
         break;
 
-      case "DisputeResponseSubmitted":
+      case 'DisputeResponseSubmitted':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         console.log(`👤 Responding Party: ${eventData.respondingParty.toBase58()}`);
@@ -199,30 +197,30 @@ class EventListener {
         console.log(`💰 Bond Amount: ${this.formatUsdcAmount(eventData.bondAmount.toNumber())}`);
         break;
 
-      case "DisputeResolved":
+      case 'DisputeResolved':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
-        console.log(`⚖️  Decision: ${eventData.decision ? "Buyer Wins" : "Seller Wins"}`);
+        console.log(`⚖️  Decision: ${eventData.decision ? 'Buyer Wins' : 'Seller Wins'}`);
         console.log(`👑 Winner: ${eventData.winner.toBase58()}`);
         console.log(`💸 Fee: ${this.formatUsdcAmount(eventData.fee.toNumber())}`);
         console.log(`🔐 Resolution Hash: ${Buffer.from(eventData.resolutionHash).toString('hex')}`);
         break;
 
-      case "DisputeDefaultJudgment":
+      case 'DisputeDefaultJudgment':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         console.log(`👤 Defaulting Party: ${eventData.defaultingParty.toBase58()}`);
-        console.log(`⚖️  Decision: ${eventData.decision ? "Buyer Wins" : "Seller Wins"}`);
+        console.log(`⚖️  Decision: ${eventData.decision ? 'Buyer Wins' : 'Seller Wins'}`);
         break;
 
-      case "EscrowBalanceChanged":
+      case 'EscrowBalanceChanged':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         console.log(`💰 New Balance: ${this.formatUsdcAmount(eventData.newBalance.toNumber())}`);
         console.log(`📝 Reason: ${eventData.reason}`);
         break;
 
-      case "SequentialAddressUpdated":
+      case 'SequentialAddressUpdated':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
         if (eventData.oldAddress) {
@@ -232,10 +230,10 @@ class EventListener {
         break;
 
       default:
-        console.log("📊 Raw Event Data:", JSON.stringify(eventData, null, 2));
+        console.log('📊 Raw Event Data:', JSON.stringify(eventData, null, 2));
     }
 
-    console.log("=".repeat(80));
+    console.log('='.repeat(80));
   }
 
   /**
@@ -255,8 +253,8 @@ class EventListener {
           console.log(`📥 Fetching block ${i + 1}/${blockCount} (slot: ${slot})`);
 
           const block = await this.connection.getBlock(slot, {
-            commitment: "confirmed",
-            maxSupportedTransactionVersion: 0
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0,
           });
 
           if (block && block.transactions) {
@@ -266,12 +264,14 @@ class EventListener {
               if (tx.transaction && tx.meta && tx.meta.logMessages) {
                 // Check if this transaction involves our program
                 const hasOurProgram = tx.meta.logMessages.some(log =>
-                  log.includes("4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x")
+                  log.includes('4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x')
                 );
 
                 if (hasOurProgram) {
                   const signature = tx.transaction.signatures[0];
-                  console.log(`🎯 Found transaction with our program: ${signature.substring(0, 16)}...`);
+                  console.log(
+                    `🎯 Found transaction with our program: ${signature.substring(0, 16)}...`
+                  );
                   this.parseTransactionLogs(tx as any, signature);
                 }
               }
@@ -287,7 +287,7 @@ class EventListener {
         }
       }
     } catch (error) {
-      console.error("❌ Error scanning recent blocks:", error);
+      console.error('❌ Error scanning recent blocks:', error);
     }
   }
 
@@ -327,7 +327,7 @@ class EventListener {
     // If no events found with Anchor parser, try manual Borsh parsing
     if (!eventFound) {
       for (const log of logs) {
-        if (log.includes("Program data:")) {
+        if (log.includes('Program data:')) {
           console.log(`📋 Found program data log: ${log.substring(0, 100)}...`);
           const manualEvent = this.tryBorshEventParsing(log, signature, slot);
           if (manualEvent) {
@@ -348,11 +348,15 @@ class EventListener {
    */
   private tryBorshEventParsing(log: string, signature: string, slot: number): boolean {
     try {
-      const base64Data = log.split("Program data: ")[1];
+      const base64Data = log.split('Program data: ')[1];
       if (!base64Data) return false;
 
       const eventData = Buffer.from(base64Data, 'base64');
-      console.log(`🔍 Borsh parsing event data (${eventData.length} bytes): ${eventData.toString('hex').substring(0, 32)}...`);
+      console.log(
+        `🔍 Borsh parsing event data (${eventData.length} bytes): ${eventData
+          .toString('hex')
+          .substring(0, 32)}...`
+      );
 
       // Check for EscrowCreated discriminator
       if (eventData.length >= 8) {
@@ -365,12 +369,18 @@ class EventListener {
           try {
             // Parse the event data using Borsh
             const parsedEvent = this.parseEscrowCreatedEvent(eventData);
-            this.displayEvent("EscrowCreated", parsedEvent, signature, slot);
+            this.displayEvent('EscrowCreated', parsedEvent, signature, slot);
             return true;
           } catch (parseError) {
             console.log(`⚠️  Borsh parsing failed: ${parseError}`);
             // Fallback to simple display
-            this.displaySimpleEvent("EscrowCreated", signature, slot, eventData.length, discriminator);
+            this.displaySimpleEvent(
+              'EscrowCreated',
+              signature,
+              slot,
+              eventData.length,
+              discriminator
+            );
             return true;
           }
         }
@@ -399,17 +409,23 @@ class EventListener {
   /**
    * Display a simple event when full parsing fails
    */
-  private displaySimpleEvent(eventName: string, signature: string, slot: number, dataLength: number, discriminator: Buffer) {
-    console.log("\n" + "=".repeat(80));
+  private displaySimpleEvent(
+    eventName: string,
+    signature: string,
+    slot: number,
+    dataLength: number,
+    discriminator: Buffer
+  ) {
+    console.log('\n' + '='.repeat(80));
     console.log(`🎯 EVENT: ${eventName} (Simple Parse)`);
     console.log(`📝 Signature: ${signature}`);
     console.log(`🎰 Slot: ${slot}`);
     console.log(`⏰ Time: ${new Date().toISOString()}`);
-    console.log("-".repeat(80));
+    console.log('-'.repeat(80));
     console.log(`🔍 Event detected but full parsing failed`);
     console.log(`📊 Raw data length: ${dataLength} bytes`);
     console.log(`🔐 Discriminator: ${discriminator.toString('hex')}`);
-    console.log("=".repeat(80));
+    console.log('='.repeat(80));
   }
 
   /**
@@ -417,11 +433,11 @@ class EventListener {
    */
   async startListening() {
     if (this.isListening) {
-      console.log("⚠️  Already listening for events");
+      console.log('⚠️  Already listening for events');
       return;
     }
 
-    console.log("🎧 Starting event listener...");
+    console.log('🎧 Starting event listener...');
     this.isListening = true;
 
     try {
@@ -433,14 +449,14 @@ class EventListener {
             logs.signature
           );
         },
-        "confirmed"
+        'confirmed'
       );
 
-      console.log("✅ Event listener started successfully");
+      console.log('✅ Event listener started successfully');
       console.log(`📡 Listening for events from program: ${PROGRAM_ID.toBase58()}`);
-      console.log("🔄 Waiting for new events... (Press Ctrl+C to stop)");
+      console.log('🔄 Waiting for new events... (Press Ctrl+C to stop)');
     } catch (error) {
-      console.error("❌ Error starting event listener:", error);
+      console.error('❌ Error starting event listener:', error);
       this.isListening = false;
     }
   }
@@ -450,7 +466,7 @@ class EventListener {
    */
   async stopListening() {
     if (!this.isListening || this.subscriptionId === null) {
-      console.log("⚠️  Not currently listening");
+      console.log('⚠️  Not currently listening');
       return;
     }
 
@@ -458,9 +474,9 @@ class EventListener {
       await this.connection.removeOnLogsListener(this.subscriptionId);
       this.subscriptionId = null;
       this.isListening = false;
-      console.log("🛑 Event listener stopped");
+      console.log('🛑 Event listener stopped');
     } catch (error) {
-      console.error("❌ Error stopping event listener:", error);
+      console.error('❌ Error stopping event listener:', error);
     }
   }
 
@@ -479,26 +495,26 @@ async function main() {
 
   // Validate input
   if (isNaN(scanHours) || scanHours <= 0) {
-    console.error("❌ Error: Hours must be a positive number");
-    console.log("Usage: npm run event-listener [hours]");
-    console.log("Example: npm run event-listener 24  # Scan last 24 hours");
+    console.error('❌ Error: Hours must be a positive number');
+    console.log('Usage: npm run event-listener [hours]');
+    console.log('Example: npm run event-listener 24  # Scan last 24 hours');
     process.exit(1);
   }
 
   const blockCount = hoursToBlocks(scanHours);
 
-  console.log("🚀 Solana Escrow Event Listener");
-  console.log("=" .repeat(50));
+  console.log('🚀 Solana Escrow Event Listener');
+  console.log('='.repeat(50));
   console.log(`🌐 RPC Endpoint: ${RPC_ENDPOINT}`);
   console.log(`📋 Program ID: ${PROGRAM_ID.toBase58()}`);
   console.log(`⏰ Scanning: ${scanHours} hour(s) (${blockCount} blocks)`);
-  console.log("=" .repeat(50));
+  console.log('='.repeat(50));
 
   const listener = new EventListener(scanHours);
 
   // Handle graceful shutdown
   process.on('SIGINT', async () => {
-    console.log("\n🛑 Shutting down event listener...");
+    console.log('\n🛑 Shutting down event listener...');
     await listener.stopListening();
     process.exit(0);
   });
@@ -517,15 +533,15 @@ async function main() {
     // Keep the process alive
     await new Promise(() => {}); // This will run indefinitely
   } catch (error) {
-    console.error("❌ Fatal error:", error);
+    console.error('❌ Fatal error:', error);
     process.exit(1);
   }
 }
 
 // Run the script
 if (require.main === module) {
-  main().catch((error) => {
-    console.error("Script failed:", error);
+  main().catch(error => {
+    console.error('Script failed:', error);
     process.exit(1);
   });
 }

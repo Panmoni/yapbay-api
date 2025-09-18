@@ -1,7 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../../middleware/auth';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
-import { ethers } from 'ethers';
 import { NetworkValidator } from '../../validation/networkValidation';
 import { NetworkService } from '../../services/networkService';
 
@@ -127,7 +126,7 @@ export const validateEscrowRecord = async (
     }
 
     next();
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: 'Failed to validate network configuration' });
     return;
   }

@@ -14,6 +14,34 @@ function fileLog(message: string) {
   logStream.write(line);
 }
 
+// Type definitions for Solana event data
+interface SolanaEventData {
+  seller?: string;
+  buyer?: string;
+  depositor?: string;
+  releaser?: string;
+  canceller?: string;
+  disputingParty?: string;
+  respondingParty?: string;
+  tradeId?: number | string;
+  trade_id?: number | string;
+  escrowId?: number | string;
+  escrow_id?: number | string;
+  amount?: number | string;
+  fee?: number | string;
+  arbitrator?: string;
+  destination?: string;
+  decision?: boolean;
+  winner?: string;
+  resolutionHash?: Buffer | string;
+  defaultingParty?: string;
+  sequential?: boolean;
+  sequential_escrow_address?: string;
+  deposit_deadline?: number | string;
+  timestamp?: number | string;
+  [key: string]: unknown;
+}
+
 // Event discriminators from the IDL
 const EVENT_DISCRIMINATORS = {
   EscrowCreated: Buffer.from([70, 127, 105, 102, 92, 97, 7, 173]),
@@ -106,7 +134,11 @@ export class SolanaEventListener {
         this.programId!,
         (logs, context) => {
           this.parseTransactionLogs(
-            { slot: context.slot, meta: { logMessages: logs.logs } } as any,
+            {
+              slot: context.slot,
+              transaction: {},
+              meta: { logMessages: logs.logs },
+            } as any,
             logs.signature
           );
         },
@@ -268,7 +300,7 @@ export class SolanaEventListener {
    */
   private async processSolanaEvent(
     eventName: string,
-    eventData: any,
+    eventData: SolanaEventData,
     signature: string,
     slot: number
   ): Promise<void> {
@@ -338,7 +370,7 @@ export class SolanaEventListener {
    */
   private async processEventSpecificLogic(
     eventName: string,
-    eventData: any,
+    eventData: SolanaEventData,
     tradeIdValue: number | null,
     signature?: string,
     slot?: number
@@ -359,10 +391,10 @@ export class SolanaEventListener {
    * then uses the escrow ID from that API call to update the trades table
    */
   private async handleEscrowCreated(
-    eventData: any,
+    eventData: SolanaEventData,
     tradeIdValue: number | null,
-    signature?: string,
-    slot?: number
+    _signature?: string,
+    _slot?: number
   ): Promise<void> {
     if (!tradeIdValue) {
       console.log(`⚠️  EscrowCreated: No trade ID found, skipping trades table update`);
@@ -484,7 +516,7 @@ export class SolanaEventListener {
   /**
    * Extract sender address from event data
    */
-  private extractSenderAddress(eventData: any): string | undefined {
+  private extractSenderAddress(eventData: SolanaEventData): string | undefined {
     // Try to extract sender from common event fields
     if (eventData.seller) return eventData.seller;
     if (eventData.buyer) return eventData.buyer;
@@ -500,7 +532,7 @@ export class SolanaEventListener {
   /**
    * Extract trade ID from event data
    */
-  private extractTradeId(eventData: any): number | null {
+  private extractTradeId(eventData: SolanaEventData): number | null {
     try {
       // Try to extract trade_id from common event fields
       if (eventData.tradeId !== undefined) {
@@ -566,12 +598,12 @@ export class SolanaEventListener {
    * Safely serialize event data to prevent [object Object] issues
    * This method preserves the good base64 format while handling complex objects
    */
-  private serializeEventData(eventData: any): any {
+  private serializeEventData(eventData: SolanaEventData): Record<string, unknown> {
     try {
       // If eventData is already a plain object, return it
       if (eventData && typeof eventData === 'object' && !Buffer.isBuffer(eventData)) {
         // Handle common Solana event data structures
-        const serialized: any = {};
+        const serialized: Record<string, unknown> = {};
 
         // Copy all enumerable properties
         for (const [key, value] of Object.entries(eventData)) {
@@ -582,10 +614,10 @@ export class SolanaEventListener {
             } else if (Buffer.isBuffer(value)) {
               serialized[key] = value.toString('base64');
             } else if (typeof value === 'object' && value.constructor === Object) {
-              serialized[key] = this.serializeEventData(value);
+              serialized[key] = this.serializeEventData(value as SolanaEventData);
             } else if (Array.isArray(value)) {
               serialized[key] = value.map(item =>
-                typeof item === 'object' ? this.serializeEventData(item) : item
+                typeof item === 'object' ? this.serializeEventData(item as SolanaEventData) : item
               );
             } else {
               serialized[key] = value;

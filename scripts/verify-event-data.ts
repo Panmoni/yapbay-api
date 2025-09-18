@@ -7,7 +7,6 @@
  * to verify it matches the expected EscrowCreated event structure.
  */
 
-import { PublicKey } from '@solana/web3.js';
 import { BorshCoder } from '@coral-xyz/anchor';
 import * as dotenv from 'dotenv';
 import { query } from '../src/db';

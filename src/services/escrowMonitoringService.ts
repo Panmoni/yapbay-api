@@ -12,7 +12,7 @@ dotenv.config();
 
 // Network detection
 const USE_TESTNET = process.env.NODE_ENV === 'development' || process.env.USE_TESTNET === 'true';
-const NETWORK_NAME = USE_TESTNET ? 'Alfajores Testnet' : 'Celo Mainnet';
+const _NETWORK_NAME = USE_TESTNET ? 'Alfajores Testnet' : 'Celo Mainnet';
 
 interface EscrowDetails {
   escrowId: number;

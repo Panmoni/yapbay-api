@@ -101,7 +101,7 @@ router.get(
           } else if (network.networkFamily === NetworkFamily.SOLANA) {
             // Solana network health check
             const connection = new Connection(network.rpcUrl);
-            const version = await connection.getVersion();
+            const _version = await connection.getVersion();
             networkStatus.status = 'Connected';
             networkStatus.providerName = 'Solana';
             networkStatus.blockExplorerUrl = blockchainService.getBlockExplorerUrl(

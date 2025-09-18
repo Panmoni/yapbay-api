@@ -1,5 +1,4 @@
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
-import { NetworkConfig } from '../types/networks';
 import { NetworkService } from './networkService';
 import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import * as fs from 'fs';

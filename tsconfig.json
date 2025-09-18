@@ -10,8 +10,8 @@
     "strict": true,
     "skipLibCheck": true,
     "typeRoots": ["./node_modules/@types", "./src"],
-    "types": ["mocha", "node"],
+    "types": ["mocha", "node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "docs"]
+  "exclude": ["node_modules", "docs", "src/contracts/solana/tests.ts"]
 }

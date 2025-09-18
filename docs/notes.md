@@ -1,5 +1,9 @@
 # YapBay API Notes
 
+31 lint problems
+
+are all event types detected by the event listener?
+
 ## Backend Monitoring Service
 
 to ensure funds not getting left in escrows

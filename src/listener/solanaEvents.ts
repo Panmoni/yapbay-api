@@ -221,36 +221,41 @@ export class SolanaEventListener {
           .substring(0, 32)}...`
       );
 
-      // Check for EscrowCreated discriminator
+      // Check for all event discriminators
       if (eventData.length >= 8) {
         const discriminator = eventData.subarray(0, 8);
-        const escrowCreatedDiscriminator = EVENT_DISCRIMINATORS.EscrowCreated;
 
-        if (discriminator.equals(escrowCreatedDiscriminator)) {
-          console.log(`✅ Found EscrowCreated event via Borsh parsing`);
-          // Try to parse the event data with Borsh if available
-          let parsedEventData = { raw: eventData.toString('base64') };
+        // Check each event type
+        for (const [eventName, eventDiscriminator] of Object.entries(EVENT_DISCRIMINATORS)) {
+          if (discriminator.equals(eventDiscriminator)) {
+            console.log(`✅ Found ${eventName} event via Borsh parsing`);
 
-          if (this.borshCoder) {
-            try {
-              // Attempt to decode the event data using Borsh
-              const decoded = this.borshCoder.events.decode(eventData.toString('base64'));
-              if (decoded) {
-                // Merge decoded data with raw data
-                parsedEventData = {
-                  ...decoded,
-                  raw: eventData.toString('base64'),
-                };
-                console.log(`📊 Successfully decoded EscrowCreated event data`);
+            // Try to parse the event data with Borsh if available
+            let parsedEventData = { raw: eventData.toString('base64') };
+
+            if (this.borshCoder) {
+              try {
+                // Attempt to decode the event data using Borsh
+                const decoded = this.borshCoder.events.decode(eventData.toString('base64'));
+                if (decoded) {
+                  // Merge decoded data with raw data
+                  parsedEventData = {
+                    ...decoded,
+                    raw: eventData.toString('base64'),
+                  };
+                  console.log(`📊 Successfully decoded ${eventName} event data`);
+                }
+              } catch (error) {
+                console.log(`⚠️  Failed to decode event data with Borsh: ${error}`);
               }
-            } catch (error) {
-              console.log(`⚠️  Failed to decode event data with Borsh: ${error}`);
             }
-          }
 
-          await this.processSolanaEvent('EscrowCreated', parsedEventData, signature, slot);
-          return true;
+            await this.processSolanaEvent(eventName, parsedEventData, signature, slot);
+            return true;
+          }
         }
+
+        console.log(`⚠️  Unknown event discriminator: ${discriminator.toString('hex')}`);
       }
     } catch (error) {
       console.log(`⚠️  Borsh parsing failed: ${error}`);
@@ -358,8 +363,12 @@ export class SolanaEventListener {
     // Try to extract sender from common event fields
     if (eventData.seller) return eventData.seller;
     if (eventData.buyer) return eventData.buyer;
+    if (eventData.depositor) return eventData.depositor;
+    if (eventData.releaser) return eventData.releaser;
+    if (eventData.canceller) return eventData.canceller;
     if (eventData.disputingParty) return eventData.disputingParty;
     if (eventData.respondingParty) return eventData.respondingParty;
+    if (eventData.arbitrator) return eventData.arbitrator;
     return undefined;
   }
 
@@ -395,17 +404,14 @@ export class SolanaEventListener {
             console.log(`🔍 Raw buffer length: ${rawBuffer.length} bytes`);
             console.log(`🔍 Raw buffer hex: ${rawBuffer.toString('hex').substring(0, 64)}...`);
 
-            // Based on the IDL, EscrowCreated event structure is:
-            // - 8 bytes: discriminator
-            // - 32 bytes: object_id (pubkey)
-            // - 8 bytes: escrow_id (u64)
-            // - 8 bytes: trade_id (u64) ← This is at offset 48 bytes from start
+            // Extract trade_id based on event type structure
+            // Most events have trade_id at offset 48 bytes (after discriminator + object_id + escrow_id)
             if (rawBuffer.length >= 56) {
               const tradeIdBytes = rawBuffer.subarray(48, 56);
               const tradeId = tradeIdBytes.readBigUInt64LE(0);
               const tradeIdNum = Number(tradeId.toString());
 
-              console.log(`🔍 Extracted trade ID from correct offset (48): ${tradeIdNum}`);
+              console.log(`🔍 Extracted trade ID from offset 48: ${tradeIdNum}`);
 
               // Validate that the trade ID is reasonable
               if (tradeIdNum > 0 && tradeIdNum < 2147483647) {

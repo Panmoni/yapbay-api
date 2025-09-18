@@ -324,9 +324,132 @@ export class SolanaEventListener {
       fileLog(
         `Recorded ${eventName} event for ${this.network.name}: ${signature}, trade_id: ${tradeIdValue}`
       );
+
+      // Process event-specific logic
+      await this.processEventSpecificLogic(eventName, eventData, tradeIdValue, signature, slot);
     } catch (error) {
       console.error(`Error processing Solana event for ${this.network.name}:`, error);
       fileLog(`Error processing Solana event for ${this.network.name}: ${error}`);
+    }
+  }
+
+  /**
+   * Process event-specific logic for different event types
+   */
+  private async processEventSpecificLogic(
+    eventName: string,
+    eventData: any,
+    tradeIdValue: number | null,
+    signature?: string,
+    slot?: number
+  ): Promise<void> {
+    switch (eventName) {
+      case 'EscrowCreated':
+        await this.handleEscrowCreated(eventData, tradeIdValue, signature, slot);
+        break;
+      // Add other event-specific handlers here as needed
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Handle EscrowCreated events by updating the trades table
+   * This method waits for the /escrows/record API call to complete first,
+   * then uses the escrow ID from that API call to update the trades table
+   */
+  private async handleEscrowCreated(
+    eventData: any,
+    tradeIdValue: number | null,
+    signature?: string,
+    slot?: number
+  ): Promise<void> {
+    if (!tradeIdValue) {
+      console.log(`⚠️  EscrowCreated: No trade ID found, skipping trades table update`);
+      return;
+    }
+
+    try {
+      console.log(
+        `🔧 EscrowCreated: Waiting for /escrows/record API call to complete for trade_id=${tradeIdValue}`
+      );
+
+      // Wait for the escrow record to be created by the /escrows/record API call
+      // The API call should happen shortly after the event is detected
+      let retries = 0;
+      const maxRetries = 10;
+      const retryDelay = 1000; // 1 second
+
+      while (retries < maxRetries) {
+        // Look for the escrow record that was created for this specific trade
+        const escrowResult = await query(
+          'SELECT onchain_escrow_id, escrow_address FROM escrows WHERE trade_id = $1 AND network_id = $2',
+          [tradeIdValue, this.network.id]
+        );
+
+        if (escrowResult.length > 0) {
+          // Found the escrow record for this specific trade
+          const escrowRecord = escrowResult[0];
+          const escrowId = escrowRecord.onchain_escrow_id;
+          const escrowAddress = escrowRecord.escrow_address;
+
+          console.log(
+            `🔍 Found escrow record: escrow_id=${escrowId}, escrow_address=${escrowAddress}`
+          );
+
+          // Get the trade to check if it exists and determine which leg to update
+          const tradeResult = await query(
+            'SELECT id, leg1_escrow_onchain_id, leg2_escrow_onchain_id FROM trades WHERE id = $1 AND network_id = $2',
+            [tradeIdValue, this.network.id]
+          );
+
+          if (tradeResult.length === 0) {
+            console.log(
+              `⚠️  EscrowCreated: Trade ${tradeIdValue} not found for network ${this.network.id}`
+            );
+            return;
+          }
+
+          const trade = tradeResult[0];
+
+          // Update leg1 if it doesn't have an escrow_onchain_id yet
+          if (!trade.leg1_escrow_onchain_id) {
+            // Update the trades table with both escrow_id and escrow_address
+            await query(
+              'UPDATE trades SET leg1_escrow_onchain_id = $1, leg1_escrow_address = $2 WHERE id = $3 AND network_id = $4',
+              [escrowId, escrowAddress, tradeIdValue, this.network.id]
+            );
+            console.log(
+              `✅ EscrowCreated: Updated trade ${tradeIdValue} leg1_escrow_onchain_id=${escrowId} leg1_escrow_address=${escrowAddress}`
+            );
+            fileLog(
+              `EscrowCreated: Updated trade ${tradeIdValue} leg1_escrow_onchain_id=${escrowId} leg1_escrow_address=${escrowAddress}`
+            );
+            return;
+          } else {
+            console.log(
+              `⚠️  EscrowCreated: Trade ${tradeIdValue} already has leg1_escrow_onchain_id=${trade.leg1_escrow_onchain_id}, skipping update`
+            );
+            return;
+          }
+        }
+
+        // No escrow record found yet, wait and retry
+        retries++;
+        if (retries < maxRetries) {
+          console.log(
+            `⏳ EscrowCreated: No escrow record found yet, retrying in ${retryDelay}ms (attempt ${retries}/${maxRetries})`
+          );
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+      }
+
+      console.log(
+        `⚠️  EscrowCreated: No escrow record found after ${maxRetries} retries, skipping trades update`
+      );
+    } catch (error) {
+      console.error(`❌ EscrowCreated: Error updating trades table: ${error}`);
+      fileLog(`EscrowCreated: Error updating trades table: ${error}`);
     }
   }
 

@@ -189,6 +189,7 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     ON CONFLICT (${uniqueIdField}, network_id) DO UPDATE SET
       status = EXCLUDED.status,
+      type = EXCLUDED.type,
       block_number = COALESCE(EXCLUDED.block_number, transactions.block_number),
       slot = COALESCE(EXCLUDED.slot, transactions.slot),
       gas_used = COALESCE(EXCLUDED.gas_used, transactions.gas_used),

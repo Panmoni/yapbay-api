@@ -66,6 +66,7 @@ export class SolanaEventListener {
   private borshCoder?: BorshCoder;
   private subscriptionId: number | null = null;
   private processedEvents: Set<string> = new Set();
+  private eventLogIndexTracker: Map<string, number> = new Map(); // Track log_index per transaction
 
   constructor(network: NetworkConfig) {
     this.network = network;
@@ -198,6 +199,9 @@ export class SolanaEventListener {
       return;
     }
 
+    // Reset log index tracker for this transaction
+    this.eventLogIndexTracker.set(signature, 0);
+
     let eventFound = false;
 
     // Try to parse all logs first with the event parser
@@ -231,6 +235,14 @@ export class SolanaEventListener {
     // Mark as processed if we found any events
     if (eventFound) {
       this.processedEvents.add(eventKey);
+    }
+
+    // Clean up old entries from the log index tracker to prevent memory leaks
+    // Keep only the last 1000 transaction signatures
+    if (this.eventLogIndexTracker.size > 1000) {
+      const entries = Array.from(this.eventLogIndexTracker.entries());
+      const toDelete = entries.slice(0, entries.length - 1000);
+      toDelete.forEach(([signature]) => this.eventLogIndexTracker.delete(signature));
     }
   }
 
@@ -330,6 +342,14 @@ export class SolanaEventListener {
       // Serialize event data safely
       const serializedArgs = this.serializeEventData(eventData);
 
+      // Get and increment log index for this transaction
+      const currentLogIndex = this.eventLogIndexTracker.get(signature) || 0;
+      this.eventLogIndexTracker.set(signature, currentLogIndex + 1);
+
+      console.log(
+        `📝 Assigning log_index ${currentLogIndex} to ${eventName} event for transaction ${signature}`
+      );
+
       // Record contract event with all required fields
       await query(
         `
@@ -343,7 +363,7 @@ export class SolanaEventListener {
           eventName,
           slot, // Use slot as block_number for Solana
           signature, // Use signature as transaction_hash for Solana
-          0, // log_index (Solana doesn't have log index, use 0)
+          currentLogIndex, // Use sequential log_index for multiple events in same transaction
           serializedArgs,
           tradeIdValue,
           transactionId,

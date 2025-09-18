@@ -2,7 +2,7 @@
 
 31 lint problems
 
-are all event types detected by the event listener?
+are all event types detected by the event listener? and recorded with the proper type?
 
 ## Backend Monitoring Service
 

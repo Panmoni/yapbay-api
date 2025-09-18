@@ -468,6 +468,8 @@ export class SolanaEventListener {
         return 'CANCEL_ESCROW';
       case 'FundsDeposited':
         return 'FUND_ESCROW';
+      case 'EscrowBalanceChanged':
+        return 'FUND_ESCROW'; // EscrowBalanceChanged typically happens during funding
       case 'DisputeOpened':
         return 'OPEN_DISPUTE';
       case 'DisputeResponseSubmitted':

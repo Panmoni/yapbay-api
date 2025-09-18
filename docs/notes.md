@@ -1,6 +1,8 @@
 # YapBay API Notes
 
-31 lint problems
+19 lint problems
+
+## Event Types
 
 are all event types detected by the event listener? and recorded with the proper type?
 

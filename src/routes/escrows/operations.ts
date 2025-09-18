@@ -39,7 +39,6 @@ router.post(
       trade_onchain_id,
     } = req.body;
 
-    const jwtWalletAddress = getWalletAddressFromJWT(req);
     const networkId = req.networkId!;
 
     const network = await NetworkService.getNetworkById(networkId);

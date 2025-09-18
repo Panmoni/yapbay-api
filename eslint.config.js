@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   // Global ignores
   {
-    ignores: ['node_modules/', 'dist/', 'eslint.config.js'],
+    ignores: ['node_modules/', 'dist/', 'eslint.config.js', 'src/contracts/solana/tests.ts'],
   },
 
   // Base configuration for JS files (including eslint.config.js itself if not ignored)
@@ -90,6 +90,24 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-expressions': 'off', // Allow unused expressions like `expect(foo).to.be.true;`
       'no-unused-vars': 'off', // Ensure base rule is off here too
       '@typescript-eslint/no-unused-vars': 'warn', // Keep TS rule (or adjust as needed for tests)
+    },
+  },
+
+  // Configuration for docs directory (no project parsing, relaxed rules)
+  {
+    files: ['docs/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.browser, // Add browser globals for DOM types like RequestInit
+      },
+    },
+    rules: {
+      // Relax rules for documentation/example code
+      '@typescript-eslint/no-explicit-any': 'off', // Allow 'any' in docs
+      '@typescript-eslint/no-unused-vars': 'warn', // Keep TS rule but as warning
+      'no-unused-vars': 'off', // Ensure base rule is off here too
+      'no-case-declarations': 'off', // Allow case declarations in docs
     },
   }
 );

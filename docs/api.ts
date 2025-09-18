@@ -9,6 +9,23 @@
 // TYPES & INTERFACES
 // ============================================================================
 
+// Define RequestInit type for fetch API compatibility
+interface RequestInit {
+  method?: string;
+  headers?: Record<string, string> | string[][];
+  body?: string | null;
+  mode?: string;
+  credentials?: string;
+  cache?: string;
+  redirect?: string;
+  referrer?: string;
+  referrerPolicy?: string;
+  integrity?: string;
+  keepalive?: boolean;
+  signal?: any;
+  window?: any;
+}
+
 export interface ApiResponse<T = unknown> {
   success?: boolean;
   data?: T;

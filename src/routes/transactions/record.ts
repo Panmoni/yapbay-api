@@ -74,8 +74,12 @@ router.post(
 
       // Extract receiver address from metadata if not provided directly
       if ((!finalToAddress || finalToAddress === '') && metaObj) {
-        finalToAddress = metaObj.buyer || metaObj.to || metaObj.receiver_address || finalToAddress;
-        console.log(`[INFO] Extracted receiver address from metadata: ${finalToAddress}`);
+        const extractedAddress = metaObj.buyer || metaObj.to || metaObj.receiver_address;
+        // Only use extracted address if it looks like a valid address (not just a number or short string)
+        if (extractedAddress && extractedAddress.length > 10) {
+          finalToAddress = extractedAddress;
+          console.log(`[INFO] Extracted receiver address from metadata: ${finalToAddress}`);
+        }
       }
 
       // For FUND_ESCROW specifically, use contract address if to_address is missing

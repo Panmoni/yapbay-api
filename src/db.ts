@@ -192,6 +192,16 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
       type = EXCLUDED.type,
       block_number = COALESCE(EXCLUDED.block_number, transactions.block_number),
       slot = COALESCE(EXCLUDED.slot, transactions.slot),
+      sender_address = CASE 
+        WHEN EXCLUDED.sender_address IS NOT NULL AND EXCLUDED.sender_address != '' 
+        THEN EXCLUDED.sender_address 
+        ELSE transactions.sender_address 
+      END,
+      receiver_or_contract_address = CASE 
+        WHEN EXCLUDED.receiver_or_contract_address IS NOT NULL AND EXCLUDED.receiver_or_contract_address != '' 
+        THEN EXCLUDED.receiver_or_contract_address 
+        ELSE transactions.receiver_or_contract_address 
+      END,
       gas_used = COALESCE(EXCLUDED.gas_used, transactions.gas_used),
       error_message = EXCLUDED.error_message,
       -- Preserve existing related IDs if they were already set

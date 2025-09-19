@@ -1,6 +1,17 @@
 # YapBay API Notes
 
 19 lint problems
+0 build
+
+TEST: verify transaction recording is fully correct for all trade steps
+
+remove divvi_referrals table migrations issue.
+
+## interaction between frontend and listener
+
+might be doing some double duty and getting in the way of each other.
+
+Also many skipped ids in transactions table
 
 ## Event Types
 

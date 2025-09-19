@@ -12,28 +12,22 @@ import { monitorExpiredEscrows } from './services/escrowMonitoringService';
 
 dotenv.config();
 
-// Start appropriate event listener based on environment
+// Start multi-network event listener for both development and production
 // Note: Currently focused on Solana Devnet only, Celo networks preserved for future re-enablement
-if (process.env.NODE_ENV === 'development') {
-  console.log('🚀 Starting multi-network event listener for development...');
-  console.log('📝 Note: Currently focused on Solana Devnet only');
-  console.log('📝 Note: Celo networks are preserved but disabled for future re-enablement');
+console.log('🚀 Starting multi-network event listener...');
+console.log('📝 Note: Currently focused on Solana Devnet only');
+console.log('📝 Note: Celo networks are preserved but disabled for future re-enablement');
 
-  const multiListener = startMultiNetworkEventListener();
-  multiListener
-    .startAllListeners()
-    .then(() => {
-      console.log('✅ Multi-network event listener startup completed');
-    })
-    .catch(error => {
-      console.error('❌ Event listener startup issues:', error);
-      console.log('⚠️  API will continue running without real-time blockchain monitoring');
-    });
-} else {
-  console.log('🚀 Starting single network event listener for production...');
-  console.log('📝 Note: Currently focused on Solana Devnet only');
-  startEventListener();
-}
+const multiListener = startMultiNetworkEventListener();
+multiListener
+  .startAllListeners()
+  .then(() => {
+    console.log('✅ Multi-network event listener startup completed');
+  })
+  .catch(error => {
+    console.error('❌ Event listener startup issues:', error);
+    console.log('⚠️  API will continue running without real-time blockchain monitoring');
+  });
 
 const deadlineSchedule = process.env.DEADLINE_CRON_SCHEDULE;
 if (deadlineSchedule) {

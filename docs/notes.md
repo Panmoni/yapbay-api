@@ -1,9 +1,9 @@
 # YapBay API Notes
 
-19 lint problems
+20 lint problems
 0 build
 
-## interaction between frontend and listener
+## Frontend x Listener
 
 might be doing some double duty and getting in the way of each other.
 
@@ -59,6 +59,8 @@ Add JSDoc documentation - Add comprehensive JSDoc comments to all functions for 
 comprensive doc, update README, etc
 
 ## Ref
+
+### Deploy
 
 ### Clean DB Reset
 

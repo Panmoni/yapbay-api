@@ -69,11 +69,12 @@ router.get(
       logError('Health check DB query failed', dbErr as Error);
     }
 
-    // Get all networks and check their status
+    // Get active networks and check their status
     try {
       const allNetworks = await NetworkService.getAllNetworks();
+      const activeNetworks = allNetworks.filter(network => network.isActive);
 
-      for (const network of allNetworks) {
+      for (const network of activeNetworks) {
         const networkStatus: NetworkStatus = {
           ...network,
           status: 'Unknown',

@@ -139,13 +139,12 @@ export class NetworkService {
   }
 
   /**
-   * Get the default network (Solana Devnet for development, Solana Mainnet for production)
+   * Get the default network (Solana Devnet for both development and production)
+   * TODO: Switch to mainnet when ready for production
    */
   static async getDefaultNetwork(): Promise<NetworkConfig> {
-    const isProduction = process.env.NODE_ENV === 'production';
-    const defaultNetworkName = isProduction
-      ? NetworkType.SOLANA_MAINNET
-      : NetworkType.SOLANA_DEVNET;
+    // Currently using devnet for both environments
+    const defaultNetworkName = NetworkType.SOLANA_DEVNET;
 
     const network = await this.getNetworkByName(defaultNetworkName);
     if (!network) {

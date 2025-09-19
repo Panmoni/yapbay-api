@@ -13,5 +13,5 @@
     "types": ["mocha", "node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "docs", "src/contracts/solana/tests.ts"]
+  "exclude": ["node_modules", "docs", "src/contracts/solana/tests.ts", "src/celo.ts"]
 }

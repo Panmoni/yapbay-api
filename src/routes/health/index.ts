@@ -1,6 +1,5 @@
 import express, { Response } from 'express';
 import { query } from '../../db';
-import { CeloService } from '../../celo';
 import { NetworkService } from '../../services/networkService';
 import { BlockchainServiceFactory } from '../../services/blockchainService';
 import { optionalNetwork } from '../../middleware/networkMiddleware';
@@ -84,22 +83,8 @@ router.get(
         try {
           const blockchainService = BlockchainServiceFactory.create(network);
 
-          if (network.networkFamily === NetworkFamily.EVM) {
-            // EVM network health check
-            const provider = await CeloService.getProviderForNetwork(network.id);
-            const celoNetwork = await provider.getNetwork();
-            networkStatus.status = 'Connected';
-            networkStatus.providerChainId = Number(celoNetwork.chainId);
-            networkStatus.providerName = celoNetwork.name;
-            networkStatus.blockExplorerUrl = blockchainService.getBlockExplorerUrl(
-              '0x0000000000000000000000000000000000000000000000000000000000000000'
-            );
-
-            // Check if chain IDs match
-            if (Number(celoNetwork.chainId) !== network.chainId) {
-              networkStatus.warning = `Chain ID mismatch: expected ${network.chainId}, got ${celoNetwork.chainId}`;
-            }
-          } else if (network.networkFamily === NetworkFamily.SOLANA) {
+          // Only check Solana networks (Celo networks are inactive)
+          if (network.networkFamily === NetworkFamily.SOLANA) {
             // Solana network health check
             const connection = new Connection(network.rpcUrl);
             const _version = await connection.getVersion();
@@ -108,6 +93,10 @@ router.get(
             networkStatus.blockExplorerUrl = blockchainService.getBlockExplorerUrl(
               '1111111111111111111111111111111111111111111111111111111111111111'
             );
+          } else {
+            // Skip health check for inactive networks
+            networkStatus.status = 'Skipped';
+            networkStatus.providerName = 'Inactive';
           }
         } catch (networkErr) {
           networkStatus.status = 'Error';

@@ -4,7 +4,6 @@ import cors from 'cors';
 import routes from './routes';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { startEventListener } from './listener/events';
 import { startMultiNetworkEventListener } from './listener/multiNetworkEvents';
 import cron from 'node-cron';
 import { expireDeadlines } from './services/deadlineService';
@@ -124,7 +123,7 @@ async function startServer(): Promise<void> {
 }
 
 // Start the server
-startServer().catch((error) => {
+startServer().catch(error => {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
 });

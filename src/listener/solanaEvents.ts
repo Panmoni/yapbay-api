@@ -36,6 +36,7 @@ interface SolanaEventData {
   resolutionHash?: Buffer | string;
   defaultingParty?: string;
   sequential?: boolean;
+  object_id?: string;
   sequential_escrow_address?: string;
   deposit_deadline?: number | string;
   timestamp?: number | string;
@@ -334,7 +335,7 @@ export class SolanaEventListener {
         type: this.mapEventToTransactionType(eventName),
         slot: slot,
         sender_address: this.extractSenderAddress(eventData),
-        receiver_or_contract_address: this.programId?.toBase58(),
+        receiver_or_contract_address: this.extractReceiverAddress(eventName, eventData),
         network_family: 'solana',
         related_trade_id: null, // Always null for Solana events since trades are created separately
       });
@@ -547,6 +548,40 @@ export class SolanaEventListener {
     if (eventData.respondingParty) return eventData.respondingParty;
     if (eventData.arbitrator) return eventData.arbitrator;
     return undefined;
+  }
+
+  /**
+   * Extract receiver address from event data based on event type
+   */
+  private extractReceiverAddress(
+    eventName: string,
+    eventData: SolanaEventData
+  ): string | undefined {
+    switch (eventName) {
+      case 'EscrowReleased':
+        // For release, use the destination where funds are actually sent
+        return eventData.destination;
+
+      case 'EscrowCancelled':
+        // For cancellation, seller gets the refund
+        return eventData.seller;
+
+      case 'EscrowCreated':
+      case 'FundsDeposited':
+      case 'FiatMarkedPaid':
+      case 'EscrowBalanceChanged':
+      case 'SequentialAddressUpdated':
+      case 'DisputeOpened':
+      case 'DisputeResponseSubmitted':
+      case 'DisputeResolved':
+      case 'DisputeDefaultJudgment':
+        // For most other events, use the object_id (escrow PDA address)
+        return eventData.object_id;
+
+      default:
+        // Fallback to program ID if event type is unknown
+        return this.programId?.toBase58();
+    }
   }
 
   /**

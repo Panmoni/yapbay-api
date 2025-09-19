@@ -20,6 +20,7 @@ DROP TABLE IF EXISTS offers CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
 DROP TABLE IF EXISTS contract_events CASCADE;
 DROP TABLE IF EXISTS networks CASCADE;
+DROP TABLE IF EXISTS divvi_referrals CASCADE;
 
 -- Drop existing types to ensure clean setup
 DROP TYPE IF EXISTS network_type CASCADE;

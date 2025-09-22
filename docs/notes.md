@@ -1,6 +1,6 @@
 # YapBay API Notes
 
-22 lint problems
+23 lint problems
 0 build
 
 ## Frontend x Listener
@@ -61,6 +61,10 @@ comprensive doc, update README, etc
 ## Ref
 
 ### Deploy
+
+- podman stop yapbay-api-server
+- podman rm yapbay-api-server
+- npm run deploy
 
 ### Clean DB Reset
 

@@ -1,4 +1,4 @@
-import express, { Response } from 'express';
+import express, { Request, Response } from 'express';
 import { query } from '../../db';
 import { NetworkService } from '../../services/networkService';
 import { BlockchainServiceFactory } from '../../services/blockchainService';
@@ -13,12 +13,19 @@ import { Connection } from '@solana/web3.js';
 
 const router = express.Router();
 
-// Health Check Endpoint (Authenticated)
+// Health Check Endpoint (Public)
 router.get(
   '/',
   optionalNetwork,
-  withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    const walletAddress = getWalletAddressFromJWT(req);
+  withErrorHandling(async (req: Request, res: Response): Promise<void> => {
+    // Try to get wallet address if JWT is present, but don't require it
+    let walletAddress: string | undefined;
+    try {
+      walletAddress = getWalletAddressFromJWT(req as AuthenticatedRequest);
+    } catch (err) {
+      // JWT not present or invalid - that's fine for public health check
+      walletAddress = undefined;
+    }
     let dbOk = false;
     interface NetworkStatus extends NetworkConfig {
       status: string;

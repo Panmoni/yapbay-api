@@ -28,18 +28,20 @@ router.use((req, res, next) => {
 // Mount public routes (no authentication required)
 router.use('/', publicRouter);
 
+// Mount health check routes (public)
+router.use('/health', healthRouter);
+
+// Mount offers routes (public)
+router.use('/offers', offersRouter);
+
 // Mount authentication routes
 router.use('/', authRouter);
 
 // Apply JWT middleware to all subsequent routes
 router.use(requireJWT);
 
-// Mount health check routes (authenticated)
-router.use('/health', healthRouter);
-
 // Mount domain-specific routes (all authenticated)
 router.use('/accounts', accountsRouter);
-router.use('/offers', offersRouter);
 router.use('/trades', tradesRouter);
 router.use('/escrows', escrowsRouter);
 

@@ -21,12 +21,12 @@
     "list-active-trades": "ts-node scripts/list-active-trades.ts",
     "build-image": "podman build -f Containerfile -t localhost/yapbay-api:latest .",
     "create-pod": "podman pod exists yapbay-api || podman pod create --name yapbay-api -p 3012:3011",
-    "start-api": "podman container exists yapbay-api-server || podman run -d --name yapbay-api-server --pod yapbay-api --mount type=bind,source=\"$(pwd)/.env.production\",target=/app/.env,ro localhost/yapbay-api:latest",
+    "start-api": "podman container exists yapbay-api-server || podman run -d --name yapbay-api-server --network host --mount type=bind,source=\"$(pwd)/.env.production\",target=/app/.env,ro localhost/yapbay-api:latest",
     "deploy": "npm run build-image && npm run create-pod && npm run start-api",
     "logs": "podman logs -f yapbay-api-server",
     "stop": "podman pod stop yapbay-api",
     "clean": "podman pod stop yapbay-api && podman pod rm -f yapbay-api",
-    "restart": "podman restart yapbay-api-server"
+    "restart": "podman stop yapbay-api-server && podman rm yapbay-api-server && npm run start-api"
   },
   "author": "",
   "license": "MIT",

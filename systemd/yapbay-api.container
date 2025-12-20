@@ -1,0 +1,30 @@
+[Unit]
+Description=Yapbay API Server
+After=network-online.target postgres.service
+Wants=network-online.target
+
+[Container]
+Image=localhost/yapbay-api:latest
+ContainerName=yapbay-api-server
+Pod=yapbay-api.pod
+WorkingDir=/app
+
+# Start command
+Exec=node dist/server.js
+
+# Mount the .env.production file (read-only)
+# Update the path below to match your repository location
+Volume=%h/repos/yapbay-api/.env.production:/app/.env:ro
+
+# Environment Variables
+# POSTGRES_URL should be set in .env.production file to connect to postgres on 127.0.0.1:5432
+# Example: POSTGRES_URL=postgres://user:password@127.0.0.1:5432/yapbay
+Environment=PORT=3011
+Environment=NODE_ENV=production
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
+

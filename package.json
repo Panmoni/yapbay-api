@@ -20,6 +20,7 @@
     "test-events": "ts-node scripts/test-events.ts",
     "list-active-trades": "ts-node scripts/list-active-trades.ts",
     "build-image": "podman build -f Containerfile -t localhost/yapbay-api:latest .",
+    "build-image:yarn": "podman build -f Containerfile.yarn -t localhost/yapbay-api:latest .",
     "create-pod": "podman pod exists yapbay-api || podman pod create --name yapbay-api -p 3012:3011",
     "start-api": "podman container exists yapbay-api-server || podman run -d --name yapbay-api-server --network host --mount type=bind,source=\"$(pwd)/.env.production\",target=/app/.env,ro localhost/yapbay-api:latest",
     "deploy": "npm run build-image && npm run create-pod && npm run start-api",
@@ -32,6 +33,7 @@
   "license": "MIT",
   "description": "API for YapBay Escrow on Celo Alfajores testnet",
   "devDependencies": {
+    "@types/bcrypt": "^5.0.0",
     "@types/chai": "^4.3.19",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.1",
@@ -40,7 +42,6 @@
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.13.10",
     "@types/pg": "^8.11.12",
-    "@types/bcrypt": "^5.0.0",
     "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^8.31.0",
     "@typescript-eslint/parser": "^8.31.0",
@@ -55,8 +56,8 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",
+    "@solana/spl-token": "^0.1.8",
     "@solana/web3.js": "^1.98.0",
-    "@solana/spl-token": "^0.4.13",
     "@types/node-cron": "^3.0.11",
     "axios": "^1.8.4",
     "bcrypt": "^5.1.0",
@@ -76,6 +77,6 @@
     "pg": "^8.14.1"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

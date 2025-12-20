@@ -1,0 +1,6 @@
+[Pod]
+PodName=yapbay-api
+# Use host network to access postgres on 127.0.0.1:5432
+# With host networking, we don't need PublishPort - the container uses host ports directly
+Network=host
+

@@ -117,12 +117,14 @@ router.get(
       logError('Health check failed to retrieve networks', networksErr as Error);
     }
 
+    const apiVersion = await getVersionInfo();
+
     res.json({
       status: 'OK',
       timestamp: new Date().toISOString(),
       userWallet: walletAddress || 'Not Found',
       dbStatus: dbOk ? 'Connected' : 'Error',
-      apiVersion: getVersionInfo(),
+      apiVersion,
       contractVersion: process.env.CONTRACT_VERSION || 'unknown',
       networks: networksStatus,
       database: {

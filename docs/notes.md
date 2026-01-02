@@ -107,3 +107,7 @@ SELECT count(\*) FROM pg_indexes WHERE schemaname = 'public';
 ### Migrations
 
 ./scripts/migrate.js
+
+
+### Helius RPC
+https://dashboard.helius.dev/usage?projectId=13770995-96e0-4ee3-ad4b-4f8d61166fb8

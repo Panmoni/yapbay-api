@@ -7,10 +7,14 @@ This document explains how to use the database migration system for YapBay API.
 Migration files are stored in the `migrations/` directory and follow this naming convention:
 
 ```
-YYYYMMDDHHMMSS_descriptive_name.sql
+NNNN-YYYY-MM-DD-descriptive-name.sql
 ```
 
-For example: `20250429180100_add_missing_columns.sql`
+- **NNNN**: Sequential 4-digit number (0000, 0001, 0002, ...) — determines execution order
+- **YYYY-MM-DD**: Date the migration was created — informational, not the sort key
+- **descriptive-name**: Kebab-case description of the change
+
+For example: `0021-2025-04-29-add-missing-columns.sql`
 
 ## Running Migrations
 
@@ -45,25 +49,27 @@ If you prefer to run migrations manually:
 
 1. Apply the migration:
    ```
-   psql -h localhost -U yapbay -d yapbay -f migrations/YYYYMMDDHHMMSS_name.sql
+   psql -h localhost -U yapbay -d yapbay -f migrations/NNNN-YYYY-MM-DD-name.sql
    ```
 
 2. Record the migration in the database:
    ```sql
    INSERT INTO schema_migrations (version, description, dirty)
-   VALUES ('YYYYMMDDHHMMSS', 'Description of migration', FALSE);
+   VALUES ('NNNN', 'Description of migration', FALSE);
    ```
 
 ## Creating New Migrations
 
-1. Create a new SQL file in the `migrations/` directory with a timestamp prefix:
+1. Find the highest existing sequence number in `migrations/` and increment by 1.
+
+2. Create a new SQL file with the naming convention:
    ```
-   YYYYMMDDHHMMSS_descriptive_name.sql
+   NNNN-YYYY-MM-DD-descriptive-name.sql
    ```
 
-2. Write your SQL statements in the file.
+3. Write your SQL statements in the file.
 
-3. Run the migration using the script or manually.
+4. Run the migration using the script or manually.
 
 ## Schema Migrations Table
 
@@ -78,16 +84,17 @@ CREATE TABLE schema_migrations (
 );
 ```
 
-- `version`: Unique identifier for the migration (timestamp)
+- `version`: Sequential 4-digit number (e.g., "0021")
 - `applied_at`: When the migration was applied
 - `description`: Human-readable description of what the migration does
 - `dirty`: Flag indicating if a migration failed during application
 
 ## Best Practices
 
-1. Always use the timestamp naming convention for migration files
+1. Always use the sequential numbering convention (`NNNN-YYYY-MM-DD-name.sql`)
 2. Make migrations idempotent when possible (can be run multiple times without error)
 3. Use `IF NOT EXISTS` and `IF EXISTS` clauses for safety
 4. Keep migrations small and focused on a single change
 5. Include both "up" (apply) and "down" (rollback) logic when possible
 6. Test migrations in a development environment before applying to production
+7. Never reuse or reassign a sequence number — always increment

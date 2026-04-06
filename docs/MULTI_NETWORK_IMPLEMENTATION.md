@@ -21,7 +21,7 @@ We use the `X-Network-Name` header to specify which network to use for each requ
 
 ## Database Changes
 
-### Migration: `20250131000000_add_multi_network_support.sql`
+### Migration: `0007-2025-01-31-add-multi-network-support.sql`
 
 Creates:
 - `network_type` enum with supported networks
@@ -102,7 +102,7 @@ export class CeloService {
 ## Implementation Steps
 
 ### Phase 1: Database Setup
-1. Run migration: `20250131000000_add_multi_network_support.sql`
+1. Run migration: `0007-2025-01-31-add-multi-network-support.sql`
 2. Verify network configurations are populated
 3. Test database queries with network filtering
 

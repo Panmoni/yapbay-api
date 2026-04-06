@@ -7,7 +7,8 @@
       "Read(//home/george9874/repos/pricing/**)",
       "Read(//home/george9874/repos/pushflip/**)",
       "Bash(mv .npmrc .npmrc.bak)",
-      "Bash(mv .npmrc.bak .npmrc)"
+      "Bash(mv .npmrc.bak .npmrc)",
+      "Read(//home/george9874/repos/bcp-api/**)"
     ],
     "additionalDirectories": [
       "/home/george9874/repos/yapbay",

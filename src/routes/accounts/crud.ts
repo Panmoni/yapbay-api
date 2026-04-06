@@ -1,9 +1,9 @@
-import express, { Response } from 'express';
+import express, { type Response } from 'express';
 import { query } from '../../db';
-import { withErrorHandling } from '../../middleware/errorHandler';
 import { logError } from '../../logger';
+import { type AuthenticatedRequest, restrictToOwner } from '../../middleware';
+import { withErrorHandling } from '../../middleware/errorHandler';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
-import { AuthenticatedRequest, restrictToOwner } from '../../middleware';
 import { validateAccountCreation, validateAccountUpdate } from './validation';
 
 const router = express.Router();
@@ -17,10 +17,10 @@ router.post(
 
     const result = await query(
       'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-      [wallet_address, username, email]
+      [wallet_address, username, email],
     );
     res.status(201).json({ id: result[0].id });
-  })
+  }),
 );
 
 // Get account details for authenticated user
@@ -44,7 +44,7 @@ router.get(
       return;
     }
     res.json(result[0]);
-  })
+  }),
 );
 
 // Retrieve specific account details (limited public view)
@@ -58,7 +58,7 @@ router.get(
       // Fetch only necessary fields initially
       const result = await query(
         'SELECT id, username, wallet_address, email, telegram_username, telegram_id, profile_photo_url, phone_country_code, phone_number, available_from, available_to, timezone, created_at FROM accounts WHERE id = $1',
-        [id]
+        [id],
       );
       if (result.length === 0) {
         res.status(404).json({ error: 'Account not found' });
@@ -94,7 +94,7 @@ router.get(
       logError(`Error fetching account ${id}`, err as Error);
       res.status(500).json({ error: (err as Error).message });
     }
-  })
+  }),
 );
 
 // Update account info (restricted to owner)
@@ -142,7 +142,7 @@ router.put(
           available_to || null,
           timezone || null,
           id,
-        ]
+        ],
       );
       if (result.length === 0) {
         res.status(404).json({ error: 'Account not found' });
@@ -152,7 +152,7 @@ router.put(
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
-  })
+  }),
 );
 
 export default router;

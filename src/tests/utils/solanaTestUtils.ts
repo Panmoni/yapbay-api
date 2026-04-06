@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
 import { NetworkFamily } from '../../types/networks';
 
 /**
@@ -10,72 +10,72 @@ import { NetworkFamily } from '../../types/networks';
  */
 
 export interface TestAccount {
-  id: number;
-  wallet_address: string;
-  username: string;
   email: string;
+  id: number;
+  username: string;
+  wallet_address: string;
 }
 
 export interface TestOffer {
-  id: number;
   creator_account_id: number;
+  fiat_currency: string;
+  id: number;
+  max_amount: number;
+  min_amount: number;
   network_id: number;
   offer_type: 'BUY' | 'SELL';
-  token: string;
-  fiat_currency: string;
-  min_amount: number;
-  max_amount: number;
-  total_available_amount: number;
   rate_adjustment: number;
   terms: string;
+  token: string;
+  total_available_amount: number;
 }
 
 export interface TestTrade {
-  id: number;
-  leg1_offer_id: number;
-  network_id: number;
-  overall_status: string;
-  from_fiat_currency: string;
   destination_fiat_currency: string;
-  leg1_state: string;
-  leg1_seller_account_id: number;
+  from_fiat_currency: string;
+  id: number;
   leg1_buyer_account_id: number;
-  leg1_crypto_token: string;
   leg1_crypto_amount: number;
+  leg1_crypto_token: string;
   leg1_fiat_amount: number;
   leg1_fiat_currency: string;
+  leg1_offer_id: number;
+  leg1_seller_account_id: number;
+  leg1_state: string;
+  network_id: number;
+  overall_status: string;
 }
 
 export interface TestEscrow {
-  id: number;
-  trade_id: number;
-  network_id: number;
-  escrow_address: string;
-  seller_address: string;
-  buyer_address: string;
-  arbitrator_address: string;
-  token_type: string;
   amount: number;
-  state: string;
-  sequential: boolean;
-  network_family: string;
-  program_id: string;
+  arbitrator_address: string;
+  buyer_address: string;
+  escrow_address: string;
   escrow_pda: string;
   escrow_token_account: string;
+  id: number;
+  network_family: string;
+  network_id: number;
+  program_id: string;
+  seller_address: string;
+  sequential: boolean;
+  state: string;
+  token_type: string;
+  trade_id: number;
 }
 
 export interface TestTransaction {
-  id: number;
-  transaction_hash: string;
-  status: string;
-  type: string;
   block_number?: number;
-  sender_address?: string;
-  receiver_or_contract_address?: string;
-  gas_used?: number;
   error_message?: string;
-  related_trade_id?: number;
+  gas_used?: number;
+  id: number;
+  receiver_or_contract_address?: string;
   related_escrow_db_id?: number;
+  related_trade_id?: number;
+  sender_address?: string;
+  status: string;
+  transaction_hash: string;
+  type: string;
 }
 
 /**
@@ -105,14 +105,14 @@ export function generateSolanaSignature(timestamp?: number, index?: number): str
 /**
  * Generate a unique username for testing
  */
-export function generateTestUsername(prefix: string = 'testuser'): string {
+export function generateTestUsername(prefix = 'testuser'): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 }
 
 /**
  * Generate a unique email for testing
  */
-export function generateTestEmail(prefix: string = 'test'): string {
+export function generateTestEmail(prefix = 'test'): string {
   const randomSuffix = Math.random().toString(36).substring(2, 8);
   return `${prefix}_${Date.now()}_${randomSuffix}@example.com`;
 }
@@ -126,7 +126,7 @@ export async function createTestAccount(
     wallet_address?: string;
     username?: string;
     email?: string;
-  } = {}
+  } = {},
 ): Promise<TestAccount> {
   const wallet_address = options.wallet_address || generateSolanaAddress();
   const username = options.username || generateTestUsername();
@@ -134,7 +134,7 @@ export async function createTestAccount(
 
   const result = await client.query(
     'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING *',
-    [wallet_address, username, email]
+    [wallet_address, username, email],
   );
 
   return result.rows[0];
@@ -156,7 +156,7 @@ export async function createTestOffer(
     total_available_amount?: number;
     rate_adjustment?: number;
     terms?: string;
-  }
+  },
 ): Promise<TestOffer> {
   const {
     creator_account_id,
@@ -187,7 +187,7 @@ export async function createTestOffer(
       total_available_amount,
       rate_adjustment,
       terms,
-    ]
+    ],
   );
 
   return result.rows[0];
@@ -211,7 +211,7 @@ export async function createTestTrade(
     leg1_crypto_amount?: number;
     leg1_fiat_amount?: number;
     leg1_fiat_currency?: string;
-  }
+  },
 ): Promise<TestTrade> {
   const {
     leg1_offer_id,
@@ -247,7 +247,7 @@ export async function createTestTrade(
       leg1_crypto_amount,
       leg1_fiat_amount,
       leg1_fiat_currency,
-    ]
+    ],
   );
 
   return result.rows[0];
@@ -273,7 +273,7 @@ export async function createTestEscrow(
     program_id?: string;
     escrow_pda?: string;
     escrow_token_account?: string;
-  }
+  },
 ): Promise<TestEscrow> {
   const {
     trade_id,
@@ -313,7 +313,7 @@ export async function createTestEscrow(
       program_id,
       escrow_pda,
       escrow_token_account,
-    ]
+    ],
   );
 
   return result.rows[0];
@@ -336,7 +336,7 @@ export async function createTestTransaction(
     error_message?: string;
     related_trade_id?: number;
     related_escrow_db_id?: number;
-  }
+  },
 ): Promise<TestTransaction> {
   const {
     network_id = 1, // Add default network_id
@@ -369,7 +369,7 @@ export async function createTestTransaction(
       error_message,
       related_trade_id,
       related_escrow_db_id,
-    ]
+    ],
   );
 
   return result.rows[0];
@@ -387,7 +387,7 @@ export async function createCompleteTestScenario(
     offer?: Partial<TestOffer>;
     trade?: Partial<TestTrade>;
     escrow?: Partial<TestEscrow>;
-  } = {}
+  } = {},
 ): Promise<{
   sellerAccount: TestAccount;
   buyerAccount: TestAccount;
@@ -452,7 +452,7 @@ export async function cleanupTestData(
     tradeIds?: number[];
     escrowIds?: number[];
     transactionIds?: number[];
-  }
+  },
 ): Promise<void> {
   const { accountIds, offerIds, tradeIds, escrowIds, transactionIds } = ids;
 
@@ -511,17 +511,13 @@ export async function cleanupTestDataByNetwork(client: Pool, networkId: number):
 /**
  * Mock Solana network configuration for testing
  */
-export function createMockSolanaNetwork(
-  id: number,
-  name: string = 'solana-devnet',
-  isActive: boolean = true
-): any {
+export function createMockSolanaNetwork(id: number, name = 'solana-devnet', isActive = true): any {
   return {
     id,
     name,
     chainId: id === 1 ? 103 : 101, // Mock chain IDs
-    rpcUrl: `https://api.devnet.solana.com`,
-    wsUrl: `wss://api.devnet.solana.com`,
+    rpcUrl: 'https://api.devnet.solana.com',
+    wsUrl: 'wss://api.devnet.solana.com',
     contractAddress: null,
     programId: '4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x',
     usdcMint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
@@ -553,7 +549,7 @@ export function isValidTestSignature(signature: string): boolean {
  */
 export function createMockSolanaTransactionResponse(
   signature: string = generateSolanaSignature(),
-  slot: number = Math.floor(Date.now() / 1000)
+  slot: number = Math.floor(Date.now() / 1000),
 ): any {
   return {
     signature,
@@ -563,8 +559,8 @@ export function createMockSolanaTransactionResponse(
     err: null,
     meta: {
       fee: 5000,
-      preBalances: [1000000000, 0],
-      postBalances: [999995000, 5000],
+      preBalances: [1_000_000_000, 0],
+      postBalances: [999_995_000, 5000],
       innerInstructions: [],
       logMessages: [
         'Program 11111111111111111111111111111112 invoke [1]',
@@ -578,8 +574,8 @@ export function createMockSolanaTransactionResponse(
  * Generate a mock Solana account info response
  */
 export function createMockSolanaAccountInfo(
-  address: string = generateSolanaAddress(),
-  lamports: number = 1000000000
+  _address: string = generateSolanaAddress(),
+  lamports = 1_000_000_000,
 ): any {
   return {
     executable: false,

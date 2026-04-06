@@ -1,8 +1,8 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import { query } from '../../db';
-import { requireNetwork } from '../../middleware/networkMiddleware';
-import { withErrorHandling } from '../../middleware/errorHandler';
 import { logError } from '../../logger';
+import { withErrorHandling } from '../../middleware/errorHandler';
+import { requireNetwork } from '../../middleware/networkMiddleware';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { sendNetworkResponse } from '../../utils/routeHelpers';
 
@@ -36,7 +36,7 @@ router.get(
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
-  })
+  }),
 );
 
 // List offers (publicly accessible but can filter by owner if authenticated)
@@ -51,11 +51,11 @@ router.get(
       const params: (string | number)[] = [networkId];
 
       if (type) {
-        sql += ' AND offer_type = $' + (params.length + 1);
+        sql += ` AND offer_type = $${params.length + 1}`;
         params.push(type as string);
       }
       if (token) {
-        sql += ' AND token = $' + (params.length + 1);
+        sql += ` AND token = $${params.length + 1}`;
         params.push(token as string);
       }
 
@@ -71,7 +71,7 @@ router.get(
         params.push(walletAddress);
       } else if (owner === 'me' && !walletAddress) {
         console.warn(
-          '[GET /offers] owner=me filter requested but no wallet address found in token.'
+          '[GET /offers] owner=me filter requested but no wallet address found in token.',
         );
       }
 
@@ -81,7 +81,7 @@ router.get(
       logError('[GET /offers] Error fetching offers', err as Error);
       res.status(500).json({ error: (err as Error).message });
     }
-  })
+  }),
 );
 
 export default router;

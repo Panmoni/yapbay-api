@@ -1,6 +1,6 @@
 import express from 'express';
-import recordRouter from './record';
 import lookupRouter from './lookup';
+import recordRouter from './record';
 
 const router = express.Router();
 

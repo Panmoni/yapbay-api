@@ -1,13 +1,13 @@
 import express from 'express';
-import operationsRouter from './operations';
 import blockchainRouter from './blockchain';
+import operationsRouter from './operations';
 
 const router = express.Router();
 
 // Mount operations routes
 router.use('/', operationsRouter);
 
-// Mount blockchain routes  
+// Mount blockchain routes
 router.use('/', blockchainRouter);
 
 export default router;

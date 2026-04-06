@@ -1,10 +1,10 @@
-import { Connection, PublicKey, ParsedTransactionWithMeta } from '@solana/web3.js';
-import { NetworkConfig } from '../types/networks';
-import { query, recordTransaction, TransactionType } from '../db';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { BorshCoder, EventParser } from '@coral-xyz/anchor';
+import { Connection, type ParsedTransactionWithMeta, PublicKey } from '@solana/web3.js';
+import { query, recordTransaction, type TransactionType } from '../db';
 import { SolanaService } from '../services/solanaService';
-import { EventParser, BorshCoder } from '@coral-xyz/anchor';
-import fs from 'fs';
-import path from 'path';
+import type { NetworkConfig } from '../types/networks';
 
 const logFilePath = path.join(process.cwd(), 'solana-events.log');
 const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
@@ -20,30 +20,30 @@ export function closeSolanaLogStream() {
 
 // Type definitions for Solana event data
 interface SolanaEventData {
-  seller?: string;
-  buyer?: string;
-  depositor?: string;
-  releaser?: string;
-  canceller?: string;
-  disputingParty?: string;
-  respondingParty?: string;
-  tradeId?: number | string;
-  trade_id?: number | string;
-  escrowId?: number | string;
-  escrow_id?: number | string;
   amount?: number | string;
-  fee?: number | string;
   arbitrator?: string;
-  destination?: string;
+  buyer?: string;
+  canceller?: string;
   decision?: boolean;
-  winner?: string;
-  resolutionHash?: Buffer | string;
   defaultingParty?: string;
-  sequential?: boolean;
-  object_id?: string;
-  sequential_escrow_address?: string;
   deposit_deadline?: number | string;
+  depositor?: string;
+  destination?: string;
+  disputingParty?: string;
+  escrow_id?: number | string;
+  escrowId?: number | string;
+  fee?: number | string;
+  object_id?: string;
+  releaser?: string;
+  resolutionHash?: Buffer | string;
+  respondingParty?: string;
+  seller?: string;
+  sequential?: boolean;
+  sequential_escrow_address?: string;
   timestamp?: number | string;
+  trade_id?: number | string;
+  tradeId?: number | string;
+  winner?: string;
   [key: string]: unknown;
 }
 
@@ -63,15 +63,15 @@ const EVENT_DISCRIMINATORS = {
 };
 
 export class SolanaEventListener {
-  private network: NetworkConfig;
-  private connection: Connection;
+  private readonly network: NetworkConfig;
+  private readonly connection: Connection;
   private isRunning = false;
-  private programId?: PublicKey;
+  private readonly programId?: PublicKey;
   private eventParser?: EventParser;
   private borshCoder?: BorshCoder;
   private subscriptionId: number | null = null;
-  private processedEvents: Set<string> = new Set();
-  private eventLogIndexTracker: Map<string, number> = new Map(); // Track log_index per transaction
+  private readonly processedEvents: Set<string> = new Set();
+  private readonly eventLogIndexTracker: Map<string, number> = new Map(); // Track log_index per transaction
 
   constructor(network: NetworkConfig) {
     this.network = network;
@@ -96,7 +96,7 @@ export class SolanaEventListener {
       // Validate network configuration
       if (!this.network.programId) {
         console.log(
-          `⚠️  No program ID configured for ${this.network.name} - event monitoring disabled`
+          `⚠️  No program ID configured for ${this.network.name} - event monitoring disabled`,
         );
         this.isRunning = true; // Mark as running but not actively monitoring
         return;
@@ -109,7 +109,7 @@ export class SolanaEventListener {
           console.log(
             `⚠️  Program ${this.programId!.toBase58()} not found on ${
               this.network.name
-            } - event monitoring disabled`
+            } - event monitoring disabled`,
           );
           this.isRunning = true; // Mark as running but not actively monitoring
           return;
@@ -119,7 +119,7 @@ export class SolanaEventListener {
         console.log(
           `⚠️  Failed to validate program ${this.programId!.toBase58()} on ${
             this.network.name
-          }: ${error}`
+          }: ${error}`,
         );
         this.isRunning = true; // Mark as running but not actively monitoring
         return;
@@ -144,11 +144,12 @@ export class SolanaEventListener {
               slot: context.slot,
               transaction: {},
               meta: { logMessages: logs.logs },
+              // biome-ignore lint/suspicious/noExplicitAny: Solana log subscription callback shape doesn't match full transaction type
             } as any,
-            logs.signature
+            logs.signature,
           );
         },
-        'confirmed'
+        'confirmed',
       );
 
       this.isRunning = true;
@@ -188,9 +189,11 @@ export class SolanaEventListener {
    */
   private async parseTransactionLogs(
     tx: ParsedTransactionWithMeta,
-    signature: string
+    signature: string,
   ): Promise<void> {
-    if (!tx.meta || !tx.meta.logMessages) return;
+    if (!tx.meta?.logMessages) {
+      return;
+    }
 
     const logs = tx.meta.logMessages;
     const slot = tx.slot;
@@ -200,7 +203,7 @@ export class SolanaEventListener {
     // Create unique key for this transaction to prevent duplicate processing
     const eventKey = `${signature}-${slot}`;
     if (this.processedEvents.has(eventKey)) {
-      console.log(`⚠️  Transaction already processed, skipping`);
+      console.log('⚠️  Transaction already processed, skipping');
       return;
     }
 
@@ -247,7 +250,9 @@ export class SolanaEventListener {
     if (this.eventLogIndexTracker.size > 1000) {
       const entries = Array.from(this.eventLogIndexTracker.entries());
       const toDelete = entries.slice(0, entries.length - 1000);
-      toDelete.forEach(([signature]) => this.eventLogIndexTracker.delete(signature));
+      toDelete.forEach(([signature]) => {
+        this.eventLogIndexTracker.delete(signature);
+      });
     }
   }
 
@@ -257,17 +262,19 @@ export class SolanaEventListener {
   private async tryBorshEventParsing(
     log: string,
     signature: string,
-    slot: number
+    slot: number,
   ): Promise<boolean> {
     try {
       const base64Data = log.split('Program data: ')[1];
-      if (!base64Data) return false;
+      if (!base64Data) {
+        return false;
+      }
 
       const eventData = Buffer.from(base64Data, 'base64');
       console.log(
         `🔍 Borsh parsing event data (${eventData.length} bytes): ${eventData
           .toString('hex')
-          .substring(0, 32)}...`
+          .substring(0, 32)}...`,
       );
 
       // Check for all event discriminators
@@ -319,7 +326,7 @@ export class SolanaEventListener {
     eventName: string,
     eventData: SolanaEventData,
     signature: string,
-    slot: number
+    slot: number,
   ): Promise<void> {
     try {
       console.log(`🎯 Processing ${eventName} event for ${this.network.name}`);
@@ -327,17 +334,17 @@ export class SolanaEventListener {
       console.log(`🎰 Slot: ${slot}`);
 
       // Extract trade_id from event data if available
-      console.log(`🔍 Raw event data structure:`, Object.keys(eventData));
+      console.log('🔍 Raw event data structure:', Object.keys(eventData));
       const tradeIdValue = this.extractTradeId(eventData);
 
       // Record transaction and capture the returned transaction ID
       // Note: related_trade_id should be null if the trade doesn't exist in our database
       const transactionId = await recordTransaction({
         network_id: this.network.id,
-        signature: signature,
+        signature,
         status: 'SUCCESS',
         type: this.mapEventToTransactionType(eventName),
-        slot: slot,
+        slot,
         sender_address: this.extractSenderAddress(eventData),
         receiver_or_contract_address: this.extractReceiverAddress(eventName, eventData),
         network_family: 'solana',
@@ -352,7 +359,7 @@ export class SolanaEventListener {
       this.eventLogIndexTracker.set(signature, currentLogIndex + 1);
 
       console.log(
-        `📝 Assigning log_index ${currentLogIndex} to ${eventName} event for transaction ${signature}`
+        `📝 Assigning log_index ${currentLogIndex} to ${eventName} event for transaction ${signature}`,
       );
 
       // Record contract event with all required fields
@@ -372,14 +379,14 @@ export class SolanaEventListener {
           serializedArgs,
           tradeIdValue,
           transactionId,
-        ]
+        ],
       );
 
       console.log(`✅ Recorded ${eventName} event to database`);
       console.log(`📊 Event data: ${JSON.stringify(serializedArgs, null, 2)}`);
       console.log(`🔍 Extracted trade ID: ${tradeIdValue}`);
       fileLog(
-        `Recorded ${eventName} event for ${this.network.name}: ${signature}, trade_id: ${tradeIdValue}`
+        `Recorded ${eventName} event for ${this.network.name}: ${signature}, trade_id: ${tradeIdValue}`,
       );
 
       // Process event-specific logic
@@ -398,7 +405,7 @@ export class SolanaEventListener {
     eventData: SolanaEventData,
     tradeIdValue: number | null,
     signature?: string,
-    slot?: number
+    slot?: number,
   ): Promise<void> {
     switch (eventName) {
       case 'EscrowCreated':
@@ -416,19 +423,19 @@ export class SolanaEventListener {
    * then uses the escrow ID from that API call to update the trades table
    */
   private async handleEscrowCreated(
-    eventData: SolanaEventData,
+    _eventData: SolanaEventData,
     tradeIdValue: number | null,
     _signature?: string,
-    _slot?: number
+    _slot?: number,
   ): Promise<void> {
     if (!tradeIdValue) {
-      console.log(`⚠️  EscrowCreated: No trade ID found, skipping trades table update`);
+      console.log('⚠️  EscrowCreated: No trade ID found, skipping trades table update');
       return;
     }
 
     try {
       console.log(
-        `🔧 EscrowCreated: Waiting for /escrows/record API call to complete for trade_id=${tradeIdValue}`
+        `🔧 EscrowCreated: Waiting for /escrows/record API call to complete for trade_id=${tradeIdValue}`,
       );
 
       // Wait for the escrow record to be created by the /escrows/record API call
@@ -441,7 +448,7 @@ export class SolanaEventListener {
         // Look for the escrow record that was created for this specific trade
         const escrowResult = await query(
           'SELECT onchain_escrow_id, escrow_address FROM escrows WHERE trade_id = $1 AND network_id = $2',
-          [tradeIdValue, this.network.id]
+          [tradeIdValue, this.network.id],
         );
 
         if (escrowResult.length > 0) {
@@ -451,18 +458,18 @@ export class SolanaEventListener {
           const escrowAddress = escrowRecord.escrow_address;
 
           console.log(
-            `🔍 Found escrow record: escrow_id=${escrowId}, escrow_address=${escrowAddress}`
+            `🔍 Found escrow record: escrow_id=${escrowId}, escrow_address=${escrowAddress}`,
           );
 
           // Get the trade to check if it exists and determine which leg to update
           const tradeResult = await query(
             'SELECT id, leg1_escrow_onchain_id, leg2_escrow_onchain_id FROM trades WHERE id = $1 AND network_id = $2',
-            [tradeIdValue, this.network.id]
+            [tradeIdValue, this.network.id],
           );
 
           if (tradeResult.length === 0) {
             console.log(
-              `⚠️  EscrowCreated: Trade ${tradeIdValue} not found for network ${this.network.id}`
+              `⚠️  EscrowCreated: Trade ${tradeIdValue} not found for network ${this.network.id}`,
             );
             return;
           }
@@ -470,39 +477,38 @@ export class SolanaEventListener {
           const trade = tradeResult[0];
 
           // Update leg1 if it doesn't have an escrow_onchain_id yet
-          if (!trade.leg1_escrow_onchain_id) {
-            // Update the trades table with both escrow_id and escrow_address
-            await query(
-              'UPDATE trades SET leg1_escrow_onchain_id = $1, leg1_escrow_address = $2 WHERE id = $3 AND network_id = $4',
-              [escrowId, escrowAddress, tradeIdValue, this.network.id]
-            );
+          if (trade.leg1_escrow_onchain_id) {
             console.log(
-              `✅ EscrowCreated: Updated trade ${tradeIdValue} leg1_escrow_onchain_id=${escrowId} leg1_escrow_address=${escrowAddress}`
-            );
-            fileLog(
-              `EscrowCreated: Updated trade ${tradeIdValue} leg1_escrow_onchain_id=${escrowId} leg1_escrow_address=${escrowAddress}`
-            );
-            return;
-          } else {
-            console.log(
-              `⚠️  EscrowCreated: Trade ${tradeIdValue} already has leg1_escrow_onchain_id=${trade.leg1_escrow_onchain_id}, skipping update`
+              `⚠️  EscrowCreated: Trade ${tradeIdValue} already has leg1_escrow_onchain_id=${trade.leg1_escrow_onchain_id}, skipping update`,
             );
             return;
           }
+          // Update the trades table with both escrow_id and escrow_address
+          await query(
+            'UPDATE trades SET leg1_escrow_onchain_id = $1, leg1_escrow_address = $2 WHERE id = $3 AND network_id = $4',
+            [escrowId, escrowAddress, tradeIdValue, this.network.id],
+          );
+          console.log(
+            `✅ EscrowCreated: Updated trade ${tradeIdValue} leg1_escrow_onchain_id=${escrowId} leg1_escrow_address=${escrowAddress}`,
+          );
+          fileLog(
+            `EscrowCreated: Updated trade ${tradeIdValue} leg1_escrow_onchain_id=${escrowId} leg1_escrow_address=${escrowAddress}`,
+          );
+          return;
         }
 
         // No escrow record found yet, wait and retry
         retries++;
         if (retries < maxRetries) {
           console.log(
-            `⏳ EscrowCreated: No escrow record found yet, retrying in ${retryDelay}ms (attempt ${retries}/${maxRetries})`
+            `⏳ EscrowCreated: No escrow record found yet, retrying in ${retryDelay}ms (attempt ${retries}/${maxRetries})`,
           );
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
         }
       }
 
       console.log(
-        `⚠️  EscrowCreated: No escrow record found after ${maxRetries} retries, skipping trades update`
+        `⚠️  EscrowCreated: No escrow record found after ${maxRetries} retries, skipping trades update`,
       );
     } catch (error) {
       console.error(`❌ EscrowCreated: Error updating trades table: ${error}`);
@@ -543,14 +549,30 @@ export class SolanaEventListener {
    */
   private extractSenderAddress(eventData: SolanaEventData): string | undefined {
     // Try to extract sender from common event fields
-    if (eventData.seller) return eventData.seller;
-    if (eventData.buyer) return eventData.buyer;
-    if (eventData.depositor) return eventData.depositor;
-    if (eventData.releaser) return eventData.releaser;
-    if (eventData.canceller) return eventData.canceller;
-    if (eventData.disputingParty) return eventData.disputingParty;
-    if (eventData.respondingParty) return eventData.respondingParty;
-    if (eventData.arbitrator) return eventData.arbitrator;
+    if (eventData.seller) {
+      return eventData.seller;
+    }
+    if (eventData.buyer) {
+      return eventData.buyer;
+    }
+    if (eventData.depositor) {
+      return eventData.depositor;
+    }
+    if (eventData.releaser) {
+      return eventData.releaser;
+    }
+    if (eventData.canceller) {
+      return eventData.canceller;
+    }
+    if (eventData.disputingParty) {
+      return eventData.disputingParty;
+    }
+    if (eventData.respondingParty) {
+      return eventData.respondingParty;
+    }
+    if (eventData.arbitrator) {
+      return eventData.arbitrator;
+    }
     return undefined;
   }
 
@@ -559,7 +581,7 @@ export class SolanaEventListener {
    */
   private extractReceiverAddress(
     eventName: string,
-    eventData: SolanaEventData
+    eventData: SolanaEventData,
   ): string | undefined {
     switch (eventName) {
       case 'EscrowReleased':
@@ -630,15 +652,14 @@ export class SolanaEventListener {
               console.log(`🔍 Extracted trade ID from offset 48: ${tradeIdNum}`);
 
               // Validate that the trade ID is reasonable
-              if (tradeIdNum > 0 && tradeIdNum < 2147483647) {
+              if (tradeIdNum > 0 && tradeIdNum < 2_147_483_647) {
                 console.log(`✅ Found valid trade ID: ${tradeIdNum}`);
                 return tradeIdNum;
-              } else {
-                console.log(`⚠️  Trade ID ${tradeIdNum} is out of range for PostgreSQL integer`);
               }
+              console.log(`⚠️  Trade ID ${tradeIdNum} is out of range for PostgreSQL integer`);
             }
 
-            console.log(`⚠️  No reasonable trade ID found in binary data`);
+            console.log('⚠️  No reasonable trade ID found in binary data');
             return null;
           } catch (rawError) {
             console.log(`⚠️  Failed to extract trade ID from raw data: ${rawError}`);
@@ -675,8 +696,8 @@ export class SolanaEventListener {
             } else if (typeof value === 'object' && value.constructor === Object) {
               serialized[key] = this.serializeEventData(value as SolanaEventData);
             } else if (Array.isArray(value)) {
-              serialized[key] = value.map(item =>
-                typeof item === 'object' ? this.serializeEventData(item as SolanaEventData) : item
+              serialized[key] = value.map((item) =>
+                typeof item === 'object' ? this.serializeEventData(item as SolanaEventData) : item,
               );
             } else {
               serialized[key] = value;

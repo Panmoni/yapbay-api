@@ -1,7 +1,7 @@
 import express from 'express';
-import tradesRouter from './trades';
 import deadlinesRouter from './deadlines';
 import escrowsRouter from './escrows';
+import tradesRouter from './trades';
 
 const router = express.Router();
 

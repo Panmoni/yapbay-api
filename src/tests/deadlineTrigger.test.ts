@@ -2,7 +2,7 @@ import { expect } from 'chai';
 import pool from '../db';
 import { expireDeadlines, expireDeadlinesForNetwork } from '../services/deadlineService';
 import { NetworkService } from '../services/networkService';
-import { NetworkConfig } from '../types/networks';
+import type { NetworkConfig } from '../types/networks';
 
 describe.skip('enforce_trade_deadlines trigger (Celo - DISABLED)', () => {
   // DISABLED: Celo networks are currently inactive, focusing on Solana
@@ -42,14 +42,14 @@ describe.skip('enforce_trade_deadlines trigger (Celo - DISABLED)', () => {
   });
 
   it('blocks leg1_state update when leg1_escrow_deposit_deadline has passed', async () => {
-    const past = new Date(Date.now() - 3600_000).toISOString();
+    const past = new Date(Date.now() - 3_600_000).toISOString();
     const res = await client.query(
       `INSERT INTO trades(
          overall_status, from_fiat_currency, destination_fiat_currency,
          leg1_state, leg1_crypto_amount, leg1_fiat_currency,
          leg1_escrow_deposit_deadline, network_id
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past, defaultNetwork.id]
+      ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past, defaultNetwork.id],
     );
     const id = res.rows[0].id;
     let blocked = false;
@@ -59,11 +59,13 @@ describe.skip('enforce_trade_deadlines trigger (Celo - DISABLED)', () => {
       blocked = true;
       expect((err as Error).message).to.match(/Leg1 escrow deposit deadline/);
     }
-    if (!blocked) throw new Error('Trigger did not block overdue leg1_state update');
+    if (!blocked) {
+      throw new Error('Trigger did not block overdue leg1_state update');
+    }
   });
 
   it('auto-cancels a trade with expired deadline in CREATED state', async () => {
-    const past = new Date(Date.now() - 3600_000).toISOString();
+    const past = new Date(Date.now() - 3_600_000).toISOString();
 
     // This test needs to run outside of a transaction to allow the deadline service to work
     await client.query('ROLLBACK'); // End current transaction
@@ -74,7 +76,7 @@ describe.skip('enforce_trade_deadlines trigger (Celo - DISABLED)', () => {
          leg1_state, leg1_crypto_amount, leg1_fiat_currency,
          leg1_escrow_deposit_deadline, network_id
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past, defaultNetwork.id]
+      ['IN_PROGRESS', 'USD', 'USD', 'CREATED', 1.0, 'USD', past, defaultNetwork.id],
     );
     const id = res.rows[0].id;
 
@@ -85,7 +87,7 @@ describe.skip('enforce_trade_deadlines trigger (Celo - DISABLED)', () => {
       // Check if the trade was cancelled
       const result = await client.query(
         'SELECT overall_status, leg1_state FROM trades WHERE id = $1',
-        [id]
+        [id],
       );
       expect(result.rows[0].overall_status).to.equal('CANCELLED');
       expect(result.rows[0].leg1_state).to.equal('CANCELLED');
@@ -98,14 +100,14 @@ describe.skip('enforce_trade_deadlines trigger (Celo - DISABLED)', () => {
   });
 
   it('does not auto-cancel a trade in FIAT_PAID state despite expired deadline', async () => {
-    const past = new Date(Date.now() - 3600_000).toISOString();
+    const past = new Date(Date.now() - 3_600_000).toISOString();
     const res = await client.query(
       `INSERT INTO trades(
          overall_status, from_fiat_currency, destination_fiat_currency,
          leg1_state, leg1_crypto_amount, leg1_fiat_currency,
          leg1_fiat_payment_deadline, network_id
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      ['IN_PROGRESS', 'USD', 'USD', 'FIAT_PAID', 1.0, 'USD', past, defaultNetwork.id]
+      ['IN_PROGRESS', 'USD', 'USD', 'FIAT_PAID', 1.0, 'USD', past, defaultNetwork.id],
     );
     const id = res.rows[0].id;
 
@@ -115,7 +117,7 @@ describe.skip('enforce_trade_deadlines trigger (Celo - DISABLED)', () => {
     // Check that the trade was NOT cancelled
     const result = await client.query(
       'SELECT overall_status, leg1_state FROM trades WHERE id = $1',
-      [id]
+      [id],
     );
     expect(result.rows[0].overall_status).to.equal('IN_PROGRESS');
     expect(result.rows[0].leg1_state).to.equal('FIAT_PAID');

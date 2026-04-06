@@ -1,10 +1,10 @@
-import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../../middleware/auth';
+import type { NextFunction, Response } from 'express';
+import type { AuthenticatedRequest } from '../../middleware/auth';
 
 export const validateTransactionRecord = (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void => {
   const {
     trade_id,
@@ -19,7 +19,7 @@ export const validateTransactionRecord = (
   const validationErrors: { field: string; message: string }[] = [];
 
   // Validate required fields - accept either transaction_hash (EVM) or signature (Solana)
-  if (!transaction_hash && !signature) {
+  if (!(transaction_hash || signature)) {
     validationErrors.push({
       field: 'transaction_hash_or_signature',
       message: 'Either transaction_hash or signature is required',

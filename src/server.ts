@@ -1,14 +1,17 @@
-import express from 'express';
-import * as dotenv from 'dotenv';
 import cors from 'cors';
-import routes from './routes';
+import * as dotenv from 'dotenv';
+import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { startMultiNetworkEventListener, MultiNetworkEventListener } from './listener/multiNetworkEvents';
 import cron from 'node-cron';
+import { Pool } from 'pg';
+import {
+  type MultiNetworkEventListener,
+  startMultiNetworkEventListener,
+} from './listener/multiNetworkEvents';
+import routes from './routes';
 import { expireDeadlines } from './services/deadlineService';
 import { monitorExpiredEscrows } from './services/escrowMonitoringService';
-import { Pool } from 'pg';
 
 dotenv.config();
 
@@ -69,7 +72,7 @@ async function startServer(): Promise<void> {
       listenerHealthy = true;
       console.log('✅ Multi-network event listener startup completed');
     })
-    .catch(error => {
+    .catch((error) => {
       listenerHealthy = false;
       console.error('❌ Event listener startup issues:', error);
       console.log('⚠️  API will continue running without real-time blockchain monitoring');
@@ -82,7 +85,7 @@ async function startServer(): Promise<void> {
         console.log(`[Scheduler] Running expireDeadlines: ${new Date().toISOString()}`);
         await expireDeadlines();
       } catch (e) {
-        console.error(`[Scheduler] expireDeadlines error:`, e);
+        console.error('[Scheduler] expireDeadlines error:', e);
       }
     });
     console.log(`[Scheduler] Scheduled auto-cancel job: ${deadlineSchedule}`);
@@ -98,13 +101,13 @@ async function startServer(): Promise<void> {
         console.log(`[Scheduler] Running escrow monitoring: ${new Date().toISOString()}`);
         await monitorExpiredEscrows();
       } catch (e) {
-        console.error(`[Scheduler] escrow monitoring error:`, e);
+        console.error('[Scheduler] escrow monitoring error:', e);
       }
     });
     console.log(`[Scheduler] Scheduled escrow monitoring job: ${escrowMonitorSchedule}`);
   } else {
     console.log(
-      `[Scheduler] Escrow monitoring disabled (ESCROW_MONITOR_ENABLED=${process.env.ESCROW_MONITOR_ENABLED})`
+      `[Scheduler] Escrow monitoring disabled (ESCROW_MONITOR_ENABLED=${process.env.ESCROW_MONITOR_ENABLED})`,
     );
   }
 
@@ -113,7 +116,7 @@ async function startServer(): Promise<void> {
   // CORS Configuration — environment-aware
   const isProduction = process.env.NODE_ENV === 'production';
   const corsOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+    ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
     : isProduction
       ? ['https://app.yapbay.com']
       : ['https://app.yapbay.com', 'http://localhost:5173', 'http://localhost:5174'];
@@ -139,7 +142,7 @@ async function startServer(): Promise<void> {
   app.use('/', routes);
 
   // Health check endpoint
-  app.get('/health', (req, res) => {
+  app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
@@ -152,7 +155,7 @@ async function startServer(): Promise<void> {
 }
 
 // Start the server
-startServer().catch(error => {
+startServer().catch((error) => {
   console.error('❌ Failed to start server:', error);
   process.exit(1);
 });

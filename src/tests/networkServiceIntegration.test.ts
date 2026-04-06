@@ -1,12 +1,11 @@
 import 'dotenv/config';
 import { expect } from 'chai';
-import { NetworkService } from '../services/networkService';
-import { BlockchainServiceFactory } from '../services/blockchainService';
-import { NetworkFamily } from '../types/networks';
-import { Connection } from '@solana/web3.js';
 import { Pool } from 'pg';
+import { BlockchainServiceFactory } from '../services/blockchainService';
+import { NetworkService } from '../services/networkService';
+import { NetworkFamily } from '../types/networks';
 
-describe('Network Service Integration Tests', function () {
+describe('Network Service Integration Tests', () => {
   let client: Pool;
   let allNetworks: any[];
   let solanaDevnetNetwork: any;
@@ -21,10 +20,10 @@ describe('Network Service Integration Tests', function () {
 
       // Get all networks
       allNetworks = await NetworkService.getAllNetworks();
-      solanaDevnetNetwork = allNetworks.find(n => n.name === 'solana-devnet');
-      solanaMainnetNetwork = allNetworks.find(n => n.name === 'solana-mainnet');
+      solanaDevnetNetwork = allNetworks.find((n) => n.name === 'solana-devnet');
+      solanaMainnetNetwork = allNetworks.find((n) => n.name === 'solana-mainnet');
 
-      if (!solanaDevnetNetwork || !solanaMainnetNetwork) {
+      if (!(solanaDevnetNetwork && solanaMainnetNetwork)) {
         this.skip();
       }
     } catch (error) {
@@ -44,41 +43,41 @@ describe('Network Service Integration Tests', function () {
     }
   });
 
-  describe('Network Service Core Functionality', function () {
-    it('should return all configured networks', function () {
+  describe('Network Service Core Functionality', () => {
+    it('should return all configured networks', () => {
       expect(allNetworks).to.be.an('array');
       expect(allNetworks.length).to.be.greaterThan(0);
     });
 
-    it('should get network by ID', async function () {
+    it('should get network by ID', async () => {
       const network = await NetworkService.getNetworkById(solanaDevnetNetwork.id);
       expect(network).to.exist;
       expect(network!.id).to.equal(solanaDevnetNetwork.id);
       expect(network!.name).to.equal('solana-devnet');
     });
 
-    it('should get network by name', async function () {
+    it('should get network by name', async () => {
       const network = await NetworkService.getNetworkByName('solana-devnet');
       expect(network).to.exist;
       expect(network!.name).to.equal('solana-devnet');
       expect(network!.networkFamily).to.equal(NetworkFamily.SOLANA);
     });
 
-    it('should get networks by family', async function () {
+    it('should get networks by family', async () => {
       const solanaNetworks = await NetworkService.getNetworksByFamily(NetworkFamily.SOLANA);
       expect(solanaNetworks).to.be.an('array');
       expect(solanaNetworks.length).to.be.greaterThan(0);
       expect(solanaNetworks.every((n: any) => n.networkFamily === NetworkFamily.SOLANA)).to.be.true;
     });
 
-    it('should get default network', async function () {
+    it('should get default network', async () => {
       const defaultNetwork = await NetworkService.getDefaultNetwork();
       expect(defaultNetwork).to.exist;
       expect(defaultNetwork!.networkFamily).to.equal(NetworkFamily.SOLANA);
     });
 
-    it('should validate network configuration', function () {
-      allNetworks.forEach(network => {
+    it('should validate network configuration', () => {
+      allNetworks.forEach((network) => {
         expect(network).to.have.property('id');
         expect(network).to.have.property('name');
         expect(network).to.have.property('networkFamily');
@@ -89,14 +88,14 @@ describe('Network Service Integration Tests', function () {
     });
   });
 
-  describe('Blockchain Service Factory Integration', function () {
-    it('should create Solana blockchain service for Solana networks', function () {
+  describe('Blockchain Service Factory Integration', () => {
+    it('should create Solana blockchain service for Solana networks', () => {
       const solanaService = BlockchainServiceFactory.create(solanaDevnetNetwork);
       expect(solanaService).to.exist;
       expect(solanaService.getNetworkFamily()).to.equal(NetworkFamily.SOLANA);
     });
 
-    it('should create different services for different Solana networks', function () {
+    it('should create different services for different Solana networks', () => {
       const devnetService = BlockchainServiceFactory.create(solanaDevnetNetwork);
       const mainnetService = BlockchainServiceFactory.create(solanaMainnetNetwork);
 
@@ -106,7 +105,7 @@ describe('Network Service Integration Tests', function () {
       expect(mainnetService.getNetworkFamily()).to.equal(NetworkFamily.SOLANA);
     });
 
-    it('should validate addresses using blockchain service', function () {
+    it('should validate addresses using blockchain service', () => {
       const service = BlockchainServiceFactory.create(solanaDevnetNetwork);
       const validAddress = '11111111111111111111111111111112'; // Valid Solana address (System Program)
       const invalidAddress = 'invalid-address';
@@ -115,7 +114,7 @@ describe('Network Service Integration Tests', function () {
       expect(service.validateAddress(invalidAddress)).to.be.false;
     });
 
-    it('should validate transaction signatures using blockchain service', function () {
+    it('should validate transaction signatures using blockchain service', () => {
       const service = BlockchainServiceFactory.create(solanaDevnetNetwork);
       const validSignature =
         '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjJfq4MZWMbbKyggtKVEznR3W3HoqKMMyRkACdzh54smHiBJRUxDi';
@@ -125,7 +124,7 @@ describe('Network Service Integration Tests', function () {
       expect(service.validateTransactionHash(invalidSignature)).to.be.false;
     });
 
-    it('should generate block explorer URLs using blockchain service', function () {
+    it('should generate block explorer URLs using blockchain service', () => {
       const service = BlockchainServiceFactory.create(solanaDevnetNetwork);
       const testSignature =
         '5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjJfq4MZWMbbKyggtKVEznR3W3HoqKMMyRkACdzh54smHiBJRUxDi';
@@ -136,25 +135,25 @@ describe('Network Service Integration Tests', function () {
       expect(blockExplorerUrl).to.include(testSignature);
     });
 
-    it('should throw error for unsupported network families', function () {
+    it('should throw error for unsupported network families', () => {
       const invalidNetwork = {
         ...solanaDevnetNetwork,
         networkFamily: 'invalid-family',
       };
 
       expect(() => BlockchainServiceFactory.create(invalidNetwork)).to.throw(
-        'Unsupported network family: invalid-family'
+        'Unsupported network family: invalid-family',
       );
     });
   });
 
-  describe('Cross-Network Data Isolation', function () {
+  describe('Cross-Network Data Isolation', () => {
     let testAccountId: number;
     let testOfferId: number;
     let testTradeId: number;
     let testEscrowId: number;
 
-    beforeEach(async function () {
+    beforeEach(async () => {
       // Create test data for both networks
       const uniqueWallet = `test-wallet-${Date.now()}`;
       const uniqueUsername = `test-user-${Date.now()}`;
@@ -163,7 +162,7 @@ describe('Network Service Integration Tests', function () {
       // Create account first
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, uniqueUsername, uniqueEmail]
+        [uniqueWallet, uniqueUsername, uniqueEmail],
       );
       testAccountId = accountResult.rows[0].id;
 
@@ -181,7 +180,7 @@ describe('Network Service Integration Tests', function () {
           100.0,
           0.0,
           'Test offer for network isolation',
-        ]
+        ],
       );
       testOfferId = offerResult.rows[0].id;
 
@@ -201,7 +200,7 @@ describe('Network Service Integration Tests', function () {
           100.0,
           100.0,
           'USD',
-        ]
+        ],
       );
       testTradeId = tradeResult.rows[0].id;
 
@@ -223,12 +222,12 @@ describe('Network Service Integration Tests', function () {
           '4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x',
           '5555555555555555555555555555555555555555555',
           '6666666666666666666666666666666666666666666',
-        ]
+        ],
       );
       testEscrowId = escrowResult.rows[0].id;
     });
 
-    afterEach(async function () {
+    afterEach(async () => {
       // Clean up test data
       await client.query('DELETE FROM escrows WHERE id = $1', [testEscrowId]);
       await client.query('DELETE FROM trades WHERE id = $1', [testTradeId]);
@@ -236,17 +235,17 @@ describe('Network Service Integration Tests', function () {
       await client.query('DELETE FROM accounts WHERE id = $1', [testAccountId]);
     });
 
-    it('should isolate offers by network', async function () {
+    it('should isolate offers by network', async () => {
       // Query offers for Solana Devnet (filter by test account to avoid interference from other tests)
       const devnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [solanaDevnetNetwork.id, testAccountId]
+        [solanaDevnetNetwork.id, testAccountId],
       );
 
       // Query offers for Solana Mainnet (filter by test account to avoid interference from other tests)
       const mainnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [solanaMainnetNetwork.id, testAccountId]
+        [solanaMainnetNetwork.id, testAccountId],
       );
 
       // Verify isolation
@@ -255,7 +254,7 @@ describe('Network Service Integration Tests', function () {
       expect(devnetOffers.rows[0].network_id).to.equal(solanaDevnetNetwork.id);
     });
 
-    it('should isolate trades by network', async function () {
+    it('should isolate trades by network', async () => {
       // Query trades for Solana Devnet
       const devnetTrades = await client.query('SELECT * FROM trades WHERE network_id = $1', [
         solanaDevnetNetwork.id,
@@ -272,7 +271,7 @@ describe('Network Service Integration Tests', function () {
       expect(devnetTrades.rows[0].network_id).to.equal(solanaDevnetNetwork.id);
     });
 
-    it('should isolate escrows by network', async function () {
+    it('should isolate escrows by network', async () => {
       // Query escrows for Solana Devnet
       const devnetEscrows = await client.query('SELECT * FROM escrows WHERE network_id = $1', [
         solanaDevnetNetwork.id,
@@ -289,30 +288,30 @@ describe('Network Service Integration Tests', function () {
       expect(devnetEscrows.rows[0].network_id).to.equal(solanaDevnetNetwork.id);
     });
 
-    it('should prevent cross-network data leakage in queries', async function () {
+    it('should prevent cross-network data leakage in queries', async () => {
       // Query all offers
-      const allOffers = await client.query('SELECT * FROM offers');
+      const _allOffers = await client.query('SELECT * FROM offers');
 
       // Query offers by network family
       const solanaOffers = await client.query(
         'SELECT o.* FROM offers o JOIN networks n ON o.network_id = n.id WHERE n.network_family = $1',
-        [NetworkFamily.SOLANA]
+        [NetworkFamily.SOLANA],
       );
 
       // Verify no cross-network leakage
       expect(
-        solanaOffers.rows.every(offer => {
-          const network = allNetworks.find(n => n.id === offer.network_id);
+        solanaOffers.rows.every((offer) => {
+          const network = allNetworks.find((n) => n.id === offer.network_id);
           return network && network.networkFamily === NetworkFamily.SOLANA;
-        })
+        }),
       ).to.be.true;
     });
 
-    it('should maintain referential integrity within networks', async function () {
+    it('should maintain referential integrity within networks', async () => {
       // Verify trade references correct offer
       const tradeOfferQuery = await client.query(
         'SELECT t.*, o.network_id as offer_network_id FROM trades t JOIN offers o ON t.leg1_offer_id = o.id WHERE t.id = $1',
-        [testTradeId]
+        [testTradeId],
       );
 
       expect(tradeOfferQuery.rows).to.have.length(1);
@@ -321,34 +320,34 @@ describe('Network Service Integration Tests', function () {
       // Verify escrow references correct trade
       const escrowTradeQuery = await client.query(
         'SELECT e.*, t.network_id as trade_network_id FROM escrows e JOIN trades t ON e.trade_id = t.id WHERE e.id = $1',
-        [testEscrowId]
+        [testEscrowId],
       );
 
       expect(escrowTradeQuery.rows).to.have.length(1);
       expect(escrowTradeQuery.rows[0].network_id).to.equal(
-        escrowTradeQuery.rows[0].trade_network_id
+        escrowTradeQuery.rows[0].trade_network_id,
       );
     });
   });
 
-  describe('Network Service Error Handling', function () {
-    it('should handle invalid network ID', async function () {
-      const network = await NetworkService.getNetworkById(99999);
+  describe('Network Service Error Handling', () => {
+    it('should handle invalid network ID', async () => {
+      const network = await NetworkService.getNetworkById(99_999);
       expect(network).to.be.null;
     });
 
-    it('should handle invalid network name', async function () {
+    it('should handle invalid network name', async () => {
       const network = await NetworkService.getNetworkByName('invalid-network');
       expect(network).to.be.null;
     });
 
-    it('should handle invalid network family', async function () {
+    it('should handle invalid network family', async () => {
       const networks = await NetworkService.getNetworksByFamily('invalid-family' as NetworkFamily);
       expect(networks).to.be.an('array');
       expect(networks.length).to.equal(0);
     });
 
-    it('should handle blockchain service creation errors gracefully', function () {
+    it('should handle blockchain service creation errors gracefully', () => {
       const invalidNetwork = {
         id: 999,
         name: 'invalid-network' as any,
@@ -366,8 +365,8 @@ describe('Network Service Integration Tests', function () {
     });
   });
 
-  describe('Network Service Performance', function () {
-    it('should retrieve networks quickly', async function () {
+  describe('Network Service Performance', () => {
+    it('should retrieve networks quickly', async () => {
       const startTime = Date.now();
 
       const networks = NetworkService.getAllNetworks();
@@ -385,7 +384,7 @@ describe('Network Service Integration Tests', function () {
       expect(duration).to.be.lessThan(100); // Should complete within 100ms
     });
 
-    it('should provide consistent results across multiple calls', async function () {
+    it('should provide consistent results across multiple calls', async () => {
       const networks1 = await NetworkService.getAllNetworks();
       const networks2 = await NetworkService.getAllNetworks();
 

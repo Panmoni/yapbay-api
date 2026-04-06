@@ -1,10 +1,14 @@
-import { Response, NextFunction } from 'express';
+import type { NextFunction, Response } from 'express';
 import { query } from '../../db';
-import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { logError } from '../../logger';
-import { AuthenticatedRequest } from '../../middleware/auth';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 
-export const requireTradeParticipant = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const requireTradeParticipant = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   const { id } = req.params;
   const networkId = req.networkId!;
   const requesterWalletAddress = getWalletAddressFromJWT(req);
@@ -18,14 +22,14 @@ export const requireTradeParticipant = async (req: AuthenticatedRequest, res: Re
     // Fetch trade data including all potential participant account IDs
     const tradeResult = await query(
       'SELECT *, leg1_seller_account_id, leg1_buyer_account_id, leg2_seller_account_id, leg2_buyer_account_id FROM trades WHERE id = $1 AND network_id = $2',
-      [id, networkId]
+      [id, networkId],
     );
-    
+
     if (tradeResult.length === 0) {
       res.status(404).json({ error: 'Trade not found' });
       return;
     }
-    
+
     const tradeData = tradeResult[0];
 
     // Collect unique, non-null participant account IDs
@@ -41,7 +45,7 @@ export const requireTradeParticipant = async (req: AuthenticatedRequest, res: Re
     if (uniqueParticipantAccountIds.length === 0) {
       logError(
         `Trade ${id} has no valid participant account IDs.`,
-        new Error('Missing participant account IDs in trade data')
+        new Error('Missing participant account IDs in trade data'),
       );
       res.status(500).json({ error: 'Internal server error processing trade participants' });
       return;
@@ -50,12 +54,12 @@ export const requireTradeParticipant = async (req: AuthenticatedRequest, res: Re
     // Fetch wallet addresses for all participants in one query
     const accountsResult = await query(
       'SELECT id, wallet_address FROM accounts WHERE id = ANY($1::int[])',
-      [uniqueParticipantAccountIds]
+      [uniqueParticipantAccountIds],
     );
 
     // Create a set of participant wallet addresses (lowercase)
     const participantWallets = new Set(
-      accountsResult.map(acc => acc.wallet_address.toLowerCase())
+      accountsResult.map((acc) => acc.wallet_address.toLowerCase()),
     );
 
     // Check if the requester is a participant
@@ -73,7 +77,11 @@ export const requireTradeParticipant = async (req: AuthenticatedRequest, res: Re
   }
 };
 
-export const requireTradeParticipantForUpdate = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const requireTradeParticipantForUpdate = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   const { id } = req.params;
   const networkId = req.networkId!;
   const jwtWalletAddress = getWalletAddressFromJWT(req);
@@ -84,7 +92,10 @@ export const requireTradeParticipantForUpdate = async (req: AuthenticatedRequest
   }
 
   try {
-    const trade = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [id, networkId]);
+    const trade = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [
+      id,
+      networkId,
+    ]);
     if (trade.length === 0) {
       res.status(404).json({ error: 'Trade not found' });
       return;

@@ -1,19 +1,19 @@
-import { Request as ExpressRequest, Response, NextFunction } from 'express';
+import type { Request as ExpressRequest, NextFunction, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
-import { CustomJwtPayload } from '../utils/jwtUtils';
-import { NetworkConfig } from '../types/networks';
+import type { NetworkConfig } from '../types/networks';
+import type { CustomJwtPayload } from '../utils/jwtUtils';
 
 // Extend Express Request interface to use existing NetworkConfig
 export interface AuthenticatedRequest extends ExpressRequest {
-  user?: CustomJwtPayload;
-  networkId?: number;
+  escrowData?: Record<string, unknown>;
   network?: NetworkConfig;
-  validatedOffer?: Record<string, unknown>;
+  networkId?: number;
+  tradeData?: Record<string, unknown>;
+  user?: CustomJwtPayload;
   validatedBuyerAccount?: Record<string, unknown>;
   validatedCreatorAccount?: Record<string, unknown>;
-  tradeData?: Record<string, unknown>;
-  escrowData?: Record<string, unknown>;
+  validatedOffer?: Record<string, unknown>;
 }
 
 // JWT Verification Setup
@@ -23,7 +23,7 @@ const client = jwksClient({
   rateLimit: true,
   cache: true,
   cacheMaxEntries: 5,
-  cacheMaxAge: 600000, // 10 minutes
+  cacheMaxAge: 600_000, // 10 minutes
 });
 
 function getKey(header: jwt.JwtHeader, callback: jwt.SigningKeyCallback) {
@@ -64,8 +64,7 @@ export const requireJWT = (req: AuthenticatedRequest, res: Response, next: NextF
 
   const verifier =
     alg === 'HS256'
-      ? (cb: jwt.VerifyCallback) =>
-          jwt.verify(token, jwtSecret!, verifyOptions, cb)
+      ? (cb: jwt.VerifyCallback) => jwt.verify(token, jwtSecret!, verifyOptions, cb)
       : (cb: jwt.VerifyCallback) => jwt.verify(token, getKey, verifyOptions, cb);
   verifier((err, decoded) => {
     if (err) {
@@ -78,7 +77,11 @@ export const requireJWT = (req: AuthenticatedRequest, res: Response, next: NextF
 };
 
 // Admin-only guard
-export const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+export const requireAdmin = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): void => {
   if (req.user?.role !== 'admin') {
     res.status(403).json({ error: 'Forbidden' });
     return;

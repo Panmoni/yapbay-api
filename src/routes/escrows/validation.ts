@@ -1,13 +1,13 @@
-import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../../middleware/auth';
+import type { NextFunction, Response } from 'express';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { NetworkService } from '../../services/networkService';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { NetworkValidator } from '../../validation/networkValidation';
-import { NetworkService } from '../../services/networkService';
 
 export const validateEscrowRecord = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   const {
     trade_id,
@@ -44,7 +44,7 @@ export const validateEscrowRecord = async (
     return;
   }
 
-  if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+  if (typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0) {
     res.status(400).json({ error: 'amount must be a positive number' });
     return;
   }
@@ -59,33 +59,35 @@ export const validateEscrowRecord = async (
 
     // Network-specific transaction validation
     if (networkFamily === 'evm') {
-      if (!transaction_hash || !NetworkValidator.validateTransactionHash(transaction_hash, 'evm')) {
+      if (
+        !(transaction_hash && NetworkValidator.validateTransactionHash(transaction_hash, 'evm'))
+      ) {
         res.status(400).json({ error: 'Valid EVM transaction_hash must be provided' });
         return;
       }
     } else if (networkFamily === 'solana') {
-      if (!signature || !NetworkValidator.validateTransactionHash(signature, 'solana')) {
+      if (!(signature && NetworkValidator.validateTransactionHash(signature, 'solana'))) {
         res.status(400).json({ error: 'Valid Solana signature must be provided' });
         return;
       }
 
       // Validate Solana-specific fields
-      if (!program_id || !NetworkValidator.validateProgramId(program_id)) {
+      if (!(program_id && NetworkValidator.validateProgramId(program_id))) {
         res.status(400).json({ error: 'Valid program_id must be provided for Solana' });
         return;
       }
 
-      if (!escrow_pda || !NetworkValidator.validatePDA(escrow_pda)) {
+      if (!(escrow_pda && NetworkValidator.validatePDA(escrow_pda))) {
         res.status(400).json({ error: 'Valid escrow_pda must be provided for Solana' });
         return;
       }
 
-      if (!escrow_token_account || !NetworkValidator.validatePDA(escrow_token_account)) {
+      if (!(escrow_token_account && NetworkValidator.validatePDA(escrow_token_account))) {
         res.status(400).json({ error: 'Valid escrow_token_account must be provided for Solana' });
         return;
       }
 
-      if (!trade_onchain_id || !NetworkValidator.validateEscrowId(trade_onchain_id, 'solana')) {
+      if (!(trade_onchain_id && NetworkValidator.validateEscrowId(trade_onchain_id, 'solana'))) {
         res.status(400).json({ error: 'Valid trade_onchain_id must be provided for Solana' });
         return;
       }
@@ -135,7 +137,7 @@ export const validateEscrowRecord = async (
 export const validateEscrowAccess = (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void => {
   const jwtWalletAddress = getWalletAddressFromJWT(req);
 

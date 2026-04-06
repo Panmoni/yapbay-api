@@ -1,9 +1,9 @@
-import express, { Response } from 'express';
 import bcrypt from 'bcrypt';
+import express, { type Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import type { AuthenticatedRequest } from '../../middleware/auth';
 import { withErrorHandling } from '../../middleware/errorHandler';
-import { signJwt, CustomJwtPayload } from '../../utils/jwtUtils';
-import { AuthenticatedRequest } from '../../middleware/auth';
+import { type CustomJwtPayload, signJwt } from '../../utils/jwtUtils';
 
 const router = express.Router();
 
@@ -23,7 +23,7 @@ router.post(
   adminLoginLimiter,
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const { username, password } = req.body;
-    if (!username || !password) {
+    if (!(username && password)) {
       res.status(400).json({ error: 'Missing username or password' });
       return;
     }
@@ -38,7 +38,7 @@ router.post(
     }
     const token = signJwt({ sub: username, role: 'admin' } as CustomJwtPayload);
     res.json({ token });
-  })
+  }),
 );
 
 export default router;

@@ -1,13 +1,17 @@
-import { Response, NextFunction } from 'express';
+import type { NextFunction, Response } from 'express';
 import { query } from '../../db';
+import type { AuthenticatedRequest } from '../../middleware/auth';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
-import { AuthenticatedRequest } from '../../middleware/auth';
 
-export const requireEscrowParticipant = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const requireEscrowParticipant = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   const { onchainEscrowId } = req.params;
   const networkId = req.networkId!;
   const jwtWalletAddress = getWalletAddressFromJWT(req);
-  
+
   if (!jwtWalletAddress) {
     res.status(401).json({ error: 'Authentication required' });
     return;
@@ -19,7 +23,7 @@ export const requireEscrowParticipant = async (req: AuthenticatedRequest, res: R
       `SELECT e.* FROM escrows e
        WHERE e.onchain_escrow_id = $1 AND e.network_id = $2
        AND (LOWER(e.seller_address) = LOWER($3) OR LOWER(e.buyer_address) = LOWER($3))`,
-      [onchainEscrowId, networkId, jwtWalletAddress]
+      [onchainEscrowId, networkId, jwtWalletAddress],
     );
 
     if (escrowCheck.length === 0) {
@@ -35,9 +39,13 @@ export const requireEscrowParticipant = async (req: AuthenticatedRequest, res: R
   }
 };
 
-export const requireEscrowList = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const requireEscrowList = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   const jwtWalletAddress = getWalletAddressFromJWT(req);
-  
+
   if (!jwtWalletAddress) {
     res.status(404).json({ error: 'Wallet address not found in token' });
     return;

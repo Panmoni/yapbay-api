@@ -1,20 +1,15 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { expect } from 'chai';
-import request from 'supertest';
 import express from 'express';
+import request from 'supertest';
 import pool from '../db';
 import routes from '../routes';
 import { NetworkService } from '../services/networkService';
 import { NetworkFamily } from '../types/networks';
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  createTestAccount,
-  createTestOffer,
-  cleanupTestData,
-  generateSolanaAddress,
-} from './utils/solanaTestUtils';
+import { createTestAccount, createTestOffer } from './utils/solanaTestUtils';
 
-describe('Solana API Integration Tests', function () {
+describe('Solana API Integration Tests', () => {
   let app: express.Application;
   let client: any;
   let solanaDevnetNetwork: any;
@@ -23,7 +18,7 @@ describe('Solana API Integration Tests', function () {
   let authToken: string;
 
   before(async function () {
-    this.timeout(10000);
+    this.timeout(10_000);
 
     // Setup express app
     app = express();
@@ -36,10 +31,10 @@ describe('Solana API Integration Tests', function () {
     try {
       // Get Solana network configurations
       const allNetworks = await NetworkService.getAllNetworks();
-      solanaDevnetNetwork = allNetworks.find(n => n.name === 'solana-devnet');
-      solanaMainnetNetwork = allNetworks.find(n => n.name === 'solana-mainnet');
+      solanaDevnetNetwork = allNetworks.find((n) => n.name === 'solana-devnet');
+      solanaMainnetNetwork = allNetworks.find((n) => n.name === 'solana-mainnet');
 
-      if (!solanaDevnetNetwork || !solanaMainnetNetwork) {
+      if (!(solanaDevnetNetwork && solanaMainnetNetwork)) {
         throw new Error('Solana networks not properly configured');
       }
 
@@ -69,11 +64,11 @@ describe('Solana API Integration Tests', function () {
     }
   });
 
-  beforeEach(async function () {
+  beforeEach(async () => {
     // No transaction rollback - we'll use proper cleanup instead
   });
 
-  afterEach(async function () {
+  afterEach(async () => {
     // Clean up test data after each test, but keep the account for tests that need it
     if (testAccountId) {
       try {
@@ -85,7 +80,7 @@ describe('Solana API Integration Tests', function () {
     }
   });
 
-  after(async function () {
+  after(async () => {
     if (client) {
       // Clean up test account safely
       if (testAccountId) {
@@ -101,8 +96,8 @@ describe('Solana API Integration Tests', function () {
     }
   });
 
-  describe('Network Header Validation', function () {
-    it('should reject requests with invalid network names', async function () {
+  describe('Network Header Validation', () => {
+    it('should reject requests with invalid network names', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'invalid-network')
@@ -114,7 +109,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.validNetworks).to.include('solana-mainnet');
     });
 
-    it('should use default network when no header provided', async function () {
+    it('should use default network when no header provided', async () => {
       const response = await request(app)
         .get('/api/health')
         .set('Authorization', authToken)
@@ -126,12 +121,12 @@ describe('Solana API Integration Tests', function () {
 
       // Check that Solana networks are included
       const solanaNetworks = response.body.networks.filter(
-        (n: any) => n.networkFamily === 'solana'
+        (n: any) => n.networkFamily === 'solana',
       );
       expect(solanaNetworks.length).to.be.greaterThan(0);
     });
 
-    it('should accept valid Solana network names', async function () {
+    it('should accept valid Solana network names', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'solana-devnet')
@@ -141,7 +136,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.network).to.equal('solana-devnet');
     });
 
-    it('should validate Solana network family', async function () {
+    it('should validate Solana network family', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'solana-devnet')
@@ -154,7 +149,7 @@ describe('Solana API Integration Tests', function () {
       expect(network?.networkFamily).to.equal(NetworkFamily.SOLANA);
     });
 
-    it('should reject empty network header', async function () {
+    it('should reject empty network header', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', '')
@@ -165,7 +160,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.validNetworks).to.exist;
     });
 
-    it('should reject null network header', async function () {
+    it('should reject null network header', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', null as any)
@@ -176,11 +171,11 @@ describe('Solana API Integration Tests', function () {
     });
   });
 
-  describe('API Endpoint Isolation', function () {
+  describe('API Endpoint Isolation', () => {
     let devnetOfferId: number;
-    let mainnetOfferId: number;
+    let _mainnetOfferId: number;
 
-    beforeEach(async function () {
+    beforeEach(async () => {
       // Create test offers on different Solana networks
       const devnetOffer = await createTestOffer(client, {
         creator_account_id: testAccountId,
@@ -208,10 +203,10 @@ describe('Solana API Integration Tests', function () {
         rate_adjustment: 1.03,
         terms: 'Test offer for Solana Mainnet',
       });
-      mainnetOfferId = mainnetOffer.id;
+      _mainnetOfferId = mainnetOffer.id;
     });
 
-    it('should return offers only for specified Solana network', async function () {
+    it('should return offers only for specified Solana network', async () => {
       // Test data is already created in beforeEach
 
       // Test Solana Devnet
@@ -224,7 +219,7 @@ describe('Solana API Integration Tests', function () {
       expect(devnetResponse.body.network).to.equal('solana-devnet');
       // Filter offers to only include those created by our test account
       const testOffers = devnetResponse.body.offers.filter(
-        (offer: any) => offer.creator_account_id === testAccountId
+        (offer: any) => offer.creator_account_id === testAccountId,
       );
       expect(testOffers).to.have.length(1);
       expect(testOffers[0].offer_type).to.equal('BUY');
@@ -239,7 +234,7 @@ describe('Solana API Integration Tests', function () {
       expect(mainnetResponse.body.error).to.equal('Network unavailable');
     });
 
-    it('should not find offers from other Solana networks by ID', async function () {
+    it('should not find offers from other Solana networks by ID', async () => {
       // Try to access Devnet offer from Mainnet (should return 503 since mainnet is inactive)
       const response = await request(app)
         .get(`/api/offers/${devnetOfferId}`)
@@ -250,7 +245,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.error).to.equal('Network unavailable');
     });
 
-    it('should isolate offers by Solana network family', async function () {
+    it('should isolate offers by Solana network family', async () => {
       // Query offers for Solana Devnet
       const devnetOffers = await client.query('SELECT * FROM offers WHERE network_id = $1', [
         solanaDevnetNetwork.id,
@@ -263,10 +258,10 @@ describe('Solana API Integration Tests', function () {
 
       // Verify isolation - filter by test account to avoid interference from other tests
       const testDevnetOffers = devnetOffers.rows.filter(
-        (offer: any) => offer.creator_account_id === testAccountId
+        (offer: any) => offer.creator_account_id === testAccountId,
       );
       const testMainnetOffers = mainnetOffers.rows.filter(
-        (offer: any) => offer.creator_account_id === testAccountId
+        (offer: any) => offer.creator_account_id === testAccountId,
       );
 
       expect(testDevnetOffers).to.have.length(1);
@@ -275,20 +270,20 @@ describe('Solana API Integration Tests', function () {
       expect(testMainnetOffers[0].network_id).to.equal(solanaMainnetNetwork.id);
     });
 
-    it('should prevent cross-network data leakage in offers API', async function () {
+    it('should prevent cross-network data leakage in offers API', async () => {
       // The beforeEach already creates offers on both networks
       // This test verifies that we can query offers by network and get the correct ones
 
       // Query for offers on Devnet
       const devnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [solanaDevnetNetwork.id, testAccountId]
+        [solanaDevnetNetwork.id, testAccountId],
       );
 
       // Query for offers on Mainnet
       const mainnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [solanaMainnetNetwork.id, testAccountId]
+        [solanaMainnetNetwork.id, testAccountId],
       );
 
       // Both networks should have offers (created by beforeEach)
@@ -301,8 +296,8 @@ describe('Solana API Integration Tests', function () {
     });
   });
 
-  describe('Authentication with Network Context', function () {
-    beforeEach(async function () {
+  describe('Authentication with Network Context', () => {
+    beforeEach(async () => {
       // Create test offer for authentication tests
       await createTestOffer(client, {
         creator_account_id: testAccountId,
@@ -318,7 +313,7 @@ describe('Solana API Integration Tests', function () {
       });
     });
 
-    it('should require authentication for protected endpoints', async function () {
+    it('should require authentication for protected endpoints', async () => {
       const response = await request(app)
         .get('/api/offers?owner=me')
         .set('X-Network-Name', 'solana-devnet')
@@ -327,7 +322,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.error).to.exist;
     });
 
-    it('should accept valid authentication with network context', async function () {
+    it('should accept valid authentication with network context', async () => {
       const response = await request(app)
         .get('/api/offers?owner=me')
         .set('X-Network-Name', 'solana-devnet')
@@ -337,7 +332,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.network).to.equal('solana-devnet');
     });
 
-    it('should validate network context in authenticated requests', async function () {
+    it('should validate network context in authenticated requests', async () => {
       // Create a test offer on Devnet
       await createTestOffer(client, {
         creator_account_id: testAccountId,
@@ -362,7 +357,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.offers).to.be.an('array');
     });
 
-    it('should isolate authenticated data by network', async function () {
+    it('should isolate authenticated data by network', async () => {
       // Create offers on both networks
       await createTestOffer(client, {
         creator_account_id: testAccountId,
@@ -406,7 +401,7 @@ describe('Solana API Integration Tests', function () {
 
       // Filter offers to only include those created by our test account
       const testDevnetOffers = devnetResponse.body.offers.filter(
-        (offer: any) => offer.creator_account_id === testAccountId
+        (offer: any) => offer.creator_account_id === testAccountId,
       );
       expect(testDevnetOffers).to.have.length(1);
       expect(testDevnetOffers[0].offer_type).to.equal('BUY');
@@ -414,8 +409,8 @@ describe('Solana API Integration Tests', function () {
     });
   });
 
-  describe('Error Handling for Invalid Solana Network Requests', function () {
-    it('should handle network service errors gracefully', async function () {
+  describe('Error Handling for Invalid Solana Network Requests', () => {
+    it('should handle network service errors gracefully', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'nonexistent-solana-network')
@@ -426,7 +421,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.validNetworks).to.exist;
     });
 
-    it('should provide helpful error messages for missing network', async function () {
+    it('should provide helpful error messages for missing network', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', '')
@@ -437,7 +432,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.validNetworks).to.exist;
     });
 
-    it('should handle malformed network headers', async function () {
+    it('should handle malformed network headers', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'solana-devnet-invalid')
@@ -447,7 +442,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.error).to.equal('Invalid network specified');
     });
 
-    it('should handle case sensitivity in network names', async function () {
+    it('should handle case sensitivity in network names', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'Solana-Devnet')
@@ -457,7 +452,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.error).to.equal('Invalid network specified');
     });
 
-    it('should handle special characters in network names', async function () {
+    it('should handle special characters in network names', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'solana-devnet@#$%')
@@ -467,8 +462,8 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.error).to.equal('Invalid network specified');
     });
 
-    it('should handle very long network names', async function () {
-      const longNetworkName = 'solana-devnet-' + 'a'.repeat(1000);
+    it('should handle very long network names', async () => {
+      const longNetworkName = `solana-devnet-${'a'.repeat(1000)}`;
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', longNetworkName)
@@ -479,8 +474,8 @@ describe('Solana API Integration Tests', function () {
     });
   });
 
-  describe('Health Endpoint Network Awareness', function () {
-    it('should return Solana network information in health check', async function () {
+  describe('Health Endpoint Network Awareness', () => {
+    it('should return Solana network information in health check', async () => {
       const response = await request(app)
         .get('/api/health')
         .set('X-Network-Name', 'solana-devnet')
@@ -497,7 +492,7 @@ describe('Solana API Integration Tests', function () {
       expect(solanaDevnet.status).to.exist;
     });
 
-    it('should test different Solana networks independently', async function () {
+    it('should test different Solana networks independently', async () => {
       // Test Solana Devnet
       const devnetResponse = await request(app)
         .get('/api/health')
@@ -518,14 +513,14 @@ describe('Solana API Integration Tests', function () {
 
       // Find Solana Devnet in the response
       const devnetSolana = devnetResponse.body.networks.find(
-        (n: any) => n.name === 'solana-devnet'
+        (n: any) => n.name === 'solana-devnet',
       );
 
       expect(devnetSolana).to.exist;
       expect(devnetSolana.networkFamily).to.equal('solana');
     });
 
-    it('should include Solana-specific network details', async function () {
+    it('should include Solana-specific network details', async () => {
       const response = await request(app)
         .get('/api/health')
         .set('X-Network-Name', 'solana-devnet')
@@ -546,8 +541,8 @@ describe('Solana API Integration Tests', function () {
     });
   });
 
-  describe('Network Response Headers', function () {
-    it('should include network information in response headers', async function () {
+  describe('Network Response Headers', () => {
+    it('should include network information in response headers', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'solana-devnet')
@@ -557,7 +552,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.network).to.equal('solana-devnet');
     });
 
-    it('should include network family in response', async function () {
+    it('should include network family in response', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'solana-devnet')
@@ -571,8 +566,8 @@ describe('Solana API Integration Tests', function () {
     });
   });
 
-  describe('Cross-Network Data Leakage Prevention', function () {
-    it('should not allow access to resources from different Solana networks', async function () {
+  describe('Cross-Network Data Leakage Prevention', () => {
+    it('should not allow access to resources from different Solana networks', async () => {
       // Create offer on Solana Devnet
       const offer = await createTestOffer(client, {
         creator_account_id: testAccountId,
@@ -597,7 +592,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.error).to.equal('Network unavailable');
     });
 
-    it('should enforce network isolation in update operations', async function () {
+    it('should enforce network isolation in update operations', async () => {
       // Create offer on Solana Devnet
       const offer = await createTestOffer(client, {
         creator_account_id: testAccountId,
@@ -625,7 +620,7 @@ describe('Solana API Integration Tests', function () {
       expect(response.body.error).to.equal('Network unavailable');
     });
 
-    it('should prevent cross-network data access in list operations', async function () {
+    it('should prevent cross-network data access in list operations', async () => {
       // Create offers on both networks
       await createTestOffer(client, {
         creator_account_id: testAccountId,
@@ -669,7 +664,7 @@ describe('Solana API Integration Tests', function () {
 
       // Filter offers to only include those created by our test account
       const testDevnetOffers = devnetResponse.body.offers.filter(
-        (offer: any) => offer.creator_account_id === testAccountId
+        (offer: any) => offer.creator_account_id === testAccountId,
       );
       expect(testDevnetOffers).to.have.length(1);
       expect(testDevnetOffers[0].offer_type).to.equal('BUY');
@@ -677,10 +672,10 @@ describe('Solana API Integration Tests', function () {
     });
   });
 
-  describe('Solana-Specific API Features', function () {
-    it('should handle Solana address validation in API requests', async function () {
-      const validSolanaAddress = '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
-      const invalidAddress = 'invalid-address';
+  describe('Solana-Specific API Features', () => {
+    it('should handle Solana address validation in API requests', async () => {
+      const _validSolanaAddress = '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
+      const _invalidAddress = 'invalid-address';
 
       // Test with valid Solana address
       const validResponse = await request(app)
@@ -707,7 +702,7 @@ describe('Solana API Integration Tests', function () {
       // The actual validation would depend on the specific API endpoint implementation
     });
 
-    it('should support Solana-specific transaction types', async function () {
+    it('should support Solana-specific transaction types', async () => {
       // This test would verify that the API can handle Solana-specific transaction types
       // like FUND_ESCROW, RELEASE_ESCROW, CANCEL_ESCROW, etc.
       const response = await request(app)
@@ -728,7 +723,7 @@ describe('Solana API Integration Tests', function () {
       expect(network?.networkFamily).to.equal(NetworkFamily.SOLANA);
     });
 
-    it('should handle Solana program ID validation', async function () {
+    it('should handle Solana program ID validation', async () => {
       const response = await request(app)
         .get('/api/health')
         .set('X-Network-Name', 'solana-devnet')
@@ -746,8 +741,8 @@ describe('Solana API Integration Tests', function () {
     });
   });
 
-  describe('Performance and Reliability', function () {
-    it('should handle concurrent requests to different Solana networks', async function () {
+  describe('Performance and Reliability', () => {
+    it('should handle concurrent requests to different Solana networks', async () => {
       const promises = [
         request(app)
           .get('/api/offers')
@@ -769,7 +764,7 @@ describe('Solana API Integration Tests', function () {
 
       const responses = await Promise.all(promises);
 
-      responses.forEach(response => {
+      responses.forEach((response) => {
         expect(response.status).to.be.oneOf([200, 400, 503]);
         if (response.status === 200) {
           // Health endpoint returns networks array, offers endpoint returns network field
@@ -784,7 +779,7 @@ describe('Solana API Integration Tests', function () {
       });
     });
 
-    it('should complete API requests within reasonable time', async function () {
+    it('should complete API requests within reasonable time', async () => {
       const startTime = Date.now();
 
       const response = await request(app)

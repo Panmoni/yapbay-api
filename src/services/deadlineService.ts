@@ -2,10 +2,10 @@ import pool from '../db';
 import { NetworkService } from './networkService';
 
 interface DeadlineConfig {
+  allowedState: string;
+  cancelledAtField: string;
   deadlineField: string;
   stateField: string;
-  cancelledAtField: string;
-  allowedState: string;
 }
 
 // States where a trade should not be auto-cancelled, regardless of deadline
@@ -57,12 +57,12 @@ export async function expireDeadlines(): Promise<void> {
       try {
         await expireDeadlinesForNetwork(network.id);
         console.log(
-          `[AutoCancel] Completed deadline processing for network ${network.name} (ID: ${network.id})`
+          `[AutoCancel] Completed deadline processing for network ${network.name} (ID: ${network.id})`,
         );
       } catch (error) {
         console.error(
           `[AutoCancel] Failed to process deadlines for network ${network.name} (ID: ${network.id}):`,
-          error
+          error,
         );
         // Continue processing other networks even if one fails
       }
@@ -94,7 +94,7 @@ export async function expireDeadlinesForNetwork(networkId: number): Promise<void
            AND ${stateField} = $2
            AND network_id = $3
          FOR UPDATE SKIP LOCKED`,
-        ['IN_PROGRESS', allowedState, networkId]
+        ['IN_PROGRESS', allowedState, networkId],
       );
 
       for (const { id, deadline, current_state } of rows) {
@@ -103,7 +103,7 @@ export async function expireDeadlinesForNetwork(networkId: number): Promise<void
           console.log(
             `[AutoCancel] Network ${networkId} - Skipping trade ${id}: '${deadlineField}' (${(
               deadline as Date
-            ).toISOString()}) passed but state=${current_state} is uncancelable.`
+            ).toISOString()}) passed but state=${current_state} is uncancelable.`,
           );
           continue;
         }
@@ -116,20 +116,20 @@ export async function expireDeadlinesForNetwork(networkId: number): Promise<void
                  cancelled = TRUE,
                  updated_at = CURRENT_TIMESTAMP
            WHERE id = $1`,
-          [id]
+          [id],
         );
 
         // record audit of auto-cancel with network context
         await client.query(
           'INSERT INTO trade_cancellations (trade_id, actor, deadline_field, network_id) VALUES ($1, $2, $3, $4)',
-          [id, 'system', deadlineField, networkId]
+          [id, 'system', deadlineField, networkId],
         );
 
         totalCancelled++;
         console.log(
           `[AutoCancel] Network ${networkId} - Trade ${id}: '${deadlineField}' (${(
             deadline as Date
-          ).toISOString()}) passed; marking overall and ${stateField} CANCELLED.`
+          ).toISOString()}) passed; marking overall and ${stateField} CANCELLED.`,
         );
       }
     }
@@ -154,7 +154,7 @@ export async function expireDeadlinesForNetwork(networkId: number): Promise<void
  */
 export async function expireDeadlinesLegacy(): Promise<void> {
   console.warn(
-    '[AutoCancel] WARNING: Using legacy single-network deadline processing. Consider updating to multi-network version.'
+    '[AutoCancel] WARNING: Using legacy single-network deadline processing. Consider updating to multi-network version.',
   );
 
   try {
@@ -190,7 +190,7 @@ export async function getDeadlineStats(networkId: number): Promise<{
            AND ${stateField} = $1
            AND network_id = $2
            AND ${deadlineField} BETWEEN NOW() AND NOW() + INTERVAL '1 hour'`,
-        [allowedState, networkId]
+        [allowedState, networkId],
       );
 
       // Count deadlines in next 24 hours
@@ -200,7 +200,7 @@ export async function getDeadlineStats(networkId: number): Promise<{
            AND ${stateField} = $1
            AND network_id = $2
            AND ${deadlineField} BETWEEN NOW() AND NOW() + INTERVAL '24 hours'`,
-        [allowedState, networkId]
+        [allowedState, networkId],
       );
 
       // Count overdue deadlines
@@ -210,12 +210,12 @@ export async function getDeadlineStats(networkId: number): Promise<{
            AND ${stateField} = $1
            AND network_id = $2
            AND ${deadlineField} < NOW()`,
-        [allowedState, networkId]
+        [allowedState, networkId],
       );
 
-      stats.upcomingIn1Hour += parseInt(hourRows[0].count);
-      stats.upcomingIn24Hours += parseInt(dayRows[0].count);
-      stats.overdue += parseInt(overdueRows[0].count);
+      stats.upcomingIn1Hour += Number.parseInt(hourRows[0].count, 10);
+      stats.upcomingIn24Hours += Number.parseInt(dayRows[0].count, 10);
+      stats.overdue += Number.parseInt(overdueRows[0].count, 10);
     }
 
     return stats;

@@ -1,12 +1,18 @@
-import express, { Response } from 'express';
-import { query, withTransaction, recordTransaction, TransactionType, TransactionStatus } from '../../db';
-import { requireNetwork } from '../../middleware/networkMiddleware';
-import { withErrorHandling } from '../../middleware/errorHandler';
+import express, { type Response } from 'express';
+import {
+  query,
+  recordTransaction,
+  type TransactionStatus,
+  type TransactionType,
+  withTransaction,
+} from '../../db';
 import { logError } from '../../logger';
-import { AuthenticatedRequest } from '../../middleware/auth';
-import { validateTransactionRecord } from './validation';
-import { VALID_LEG_TRANSITIONS } from '../../utils/stateTransitions';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { withErrorHandling } from '../../middleware/errorHandler';
+import { requireNetwork } from '../../middleware/networkMiddleware';
 import { isDevMode } from '../../utils/envConfig';
+import { VALID_LEG_TRANSITIONS } from '../../utils/stateTransitions';
+import { validateTransactionRecord } from './validation';
 
 const router = express.Router();
 
@@ -19,7 +25,7 @@ router.post(
     if (isDevMode) {
       console.log(
         '[DEBUG] /transactions/record endpoint hit with body:',
-        JSON.stringify(req.body, null, 2)
+        JSON.stringify(req.body, null, 2),
       );
     }
     const {
@@ -57,7 +63,7 @@ router.post(
           // Log parse errors for debugging, fallback to 'OTHER'
           logError(
             'Failed to parse metadata when inferring transaction type in /transactions/record',
-            e as Error
+            e as Error,
           );
         }
       }
@@ -80,23 +86,33 @@ router.post(
       if ((!finalFromAddress || finalFromAddress === '') && metaObj) {
         finalFromAddress =
           metaObj.seller || metaObj.from || metaObj.sender_address || finalFromAddress;
-        if (isDevMode) console.log(`[INFO] Extracted sender address from metadata: ${finalFromAddress}`);
+        if (isDevMode) {
+          console.log(`[INFO] Extracted sender address from metadata: ${finalFromAddress}`);
+        }
       }
 
       // Extract receiver address from metadata if not provided directly
       if ((!finalToAddress || finalToAddress === '') && metaObj) {
         const extractedAddress = metaObj.buyer || metaObj.to || metaObj.receiver_address;
         // Only use extracted address if it looks like a valid address (not just a number or short string)
-        if (extractedAddress && typeof extractedAddress === 'string' && extractedAddress.length > 10) {
+        if (
+          extractedAddress &&
+          typeof extractedAddress === 'string' &&
+          extractedAddress.length > 10
+        ) {
           finalToAddress = extractedAddress;
-          if (isDevMode) console.log(`[INFO] Extracted receiver address from metadata: ${finalToAddress}`);
+          if (isDevMode) {
+            console.log(`[INFO] Extracted receiver address from metadata: ${finalToAddress}`);
+          }
         }
       }
 
       // For FUND_ESCROW specifically, use contract address if to_address is missing
       if (finalTransactionType === 'FUND_ESCROW' && (!finalToAddress || finalToAddress === '')) {
         finalToAddress = process.env.CONTRACT_ADDRESS;
-        if (isDevMode) console.log(`[INFO] Using contract address for FUND_ESCROW: ${finalToAddress}`);
+        if (isDevMode) {
+          console.log(`[INFO] Using contract address for FUND_ESCROW: ${finalToAddress}`);
+        }
       }
 
       // Verify trade exists
@@ -111,11 +127,19 @@ router.post(
       }
 
       // Resolve escrow database ID
-      const escrowDbId = await resolveEscrowDbId(escrow_id, finalTransactionType, trade_id, metadata, networkId);
+      const escrowDbId = await resolveEscrowDbId(
+        escrow_id,
+        finalTransactionType,
+        trade_id,
+        metadata,
+        networkId,
+      );
 
       // Record the transaction (metadata stored only in error_message for FAILED status)
       const transactionIdentifier = transaction_hash || signature;
-      if (isDevMode) console.log(`[DEBUG] Recording transaction ${transactionIdentifier} for trade ${trade_id}`);
+      if (isDevMode) {
+        console.log(`[DEBUG] Recording transaction ${transactionIdentifier} for trade ${trade_id}`);
+      }
       const transactionId = await recordTransaction({
         transaction_hash,
         signature,
@@ -131,7 +155,7 @@ router.post(
       });
 
       console.log(
-        `[DB] Recorded/Updated transaction ${transactionIdentifier} with ID: ${transactionId}`
+        `[DB] Recorded/Updated transaction ${transactionIdentifier} with ID: ${transactionId}`,
       );
 
       // Handle state updates atomically within a transaction
@@ -139,7 +163,7 @@ router.post(
 
       if (transactionId === null) {
         console.error(
-          `[ERROR] Failed to record transaction ${transaction_hash} for trade ${trade_id}`
+          `[ERROR] Failed to record transaction ${transaction_hash} for trade ${trade_id}`,
         );
         res.status(500).json({
           error: 'Failed to record transaction',
@@ -150,7 +174,7 @@ router.post(
 
       if (isDevMode) {
         console.log(
-          `[DEBUG] Successfully recorded transaction ${transaction_hash} with ID: ${transactionId}`
+          `[DEBUG] Successfully recorded transaction ${transaction_hash} with ID: ${transactionId}`,
         );
       }
       res.status(201).json({
@@ -161,7 +185,7 @@ router.post(
       });
     } catch (err) {
       const error = err as Error;
-      console.error(`[ERROR] Exception in /transactions/record endpoint:`, error);
+      console.error('[ERROR] Exception in /transactions/record endpoint:', error);
       logError(`Error in /transactions/record endpoint for trade ${trade_id}`, error);
 
       res.status(500).json({
@@ -169,7 +193,7 @@ router.post(
         details: 'Error occurred while recording transaction',
       });
     }
-  })
+  }),
 );
 
 /**
@@ -180,7 +204,7 @@ async function resolveEscrowDbId(
   finalTransactionType: string,
   trade_id: number,
   metadata: Record<string, unknown> | undefined,
-  networkId: number
+  networkId: number,
 ): Promise<number | null> {
   if (escrow_id) {
     // First try to find by database ID
@@ -191,13 +215,13 @@ async function resolveEscrowDbId(
     if (escrowResult.length === 0) {
       escrowResult = await query(
         'SELECT id, onchain_escrow_id FROM escrows WHERE onchain_escrow_id = $1',
-        [escrow_id]
+        [escrow_id],
       );
 
       if (escrowResult.length === 0) {
         const mappingResult = await query(
           'SELECT e.id, e.onchain_escrow_id FROM escrow_id_mapping m JOIN escrows e ON m.database_id = e.id WHERE m.blockchain_id = $1',
-          [escrow_id]
+          [escrow_id],
         );
 
         if (mappingResult.length > 0) {
@@ -217,7 +241,7 @@ async function resolveEscrowDbId(
         try {
           await query(
             'INSERT INTO escrow_id_mapping (blockchain_id, database_id, network_id) VALUES ($1, $2, $3) ON CONFLICT (blockchain_id, network_id) DO UPDATE SET database_id = $2',
-            [escrow_id, escrowDbId, networkId]
+            [escrow_id, escrowDbId, networkId],
           );
         } catch (err) {
           console.log(`[WARN] Could not create escrow ID mapping: ${(err as Error).message}`);
@@ -227,27 +251,37 @@ async function resolveEscrowDbId(
     }
   }
 
-  if (finalTransactionType === 'FUND_ESCROW' && metadata && (metadata as Record<string, unknown>).escrow_id) {
+  if (
+    finalTransactionType === 'FUND_ESCROW' &&
+    metadata &&
+    (metadata as Record<string, unknown>).escrow_id
+  ) {
     const metaEscrowId = (metadata as Record<string, unknown>).escrow_id;
     const mappingResult = await query(
       'SELECT database_id FROM escrow_id_mapping WHERE blockchain_id = $1 AND network_id = $2',
-      [metaEscrowId, networkId]
+      [metaEscrowId, networkId],
     );
 
-    if (mappingResult.length > 0) return mappingResult[0].database_id;
+    if (mappingResult.length > 0) {
+      return mappingResult[0].database_id;
+    }
 
     const escrowResult = await query('SELECT id FROM escrows WHERE onchain_escrow_id = $1', [
       metaEscrowId,
     ]);
-    if (escrowResult.length > 0) return escrowResult[0].id;
+    if (escrowResult.length > 0) {
+      return escrowResult[0].id;
+    }
   }
 
   if (finalTransactionType === 'FUND_ESCROW') {
     const escrowResult = await query(
       'SELECT id FROM escrows WHERE trade_id = $1 ORDER BY created_at DESC LIMIT 1',
-      [trade_id]
+      [trade_id],
     );
-    if (escrowResult.length > 0) return escrowResult[0].id;
+    if (escrowResult.length > 0) {
+      return escrowResult[0].id;
+    }
   }
 
   return null;
@@ -260,20 +294,22 @@ async function resolveEscrowDbId(
 async function applyStateUpdate(
   transactionType: string,
   trade_id: number,
-  escrowDbId: number | null
+  escrowDbId: number | null,
 ): Promise<void> {
   if (transactionType === 'MARK_FIAT_PAID') {
     await withTransaction(async (client) => {
       const { rows } = await client.query(
         'SELECT leg1_state FROM trades WHERE id = $1 FOR UPDATE',
-        [trade_id]
+        [trade_id],
       );
       if (rows.length === 0) {
         console.log(`[WARN] Cannot update trade state: Trade with ID ${trade_id} not found`);
         return;
       }
       const currentState = rows[0].leg1_state;
-      if (currentState === 'FIAT_PAID') return; // Already in target state
+      if (currentState === 'FIAT_PAID') {
+        return; // Already in target state
+      }
 
       if (!VALID_LEG_TRANSITIONS[currentState]?.includes('FIAT_PAID')) {
         console.log(`[WARN] Invalid transition ${currentState} -> FIAT_PAID for trade ${trade_id}`);
@@ -283,12 +319,12 @@ async function applyStateUpdate(
       const timestamp = Math.floor(Date.now() / 1000);
       await client.query(
         'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE id = $3',
-        ['FIAT_PAID', timestamp, trade_id]
+        ['FIAT_PAID', timestamp, trade_id],
       );
       if (escrowDbId) {
         await client.query(
           'UPDATE escrows SET fiat_paid = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND fiat_paid = FALSE',
-          [escrowDbId]
+          [escrowDbId],
         );
       }
       console.log(`[INFO] Updated trade id=${trade_id} leg1_state=FIAT_PAID`);
@@ -299,12 +335,16 @@ async function applyStateUpdate(
         `SELECT t.leg1_state, t.leg1_escrow_onchain_id, e.id as escrow_id, e.state as escrow_state
          FROM trades t LEFT JOIN escrows e ON e.trade_id = t.id
          WHERE t.id = $1 ORDER BY e.created_at DESC LIMIT 1`,
-        [trade_id]
+        [trade_id],
       );
-      if (rows.length === 0) return;
+      if (rows.length === 0) {
+        return;
+      }
 
       const { leg1_state, escrow_id: foundEscrowId, leg1_escrow_onchain_id } = rows[0];
-      if (leg1_state === 'RELEASED' || leg1_state === 'COMPLETED') return;
+      if (leg1_state === 'RELEASED' || leg1_state === 'COMPLETED') {
+        return;
+      }
 
       if (!VALID_LEG_TRANSITIONS[leg1_state]?.includes('RELEASED')) {
         console.log(`[WARN] Invalid transition ${leg1_state} -> RELEASED for trade ${trade_id}`);
@@ -314,47 +354,50 @@ async function applyStateUpdate(
       const timestamp = Math.floor(Date.now() / 1000);
       await client.query(
         'UPDATE trades SET leg1_state = $1, leg1_released_at = to_timestamp($2), overall_status = $3 WHERE id = $4',
-        ['RELEASED', timestamp, 'COMPLETED', trade_id]
+        ['RELEASED', timestamp, 'COMPLETED', trade_id],
       );
 
       const escrowToUpdate = foundEscrowId || escrowDbId;
       if (escrowToUpdate) {
         await client.query(
           'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE id = $3 AND state <> $1',
-          ['RELEASED', timestamp, escrowToUpdate]
+          ['RELEASED', timestamp, escrowToUpdate],
         );
       } else if (leg1_escrow_onchain_id) {
         await client.query(
           'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE onchain_escrow_id = $3 AND state <> $1',
-          ['RELEASED', timestamp, leg1_escrow_onchain_id]
+          ['RELEASED', timestamp, leg1_escrow_onchain_id],
         );
       }
-      console.log(`[INFO] Updated trade id=${trade_id} leg1_state=RELEASED overall_status=COMPLETED`);
+      console.log(
+        `[INFO] Updated trade id=${trade_id} leg1_state=RELEASED overall_status=COMPLETED`,
+      );
     });
   } else if (transactionType === 'FUND_ESCROW') {
     await withTransaction(async (client) => {
       const { rows } = await client.query(
         'SELECT leg1_state FROM trades WHERE id = $1 FOR UPDATE',
-        [trade_id]
+        [trade_id],
       );
-      if (rows.length === 0) return;
+      if (rows.length === 0) {
+        return;
+      }
 
       const currentState = rows[0].leg1_state;
-      if (['FUNDED', 'FIAT_PAID', 'RELEASED', 'COMPLETED'].includes(currentState)) return;
+      if (['FUNDED', 'FIAT_PAID', 'RELEASED', 'COMPLETED'].includes(currentState)) {
+        return;
+      }
 
       if (!VALID_LEG_TRANSITIONS[currentState]?.includes('FUNDED')) {
         console.log(`[WARN] Invalid transition ${currentState} -> FUNDED for trade ${trade_id}`);
         return;
       }
 
-      await client.query(
-        'UPDATE trades SET leg1_state = $1 WHERE id = $2',
-        ['FUNDED', trade_id]
-      );
+      await client.query('UPDATE trades SET leg1_state = $1 WHERE id = $2', ['FUNDED', trade_id]);
       if (escrowDbId) {
         await client.query(
           'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND state NOT IN ($1, $3, $4, $5)',
-          ['FUNDED', escrowDbId, 'FIAT_PAID', 'RELEASED', 'COMPLETED']
+          ['FUNDED', escrowDbId, 'FIAT_PAID', 'RELEASED', 'COMPLETED'],
         );
       }
       console.log(`[INFO] Updated trade id=${trade_id} leg1_state=FUNDED`);
@@ -363,12 +406,16 @@ async function applyStateUpdate(
     await withTransaction(async (client) => {
       const { rows } = await client.query(
         'SELECT leg1_state FROM trades WHERE id = $1 FOR UPDATE',
-        [trade_id]
+        [trade_id],
       );
-      if (rows.length === 0) return;
+      if (rows.length === 0) {
+        return;
+      }
 
       const currentState = rows[0].leg1_state;
-      if (currentState === 'CANCELLED') return;
+      if (currentState === 'CANCELLED') {
+        return;
+      }
 
       if (!VALID_LEG_TRANSITIONS[currentState]?.includes('CANCELLED')) {
         console.log(`[WARN] Invalid transition ${currentState} -> CANCELLED for trade ${trade_id}`);
@@ -378,12 +425,12 @@ async function applyStateUpdate(
       const timestamp = Math.floor(Date.now() / 1000);
       await client.query(
         'UPDATE trades SET leg1_state = $1, leg1_cancelled_at = to_timestamp($2), overall_status = $3, cancelled = TRUE WHERE id = $4',
-        ['CANCELLED', timestamp, 'CANCELLED', trade_id]
+        ['CANCELLED', timestamp, 'CANCELLED', trade_id],
       );
       if (escrowDbId) {
         await client.query(
           'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE id = $3 AND state <> $1',
-          ['CANCELLED', timestamp, escrowDbId]
+          ['CANCELLED', timestamp, escrowDbId],
         );
       }
       console.log(`[INFO] Updated trade id=${trade_id} leg1_state=CANCELLED`);
@@ -392,26 +439,31 @@ async function applyStateUpdate(
     await withTransaction(async (client) => {
       const { rows } = await client.query(
         'SELECT leg1_state FROM trades WHERE id = $1 FOR UPDATE',
-        [trade_id]
+        [trade_id],
       );
-      if (rows.length === 0) return;
+      if (rows.length === 0) {
+        return;
+      }
 
       const currentState = rows[0].leg1_state;
-      if (['DISPUTED', 'RESOLVED', 'RELEASED', 'COMPLETED', 'CANCELLED'].includes(currentState)) return;
+      if (['DISPUTED', 'RESOLVED', 'RELEASED', 'COMPLETED', 'CANCELLED'].includes(currentState)) {
+        return;
+      }
 
       if (!VALID_LEG_TRANSITIONS[currentState]?.includes('DISPUTED')) {
         console.log(`[WARN] Invalid transition ${currentState} -> DISPUTED for trade ${trade_id}`);
         return;
       }
 
-      await client.query(
-        'UPDATE trades SET leg1_state = $1, overall_status = $2 WHERE id = $3',
-        ['DISPUTED', 'DISPUTED', trade_id]
-      );
+      await client.query('UPDATE trades SET leg1_state = $1, overall_status = $2 WHERE id = $3', [
+        'DISPUTED',
+        'DISPUTED',
+        trade_id,
+      ]);
       if (escrowDbId) {
         await client.query(
           'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND state NOT IN ($1, $3, $4, $5)',
-          ['DISPUTED', escrowDbId, 'RESOLVED', 'RELEASED', 'CANCELLED']
+          ['DISPUTED', escrowDbId, 'RESOLVED', 'RELEASED', 'CANCELLED'],
         );
       }
       console.log(`[INFO] Updated trade id=${trade_id} leg1_state=DISPUTED`);
@@ -420,12 +472,16 @@ async function applyStateUpdate(
     await withTransaction(async (client) => {
       const { rows } = await client.query(
         'SELECT leg1_state FROM trades WHERE id = $1 FOR UPDATE',
-        [trade_id]
+        [trade_id],
       );
-      if (rows.length === 0) return;
+      if (rows.length === 0) {
+        return;
+      }
 
       const currentState = rows[0].leg1_state;
-      if (['RESOLVED', 'RELEASED', 'COMPLETED'].includes(currentState)) return;
+      if (['RESOLVED', 'RELEASED', 'COMPLETED'].includes(currentState)) {
+        return;
+      }
 
       if (!VALID_LEG_TRANSITIONS[currentState]?.includes('RESOLVED')) {
         console.log(`[WARN] Invalid transition ${currentState} -> RESOLVED for trade ${trade_id}`);
@@ -433,14 +489,15 @@ async function applyStateUpdate(
       }
 
       const timestamp = Math.floor(Date.now() / 1000);
-      await client.query(
-        'UPDATE trades SET leg1_state = $1, overall_status = $2 WHERE id = $3',
-        ['RESOLVED', 'COMPLETED', trade_id]
-      );
+      await client.query('UPDATE trades SET leg1_state = $1, overall_status = $2 WHERE id = $3', [
+        'RESOLVED',
+        'COMPLETED',
+        trade_id,
+      ]);
       if (escrowDbId) {
         await client.query(
           'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($2) WHERE id = $3 AND state <> $1 AND state <> $4',
-          ['RESOLVED', timestamp, escrowDbId, 'RELEASED']
+          ['RESOLVED', timestamp, escrowDbId, 'RELEASED'],
         );
       }
       console.log(`[INFO] Updated trade id=${trade_id} leg1_state=RESOLVED`);

@@ -1,12 +1,12 @@
 import { query } from '../db';
 import {
-  NetworkConfig,
-  NetworkType,
-  NetworkFamily,
-  NetworkRow,
-  NetworkNotFoundError,
-  NetworkInactiveError,
   InvalidNetworkError,
+  type NetworkConfig,
+  NetworkFamily,
+  NetworkInactiveError,
+  NetworkNotFoundError,
+  type NetworkRow,
+  NetworkType,
 } from '../types/networks';
 
 export class NetworkService {
@@ -43,24 +43,24 @@ export class NetworkService {
   private static async loadNetworks(): Promise<void> {
     const rows = await query('SELECT * FROM networks ORDER BY id');
 
-    this.networkCache.clear();
-    this.networkNameCache.clear();
+    NetworkService.networkCache.clear();
+    NetworkService.networkNameCache.clear();
 
     for (const row of rows) {
-      const config = this.rowToConfig(row as NetworkRow);
-      this.networkCache.set(config.id, config);
-      this.networkNameCache.set(config.name, config);
+      const config = NetworkService.rowToConfig(row as NetworkRow);
+      NetworkService.networkCache.set(config.id, config);
+      NetworkService.networkNameCache.set(config.name, config);
     }
 
-    this.lastCacheUpdate = Date.now();
+    NetworkService.lastCacheUpdate = Date.now();
   }
 
   /**
    * Ensure cache is fresh
    */
   private static async ensureFreshCache(): Promise<void> {
-    if (Date.now() - this.lastCacheUpdate > this.cacheExpiry) {
-      await this.loadNetworks();
+    if (Date.now() - NetworkService.lastCacheUpdate > NetworkService.cacheExpiry) {
+      await NetworkService.loadNetworks();
     }
   }
 
@@ -68,15 +68,15 @@ export class NetworkService {
    * Get network by ID
    */
   static async getNetworkById(id: number): Promise<NetworkConfig | null> {
-    await this.ensureFreshCache();
-    return this.networkCache.get(id) || null;
+    await NetworkService.ensureFreshCache();
+    return NetworkService.networkCache.get(id) || null;
   }
 
   /**
    * Get network by name
    */
   static async getNetworkByName(name: NetworkType | string): Promise<NetworkConfig | null> {
-    await this.ensureFreshCache();
+    await NetworkService.ensureFreshCache();
 
     // Handle string input
     if (typeof name === 'string') {
@@ -86,52 +86,54 @@ export class NetworkService {
       name = name as NetworkType;
     }
 
-    return this.networkNameCache.get(name as NetworkType) || null;
+    return NetworkService.networkNameCache.get(name as NetworkType) || null;
   }
 
   /**
    * Get all active networks
    */
   static async getActiveNetworks(): Promise<NetworkConfig[]> {
-    await this.ensureFreshCache();
-    return Array.from(this.networkCache.values()).filter(n => n.isActive);
+    await NetworkService.ensureFreshCache();
+    return Array.from(NetworkService.networkCache.values()).filter((n) => n.isActive);
   }
 
   /**
    * Get all networks (including inactive)
    */
   static async getAllNetworks(): Promise<NetworkConfig[]> {
-    await this.ensureFreshCache();
-    return Array.from(this.networkCache.values());
+    await NetworkService.ensureFreshCache();
+    return Array.from(NetworkService.networkCache.values());
   }
 
   /**
    * Get networks by family
    */
   static async getNetworksByFamily(family: NetworkFamily): Promise<NetworkConfig[]> {
-    await this.ensureFreshCache();
-    return Array.from(this.networkCache.values()).filter(n => n.networkFamily === family);
+    await NetworkService.ensureFreshCache();
+    return Array.from(NetworkService.networkCache.values()).filter(
+      (n) => n.networkFamily === family,
+    );
   }
 
   /**
    * Get Solana networks
    */
   static async getSolanaNetworks(): Promise<NetworkConfig[]> {
-    return this.getNetworksByFamily(NetworkFamily.SOLANA);
+    return NetworkService.getNetworksByFamily(NetworkFamily.SOLANA);
   }
 
   /**
    * Get EVM networks
    */
   static async getEVMNetworks(): Promise<NetworkConfig[]> {
-    return this.getNetworksByFamily(NetworkFamily.EVM);
+    return NetworkService.getNetworksByFamily(NetworkFamily.EVM);
   }
 
   /**
    * Get network family for a given network ID
    */
   static async getNetworkFamily(networkId: number): Promise<NetworkFamily> {
-    const network = await this.getNetworkById(networkId);
+    const network = await NetworkService.getNetworkById(networkId);
     if (!network) {
       throw new NetworkNotFoundError(`Network with ID ${networkId} not found`);
     }
@@ -146,7 +148,7 @@ export class NetworkService {
     // Currently using devnet for both environments
     const defaultNetworkName = NetworkType.SOLANA_DEVNET;
 
-    const network = await this.getNetworkByName(defaultNetworkName);
+    const network = await NetworkService.getNetworkByName(defaultNetworkName);
     if (!network) {
       throw new NetworkNotFoundError(defaultNetworkName);
     }
@@ -164,10 +166,10 @@ export class NetworkService {
 
     if (networkName === undefined || networkName === null) {
       // Return default network if no header specified
-      return await this.getDefaultNetwork();
+      return await NetworkService.getDefaultNetwork();
     }
 
-    const network = await this.getNetworkByName(networkName);
+    const network = await NetworkService.getNetworkByName(networkName);
     if (!network) {
       throw new InvalidNetworkError(networkName);
     }
@@ -183,7 +185,7 @@ export class NetworkService {
    * Validate network exists and is active
    */
   static async validateNetwork(networkId: number): Promise<NetworkConfig> {
-    const network = await this.getNetworkById(networkId);
+    const network = await NetworkService.getNetworkById(networkId);
     if (!network) {
       throw new NetworkNotFoundError(networkId.toString());
     }
@@ -199,7 +201,7 @@ export class NetworkService {
    * Create a new network (admin only)
    */
   static async createNetwork(
-    config: Omit<NetworkConfig, 'id' | 'createdAt' | 'updatedAt'>
+    config: Omit<NetworkConfig, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<NetworkConfig> {
     const result = await query(
       `
@@ -215,13 +217,13 @@ export class NetworkService {
         config.contractAddress,
         config.isTestnet,
         config.isActive,
-      ]
+      ],
     );
 
     // Clear cache to force reload
-    this.lastCacheUpdate = 0;
+    NetworkService.lastCacheUpdate = 0;
 
-    return this.rowToConfig(result[0] as NetworkRow);
+    return NetworkService.rowToConfig(result[0] as NetworkRow);
   }
 
   /**
@@ -229,7 +231,7 @@ export class NetworkService {
    */
   static async updateNetwork(
     id: number,
-    updates: Partial<Omit<NetworkConfig, 'id' | 'createdAt' | 'updatedAt'>>
+    updates: Partial<Omit<NetworkConfig, 'id' | 'createdAt' | 'updatedAt'>>,
   ): Promise<NetworkConfig | null> {
     const setClauses: string[] = [];
     const values: (string | number | boolean)[] = [];
@@ -265,7 +267,7 @@ export class NetworkService {
     }
 
     if (setClauses.length === 0) {
-      return await this.getNetworkById(id);
+      return await NetworkService.getNetworkById(id);
     }
 
     values.push(id);
@@ -276,7 +278,7 @@ export class NetworkService {
       WHERE id = $${paramIndex}
       RETURNING *
     `,
-      values
+      values,
     );
 
     if (result.length === 0) {
@@ -284,9 +286,9 @@ export class NetworkService {
     }
 
     // Clear cache to force reload
-    this.lastCacheUpdate = 0;
+    NetworkService.lastCacheUpdate = 0;
 
-    return this.rowToConfig(result[0] as NetworkRow);
+    return NetworkService.rowToConfig(result[0] as NetworkRow);
   }
 
   /**
@@ -299,11 +301,11 @@ export class NetworkService {
       SET is_active = false, updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
     `,
-      [id]
+      [id],
     );
 
     // Clear cache to force reload
-    this.lastCacheUpdate = 0;
+    NetworkService.lastCacheUpdate = 0;
 
     // query() returns an array, so we assume success if no error was thrown
     return true;
@@ -313,9 +315,9 @@ export class NetworkService {
    * Clear cache (useful for testing or manual cache invalidation)
    */
   static clearCache(): void {
-    this.networkCache.clear();
-    this.networkNameCache.clear();
-    this.lastCacheUpdate = 0;
+    NetworkService.networkCache.clear();
+    NetworkService.networkNameCache.clear();
+    NetworkService.lastCacheUpdate = 0;
   }
 
   /**
@@ -335,10 +337,10 @@ export class NetworkService {
     ]);
 
     return {
-      offers: parseInt(offersResult[0].count),
-      trades: parseInt(tradesResult[0].count),
-      escrows: parseInt(escrowsResult[0].count),
-      transactions: parseInt(transactionsResult[0].count),
+      offers: Number.parseInt(offersResult[0].count, 10),
+      trades: Number.parseInt(tradesResult[0].count, 10),
+      escrows: Number.parseInt(escrowsResult[0].count, 10),
+      transactions: Number.parseInt(transactionsResult[0].count, 10),
     };
   }
 }

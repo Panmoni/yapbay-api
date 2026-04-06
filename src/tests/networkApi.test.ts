@@ -1,14 +1,14 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { expect } from 'chai';
-import request from 'supertest';
 import express from 'express';
+import request from 'supertest';
 import pool from '../db';
 import routes from '../routes';
 import { NetworkService } from '../services/networkService';
-import { NetworkType, NetworkConfig } from '../types/networks';
-import * as fs from 'fs';
-import * as path from 'path';
+import { type NetworkConfig, NetworkType } from '../types/networks';
 
-describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
+describe.skip('Network API Integration Tests (Celo - DISABLED)', () => {
   // DISABLED: Celo networks are currently inactive, focusing on Solana
   // These tests will be re-enabled when Celo networks are reactivated
   let app: express.Application;
@@ -19,7 +19,7 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
   let authToken: string;
 
   before(async function () {
-    this.timeout(10000);
+    this.timeout(10_000);
 
     // Setup express app
     app = express();
@@ -32,20 +32,20 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
     try {
       // Get network configurations
       alfajoresNetwork = (await NetworkService.getNetworkByName(
-        NetworkType.CELO_ALFAJORES
+        NetworkType.CELO_ALFAJORES,
       )) as NetworkConfig;
       mainnetNetwork = (await NetworkService.getNetworkByName(
-        NetworkType.CELO_MAINNET
+        NetworkType.CELO_MAINNET,
       )) as NetworkConfig;
 
-      if (!alfajoresNetwork || !mainnetNetwork) {
+      if (!(alfajoresNetwork && mainnetNetwork)) {
         throw new Error('Networks not properly configured');
       }
 
       // Create test account
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        ['0x1234567890123456789012345678901234567890', 'apitest', 'apitest@example.com']
+        ['0x1234567890123456789012345678901234567890', 'apitest', 'apitest@example.com'],
       );
       testAccountId = accountResult.rows[0].id;
 
@@ -59,22 +59,22 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
     }
   });
 
-  beforeEach(async function () {
+  beforeEach(async () => {
     await client.query('BEGIN');
   });
 
-  afterEach(async function () {
+  afterEach(async () => {
     await client.query('ROLLBACK');
   });
 
-  after(async function () {
+  after(async () => {
     if (client) {
       await client.release();
     }
   });
 
-  describe('Network Header Validation', function () {
-    it('should reject requests with invalid network names', async function () {
+  describe('Network Header Validation', () => {
+    it('should reject requests with invalid network names', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'invalid-network')
@@ -85,14 +85,14 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
       expect(response.body.validNetworks).to.include('celo-mainnet');
     });
 
-    it('should use default network when no header provided', async function () {
+    it('should use default network when no header provided', async () => {
       const response = await request(app).get('/api/health').expect(200);
 
       expect(response.body.network).to.exist;
       expect(['celo-alfajores', 'celo-mainnet']).to.include(response.body.network.name);
     });
 
-    it('should accept valid network names', async function () {
+    it('should accept valid network names', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'celo-alfajores')
@@ -102,21 +102,21 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
     });
   });
 
-  describe('Offers API Network Isolation', function () {
-    beforeEach(async function () {
+  describe('Offers API Network Isolation', () => {
+    beforeEach(async () => {
       // Create test offers on different networks
       await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
+        [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id],
       );
 
       await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [testAccountId, 'SELL', 150, 300, 600, 1.03, mainnetNetwork.id]
+        [testAccountId, 'SELL', 150, 300, 600, 1.03, mainnetNetwork.id],
       );
     });
 
-    it('should return offers only for specified network', async function () {
+    it('should return offers only for specified network', async () => {
       // Test Alfajores
       const alfajoresResponse = await request(app)
         .get('/api/offers')
@@ -138,7 +138,7 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
       expect(mainnetResponse.body.offers[0].offer_type).to.equal('SELL');
     });
 
-    it('should not find offers from other networks by ID', async function () {
+    it('should not find offers from other networks by ID', async () => {
       // Get an offer ID from Alfajores
       const alfajoresOffers = await client.query('SELECT id FROM offers WHERE network_id = $1', [
         alfajoresNetwork.id,
@@ -155,21 +155,21 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
     });
   });
 
-  describe('Trades API Network Isolation', function () {
+  describe('Trades API Network Isolation', () => {
     let alfajoresOfferId: number;
     let mainnetOfferId: number;
 
-    beforeEach(async function () {
+    beforeEach(async () => {
       // Create test offers
       const alfajoresOffer = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
+        [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id],
       );
       alfajoresOfferId = alfajoresOffer.rows[0].id;
 
       const mainnetOffer = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [testAccountId, 'SELL', 150, 300, 600, 1.03, mainnetNetwork.id]
+        [testAccountId, 'SELL', 150, 300, 600, 1.03, mainnetNetwork.id],
       );
       mainnetOfferId = mainnetOffer.rows[0].id;
 
@@ -186,7 +186,7 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
           100,
           'USD',
           alfajoresNetwork.id,
-        ]
+        ],
       );
 
       await client.query(
@@ -201,11 +201,11 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
           200,
           'EUR',
           mainnetNetwork.id,
-        ]
+        ],
       );
     });
 
-    it('should return trades only for specified network', async function () {
+    it('should return trades only for specified network', async () => {
       // Test Alfajores
       const alfajoresResponse = await request(app)
         .get('/api/my/trades')
@@ -229,7 +229,7 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
       expect(mainnetResponse.body.trades[0].from_fiat_currency).to.equal('EUR');
     });
 
-    it('should reject trade creation with offer from different network', async function () {
+    it('should reject trade creation with offer from different network', async () => {
       // Try to create trade on Mainnet using Alfajores offer
       const response = await request(app)
         .post('/api/trades')
@@ -247,7 +247,7 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
       expect(response.body.error).to.equal('Leg 1 offer not found');
     });
 
-    it('should successfully create trade with offer from same network', async function () {
+    it('should successfully create trade with offer from same network', async () => {
       // Create trade on Mainnet using Mainnet offer
       const response = await request(app)
         .post('/api/trades')
@@ -267,8 +267,8 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
     });
   });
 
-  describe('Health Endpoint Network Awareness', function () {
-    it('should return network information in health check', async function () {
+  describe('Health Endpoint Network Awareness', () => {
+    it('should return network information in health check', async () => {
       const response = await request(app)
         .get('/api/health')
         .set('X-Network-Name', 'celo-alfajores')
@@ -276,11 +276,11 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
 
       expect(response.body.network).to.exist;
       expect(response.body.network.name).to.equal('celo-alfajores');
-      expect(response.body.network.chainId).to.equal(44787);
+      expect(response.body.network.chainId).to.equal(44_787);
       expect(response.body.network.status).to.exist;
     });
 
-    it('should test different networks independently', async function () {
+    it('should test different networks independently', async () => {
       // Test Alfajores
       const alfajoresResponse = await request(app)
         .get('/api/health')
@@ -293,13 +293,13 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
         .set('X-Network-Name', 'celo-mainnet')
         .expect(200);
 
-      expect(alfajoresResponse.body.network.chainId).to.equal(44787);
-      expect(mainnetResponse.body.network.chainId).to.equal(42220);
+      expect(alfajoresResponse.body.network.chainId).to.equal(44_787);
+      expect(mainnetResponse.body.network.chainId).to.equal(42_220);
     });
   });
 
-  describe('Network Response Headers', function () {
-    it('should include network information in response headers', async function () {
+  describe('Network Response Headers', () => {
+    it('should include network information in response headers', async () => {
       const response = await request(app)
         .get('/api/offers')
         .set('X-Network-Name', 'celo-alfajores')
@@ -311,8 +311,8 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
     });
   });
 
-  describe('Error Handling', function () {
-    it('should handle network service errors gracefully', async function () {
+  describe('Error Handling', () => {
+    it('should handle network service errors gracefully', async () => {
       // Test with a network that might be inactive
       const response = await request(app)
         .get('/api/offers')
@@ -322,7 +322,7 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
       expect(response.body.error).to.equal('Invalid network specified');
     });
 
-    it('should provide helpful error messages for missing network', async function () {
+    it('should provide helpful error messages for missing network', async () => {
       const response = await request(app).get('/api/offers').set('X-Network-Name', '').expect(400);
 
       expect(response.body.error).to.equal('Invalid network specified');
@@ -330,12 +330,12 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
     });
   });
 
-  describe('Cross-Network Data Leakage Prevention', function () {
-    it('should not allow access to resources from different networks', async function () {
+  describe('Cross-Network Data Leakage Prevention', () => {
+    it('should not allow access to resources from different networks', async () => {
       // Create offer on Alfajores
       const offerResult = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
+        [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id],
       );
       const offerId = offerResult.rows[0].id;
 
@@ -348,11 +348,11 @@ describe.skip('Network API Integration Tests (Celo - DISABLED)', function () {
       expect(response.body.error).to.equal('Offer not found');
     });
 
-    it('should enforce network isolation in update operations', async function () {
+    it('should enforce network isolation in update operations', async () => {
       // Create offer on Alfajores
       const offerResult = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
+        [testAccountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id],
       );
       const offerId = offerResult.rows[0].id;
 

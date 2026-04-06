@@ -1,9 +1,9 @@
-import express, { Response } from 'express';
-import { CeloService } from '../../celo';
-import { requireNetwork } from '../../middleware/networkMiddleware';
-import { withErrorHandling } from '../../middleware/errorHandler';
 import { ethers } from 'ethers';
-import { AuthenticatedRequest } from '../../middleware/auth';
+import express, { type Response } from 'express';
+import { CeloService } from '../../celo';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { withErrorHandling } from '../../middleware/errorHandler';
+import { requireNetwork } from '../../middleware/networkMiddleware';
 import { requireEscrowParticipant } from './middleware';
 
 const router = express.Router();
@@ -18,17 +18,20 @@ router.get(
     const networkId = req.networkId!;
 
     try {
-      const balance = await CeloService.getEscrowBalance(networkId, parseInt(onchainEscrowId));
+      const balance = await CeloService.getEscrowBalance(
+        networkId,
+        Number.parseInt(onchainEscrowId, 10),
+      );
       res.json({
         network: req.network!.name,
         escrowId: onchainEscrowId,
-        balance
+        balance,
       });
     } catch (error) {
       console.error('Error fetching escrow balance:', error);
       res.status(500).json({ error: 'Failed to fetch escrow balance' });
     }
-  })
+  }),
 );
 
 // Get stored escrow balance from contract
@@ -46,13 +49,13 @@ router.get(
 
       res.json({
         escrowId: onchainEscrowId,
-        storedBalance: ethers.formatUnits(stored, 6)
+        storedBalance: ethers.formatUnits(stored, 6),
       });
     } catch (error) {
       console.error('Error fetching stored escrow balance:', error);
       res.status(500).json({ error: 'Failed to fetch stored escrow balance' });
     }
-  })
+  }),
 );
 
 // Get calculated escrow balance from contract
@@ -70,13 +73,13 @@ router.get(
 
       res.json({
         escrowId: onchainEscrowId,
-        calculatedBalance: ethers.formatUnits(calculated, 6)
+        calculatedBalance: ethers.formatUnits(calculated, 6),
       });
     } catch (error) {
       console.error('Error fetching calculated escrow balance:', error);
       res.status(500).json({ error: 'Failed to fetch calculated escrow balance' });
     }
-  })
+  }),
 );
 
 // Get sequential escrow information
@@ -89,18 +92,21 @@ router.get(
     const networkId = req.networkId!;
 
     try {
-      const sequentialInfo = await CeloService.getSequentialInfo(networkId, parseInt(onchainEscrowId));
-      
+      const sequentialInfo = await CeloService.getSequentialInfo(
+        networkId,
+        Number.parseInt(onchainEscrowId, 10),
+      );
+
       res.json({
         network: req.network!.name,
         escrowId: onchainEscrowId,
-        sequentialInfo
+        sequentialInfo,
       });
     } catch (error) {
       console.error('Error fetching sequential escrow info:', error);
       res.status(500).json({ error: 'Failed to fetch sequential escrow info' });
     }
-  })
+  }),
 );
 
 // Check if escrow is eligible for auto-cancellation
@@ -113,17 +119,20 @@ router.get(
     const networkId = req.networkId!;
 
     try {
-      const isEligible = await CeloService.checkAutoCancelEligible(networkId, parseInt(onchainEscrowId));
-      
+      const isEligible = await CeloService.checkAutoCancelEligible(
+        networkId,
+        Number.parseInt(onchainEscrowId, 10),
+      );
+
       res.json({
         escrowId: onchainEscrowId,
-        isEligibleForAutoCancel: isEligible
+        isEligibleForAutoCancel: isEligible,
       });
     } catch (error) {
       console.error('Error checking auto-cancel eligibility:', error);
       res.status(500).json({ error: 'Failed to check auto-cancel eligibility' });
     }
-  })
+  }),
 );
 
 export default router;

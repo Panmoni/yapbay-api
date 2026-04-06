@@ -1,7 +1,7 @@
 import express from 'express';
-import publicRouter from './public';
-import crudRouter from './crud';
 import { requireJWT } from '../../middleware';
+import crudRouter from './crud';
+import publicRouter from './public';
 
 const router = express.Router();
 

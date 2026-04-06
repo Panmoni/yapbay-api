@@ -1,21 +1,21 @@
+import { Connection, PublicKey } from '@solana/web3.js';
 import { expect } from 'chai';
 import { NetworkService } from '../services/networkService';
-import { NetworkType, NetworkFamily } from '../types/networks';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { NetworkFamily, NetworkType } from '../types/networks';
 
-describe('Solana Network Tests', function () {
+describe('Solana Network Tests', () => {
   let solanaDevnetNetwork: any;
   let solanaMainnetNetwork: any;
 
   before(async function () {
-    this.timeout(10000);
+    this.timeout(10_000);
 
     try {
       // Get Solana network configurations
       solanaDevnetNetwork = await NetworkService.getNetworkByName(NetworkType.SOLANA_DEVNET);
       solanaMainnetNetwork = await NetworkService.getNetworkByName(NetworkType.SOLANA_MAINNET);
 
-      if (!solanaDevnetNetwork || !solanaMainnetNetwork) {
+      if (!(solanaDevnetNetwork && solanaMainnetNetwork)) {
         throw new Error('Solana networks not properly configured');
       }
     } catch (error) {
@@ -24,22 +24,22 @@ describe('Solana Network Tests', function () {
     }
   });
 
-  describe('Solana Network Configuration', function () {
-    it('should have Solana Devnet configured', function () {
+  describe('Solana Network Configuration', () => {
+    it('should have Solana Devnet configured', () => {
       expect(solanaDevnetNetwork).to.not.be.null;
       expect(solanaDevnetNetwork.name).to.equal(NetworkType.SOLANA_DEVNET);
       expect(solanaDevnetNetwork.networkFamily).to.equal(NetworkFamily.SOLANA);
       expect(solanaDevnetNetwork.isTestnet).to.be.true;
     });
 
-    it('should have Solana Mainnet configured', function () {
+    it('should have Solana Mainnet configured', () => {
       expect(solanaMainnetNetwork).to.not.be.null;
       expect(solanaMainnetNetwork.name).to.equal(NetworkType.SOLANA_MAINNET);
       expect(solanaMainnetNetwork.networkFamily).to.equal(NetworkFamily.SOLANA);
       expect(solanaMainnetNetwork.isTestnet).to.be.false;
     });
 
-    it('should have valid Solana RPC URLs', function () {
+    it('should have valid Solana RPC URLs', () => {
       expect(solanaDevnetNetwork.rpcUrl).to.be.a('string');
       expect(solanaDevnetNetwork.rpcUrl).to.include('solana');
 
@@ -47,16 +47,16 @@ describe('Solana Network Tests', function () {
       expect(solanaMainnetNetwork.rpcUrl).to.include('solana');
     });
 
-    it('should have valid program IDs', function () {
+    it('should have valid program IDs', () => {
       // Only test devnet since mainnet is not active yet
       expect(solanaDevnetNetwork.programId).to.be.a('string');
       expect(solanaDevnetNetwork.programId.length).to.equal(44); // Base58 encoded public key
       expect(solanaDevnetNetwork.programId).to.equal(
-        '4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x'
+        '4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x',
       );
     });
 
-    it('should have valid USDC mint addresses', function () {
+    it('should have valid USDC mint addresses', () => {
       expect(solanaDevnetNetwork.usdcMint).to.be.a('string');
       expect(solanaDevnetNetwork.usdcMint.length).to.equal(44);
 
@@ -64,7 +64,7 @@ describe('Solana Network Tests', function () {
       expect(solanaMainnetNetwork.usdcMint.length).to.equal(44);
     });
 
-    it('should have valid arbitrator addresses', function () {
+    it('should have valid arbitrator addresses', () => {
       expect(solanaDevnetNetwork.arbitratorAddress).to.be.a('string');
       expect(solanaDevnetNetwork.arbitratorAddress.length).to.equal(44);
 
@@ -73,9 +73,9 @@ describe('Solana Network Tests', function () {
     });
   });
 
-  describe('Solana RPC Connection', function () {
+  describe('Solana RPC Connection', () => {
     it('should connect to Solana Devnet', async function () {
-      this.timeout(15000);
+      this.timeout(15_000);
 
       const connection = new Connection(solanaDevnetNetwork.rpcUrl);
       const version = await connection.getVersion();
@@ -85,7 +85,7 @@ describe('Solana Network Tests', function () {
     });
 
     it('should connect to Solana Mainnet', async function () {
-      this.timeout(15000);
+      this.timeout(15_000);
 
       const connection = new Connection(solanaMainnetNetwork.rpcUrl);
       const version = await connection.getVersion();
@@ -95,7 +95,7 @@ describe('Solana Network Tests', function () {
     });
 
     it('should get current slot from Solana Devnet', async function () {
-      this.timeout(15000);
+      this.timeout(15_000);
 
       const connection = new Connection(solanaDevnetNetwork.rpcUrl);
       const slot = await connection.getSlot();
@@ -105,25 +105,25 @@ describe('Solana Network Tests', function () {
     });
   });
 
-  describe('Solana Address Validation', function () {
-    it('should validate Solana program IDs', function () {
+  describe('Solana Address Validation', () => {
+    it('should validate Solana program IDs', () => {
       // Test valid program ID - only test devnet since mainnet is not active yet
       expect(() => new PublicKey(solanaDevnetNetwork.programId)).to.not.throw();
     });
 
-    it('should validate Solana USDC mint addresses', function () {
+    it('should validate Solana USDC mint addresses', () => {
       // Test valid USDC mint
       expect(() => new PublicKey(solanaDevnetNetwork.usdcMint)).to.not.throw();
       expect(() => new PublicKey(solanaMainnetNetwork.usdcMint)).to.not.throw();
     });
 
-    it('should validate Solana arbitrator addresses', function () {
+    it('should validate Solana arbitrator addresses', () => {
       // Test valid arbitrator address
       expect(() => new PublicKey(solanaDevnetNetwork.arbitratorAddress)).to.not.throw();
       expect(() => new PublicKey(solanaMainnetNetwork.arbitratorAddress)).to.not.throw();
     });
 
-    it('should reject invalid Solana addresses', function () {
+    it('should reject invalid Solana addresses', () => {
       const invalidAddresses = [
         'invalid-address',
         '0x1234567890123456789012345678901234567890', // EVM address
@@ -131,32 +131,32 @@ describe('Solana Network Tests', function () {
         '1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111', // Too long
       ];
 
-      invalidAddresses.forEach(address => {
+      invalidAddresses.forEach((address) => {
         expect(() => new PublicKey(address)).to.throw();
       });
     });
   });
 
-  describe('Network Service Integration', function () {
-    it('should get Solana networks by family', async function () {
+  describe('Network Service Integration', () => {
+    it('should get Solana networks by family', async () => {
       const solanaNetworks = await NetworkService.getSolanaNetworks();
 
       expect(solanaNetworks).to.be.an('array');
       expect(solanaNetworks.length).to.be.greaterThan(0);
 
-      solanaNetworks.forEach(network => {
+      solanaNetworks.forEach((network) => {
         expect(network.networkFamily).to.equal(NetworkFamily.SOLANA);
       });
     });
 
-    it('should get default network as Solana Devnet in development', async function () {
+    it('should get default network as Solana Devnet in development', async () => {
       const defaultNetwork = await NetworkService.getDefaultNetwork();
 
       expect(defaultNetwork.networkFamily).to.equal(NetworkFamily.SOLANA);
       expect(defaultNetwork.isTestnet).to.be.true;
     });
 
-    it('should get network family correctly', async function () {
+    it('should get network family correctly', async () => {
       const devnetFamily = await NetworkService.getNetworkFamily(solanaDevnetNetwork.id);
       const mainnetFamily = await NetworkService.getNetworkFamily(solanaMainnetNetwork.id);
 
@@ -165,12 +165,12 @@ describe('Solana Network Tests', function () {
     });
   });
 
-  describe('Network Status', function () {
-    it('should have Solana Devnet as active', function () {
+  describe('Network Status', () => {
+    it('should have Solana Devnet as active', () => {
       expect(solanaDevnetNetwork.isActive).to.be.true;
     });
 
-    it('should have Solana Mainnet as inactive (for now)', function () {
+    it('should have Solana Mainnet as inactive (for now)', () => {
       expect(solanaMainnetNetwork.isActive).to.be.false;
     });
   });

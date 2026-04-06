@@ -1,14 +1,14 @@
-import { readFileSync } from 'fs';
-import path from 'path';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import axios from 'axios';
 
 interface VersionInfo {
-  version: string;
-  gitCommitHash: string;
-  gitCommitDate: string;
-  gitBranch: string;
   buildDate: string;
+  gitBranch: string;
+  gitCommitDate: string;
+  gitCommitHash: string;
   isDirty: boolean;
+  version: string;
 }
 
 let cachedVersionInfo: VersionInfo | null = null;
@@ -27,7 +27,7 @@ export async function getVersionInfo(): Promise<VersionInfo> {
     // Get git information from environment variables (set at build time) or files
     let gitCommitHash = process.env.GIT_COMMIT_HASH;
     let gitBranch = process.env.GIT_BRANCH;
-    
+
     // If not in env vars, try reading from files (set during container build)
     if (!gitCommitHash || gitCommitHash === 'unknown') {
       try {
@@ -36,7 +36,7 @@ export async function getVersionInfo(): Promise<VersionInfo> {
         gitCommitHash = 'unknown';
       }
     }
-    
+
     if (!gitBranch || gitBranch === 'unknown') {
       try {
         gitBranch = readFileSync('/tmp/git_branch', 'utf8').trim() || 'unknown';
@@ -44,9 +44,9 @@ export async function getVersionInfo(): Promise<VersionInfo> {
         gitBranch = 'unknown';
       }
     }
-    
+
     let gitCommitDate = 'unknown';
-    let isDirty = false;
+    const isDirty = false;
 
     // If we have a commit hash, try to get details from GitHub API
     if (gitCommitHash !== 'unknown') {
@@ -56,16 +56,16 @@ export async function getVersionInfo(): Promise<VersionInfo> {
         const githubToken = process.env.GITHUB_TOKEN; // Optional, for rate limits
 
         const headers: Record<string, string> = {
-          'Accept': 'application/vnd.github.v3+json',
+          Accept: 'application/vnd.github.v3+json',
         };
         if (githubToken) {
-          headers['Authorization'] = `token ${githubToken}`;
+          headers.Authorization = `token ${githubToken}`;
         }
 
         // Query GitHub API for commit details
         const response = await axios.get(
           `https://api.github.com/repos/${repoOwner}/${repoName}/commits/${gitCommitHash}`,
-          { headers, timeout: 5000 }
+          { headers, timeout: 5000 },
         );
 
         if (response.data) {
@@ -75,7 +75,10 @@ export async function getVersionInfo(): Promise<VersionInfo> {
         }
       } catch (apiError) {
         // GitHub API call failed, use fallback values
-        console.warn('Could not retrieve git information from GitHub API:', (apiError as Error).message);
+        console.warn(
+          'Could not retrieve git information from GitHub API:',
+          (apiError as Error).message,
+        );
       }
     }
 
@@ -85,14 +88,13 @@ export async function getVersionInfo(): Promise<VersionInfo> {
       gitCommitDate,
       gitBranch,
       buildDate: new Date().toISOString(),
-      isDirty
+      isDirty,
     };
 
     return cachedVersionInfo;
-
   } catch (error) {
     console.error('Error getting version info:', error);
-    
+
     // Return fallback version info
     return {
       version: 'unknown',
@@ -100,7 +102,7 @@ export async function getVersionInfo(): Promise<VersionInfo> {
       gitCommitDate: 'unknown',
       gitBranch: 'unknown',
       buildDate: new Date().toISOString(),
-      isDirty: false
+      isDirty: false,
     };
   }
 }

@@ -1,8 +1,8 @@
-import { Response, NextFunction } from 'express';
+import type { NextFunction, Response } from 'express';
 import { query } from '../db';
-import { getWalletAddressFromJWT } from '../utils/jwtUtils';
 import { logError } from '../logger';
-import { AuthenticatedRequest } from './auth';
+import { getWalletAddressFromJWT } from '../utils/jwtUtils';
+import type { AuthenticatedRequest } from './auth';
 
 // Middleware to check ownership
 export const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: string) => {
@@ -17,16 +17,19 @@ export const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: 
     try {
       const table = resourceType === 'account' ? 'accounts' : 'offers';
       const column = resourceType === 'account' ? 'wallet_address' : 'creator_account_id';
-      
+
       let result;
       if (resourceType === 'offer' && req.networkId) {
         // For offers, include network filtering
-        result = await query(`SELECT ${column} FROM ${table} WHERE id = $1 AND network_id = $2`, [resourceId, req.networkId]);
+        result = await query(`SELECT ${column} FROM ${table} WHERE id = $1 AND network_id = $2`, [
+          resourceId,
+          req.networkId,
+        ]);
       } else {
         // For accounts (cross-network) or when network not available
         result = await query(`SELECT ${column} FROM ${table} WHERE id = $1`, [resourceId]);
       }
-      
+
       if (result.length === 0) {
         res.status(404).json({ error: `${resourceType} not found` });
         return;
@@ -58,7 +61,7 @@ export const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: 
     } catch (err) {
       logError(
         `[restrictToOwner] Error checking ownership for ${resourceType} ${resourceId}`,
-        err as Error
+        err as Error,
       );
       res.status(500).json({ error: (err as Error).message });
     }

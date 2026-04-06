@@ -1,18 +1,18 @@
-import express, { Response } from 'express';
-import { query, withTransaction, recordTransaction } from '../../db';
-// import { CeloService } from '../../celo'; // CELO - DISABLED
-import { NetworkService } from '../../services/networkService';
-import { BlockchainServiceFactory } from '../../services/blockchainService';
-import { NetworkFamily } from '../../types/networks';
-import { requireNetwork } from '../../middleware/networkMiddleware';
-import { withErrorHandling } from '../../middleware/errorHandler';
+import express, { type Response } from 'express';
+import { query, recordTransaction, withTransaction } from '../../db';
 import { logError } from '../../logger';
-import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 // import { ethers } from 'ethers'; // CELO - DISABLED
 // import YapBayEscrowABI from '../../contract/YapBayEscrow.json'; // CELO - DISABLED
-import { AuthenticatedRequest } from '../../middleware/auth';
-import { validateEscrowRecord } from './validation';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { withErrorHandling } from '../../middleware/errorHandler';
+import { requireNetwork } from '../../middleware/networkMiddleware';
+import { BlockchainServiceFactory } from '../../services/blockchainService';
+// import { CeloService } from '../../celo'; // CELO - DISABLED
+import { NetworkService } from '../../services/networkService';
+import { NetworkFamily } from '../../types/networks';
+import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { requireEscrowList } from './middleware';
+import { validateEscrowRecord } from './validation';
 
 const router = express.Router();
 
@@ -110,7 +110,7 @@ router.post(
         // Check if an escrow with this onchain_escrow_id already exists
         const { rows: existingEscrow } = await client.query(
           'SELECT id FROM escrows WHERE onchain_escrow_id = $1 AND network_id = $2',
-          [escrow_id, networkId]
+          [escrow_id, networkId],
         );
 
         let dbId;
@@ -119,7 +119,7 @@ router.post(
           dbId = existingEscrow[0].id;
           await client.query(
             'UPDATE escrows SET state = $1, deposit_deadline = $2, fiat_deadline = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
-            ['CREATED', depositDeadline, fiatDeadline, dbId]
+            ['CREATED', depositDeadline, fiatDeadline, dbId],
           );
         } else {
           const { rows: result } = await client.query(
@@ -151,7 +151,7 @@ router.post(
               escrowData.trade_onchain_id,
               depositDeadline,
               fiatDeadline,
-            ]
+            ],
           );
 
           if (result.length === 0 || !result[0].id) {
@@ -181,7 +181,7 @@ router.post(
       res.json({
         success: true,
         escrowId: escrow_id,
-        escrowDbId: escrowDbId,
+        escrowDbId,
         txHash: network.networkFamily === NetworkFamily.EVM ? transaction_hash : signature,
         networkFamily: network.networkFamily,
         blockExplorerUrl: blockchainService.getBlockExplorerUrl(transactionIdentifier),
@@ -211,7 +211,7 @@ router.post(
         details: 'Error occurred while recording escrow',
       });
     }
-  })
+  }),
 );
 
 // List escrows for authenticated user
@@ -232,10 +232,10 @@ router.get(
        AND (LOWER(e.seller_address) = LOWER($2) OR LOWER(e.buyer_address) = LOWER($2))
        ORDER BY e.created_at DESC
        LIMIT $3 OFFSET $4`,
-      [networkId, jwtWalletAddress, limit, offset]
+      [networkId, jwtWalletAddress, limit, offset],
     );
     res.json(result);
-  })
+  }),
 );
 
 export default router;

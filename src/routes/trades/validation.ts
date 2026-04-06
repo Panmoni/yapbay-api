@@ -1,10 +1,14 @@
-import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../../middleware/auth';
-import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
+import type { NextFunction, Response } from 'express';
 import { query } from '../../db';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { VALID_LEG_TRANSITIONS, VALID_OVERALL_TRANSITIONS } from '../../utils/stateTransitions';
 
-export const validateTradeCreation = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const validateTradeCreation = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   const {
     leg1_offer_id,
     leg1_crypto_amount,
@@ -27,15 +31,18 @@ export const validateTradeCreation = async (req: AuthenticatedRequest, res: Resp
 
   try {
     // Validate the offer exists and is available
-    const leg1Offer = await query('SELECT * FROM offers WHERE id = $1 AND network_id = $2', [leg1_offer_id, networkId]);
+    const leg1Offer = await query('SELECT * FROM offers WHERE id = $1 AND network_id = $2', [
+      leg1_offer_id,
+      networkId,
+    ]);
     if (leg1Offer.length === 0) {
       res.status(404).json({ error: 'Leg 1 offer not found' });
       return;
     }
 
     // Convert string values to numbers for proper comparison
-    const totalAvailable = parseFloat(leg1Offer[0].total_available_amount);
-    const offerMinAmount = parseFloat(leg1Offer[0].min_amount);
+    const totalAvailable = Number.parseFloat(leg1Offer[0].total_available_amount);
+    const offerMinAmount = Number.parseFloat(leg1Offer[0].min_amount);
 
     if (totalAvailable < offerMinAmount) {
       res.status(400).json({ error: 'Offer no longer available' });
@@ -61,7 +68,10 @@ export const validateTradeCreation = async (req: AuthenticatedRequest, res: Resp
     }
 
     // Validate fiat amount if provided
-    if (leg1_fiat_amount !== undefined && (typeof leg1_fiat_amount !== 'number' || leg1_fiat_amount <= 0)) {
+    if (
+      leg1_fiat_amount !== undefined &&
+      (typeof leg1_fiat_amount !== 'number' || leg1_fiat_amount <= 0)
+    ) {
       res.status(400).json({ error: 'leg1_fiat_amount must be a positive number' });
       return;
     }
@@ -73,7 +83,9 @@ export const validateTradeCreation = async (req: AuthenticatedRequest, res: Resp
     }
 
     if (destination_fiat_currency && !/^[A-Z]{3}$/.test(destination_fiat_currency)) {
-      res.status(400).json({ error: 'destination_fiat_currency must be a 3-letter uppercase code' });
+      res
+        .status(400)
+        .json({ error: 'destination_fiat_currency must be a 3-letter uppercase code' });
       return;
     }
 
@@ -92,8 +104,10 @@ export const validateTradeCreation = async (req: AuthenticatedRequest, res: Resp
       leg1Offer[0].creator_account_id,
     ]);
 
-    if (creatorAccount.length > 0 && 
-        creatorAccount[0].wallet_address.toLowerCase() === jwtWalletAddress.toLowerCase()) {
+    if (
+      creatorAccount.length > 0 &&
+      creatorAccount[0].wallet_address.toLowerCase() === jwtWalletAddress.toLowerCase()
+    ) {
       res.status(400).json({ error: 'Cannot create a trade with your own offer' });
       return;
     }
@@ -110,7 +124,11 @@ export const validateTradeCreation = async (req: AuthenticatedRequest, res: Resp
   }
 };
 
-export const validateTradeUpdate = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const validateTradeUpdate = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   const { leg1_state, overall_status, fiat_paid } = req.body;
   const { id } = req.params;
 
@@ -120,7 +138,7 @@ export const validateTradeUpdate = async (req: AuthenticatedRequest, res: Respon
     if (!validStates.includes(leg1_state)) {
       res.status(400).json({
         error: 'Invalid leg1_state',
-        validStates
+        validStates,
       });
       return;
     }
@@ -132,7 +150,7 @@ export const validateTradeUpdate = async (req: AuthenticatedRequest, res: Respon
     if (!validStatuses.includes(overall_status)) {
       res.status(400).json({
         error: 'Invalid overall_status',
-        validStatuses
+        validStatuses,
       });
       return;
     }
@@ -147,7 +165,10 @@ export const validateTradeUpdate = async (req: AuthenticatedRequest, res: Respon
   // Enforce state machine transitions by checking current state
   if (leg1_state !== undefined || overall_status !== undefined) {
     try {
-      const tradeResult = await query('SELECT leg1_state, overall_status FROM trades WHERE id = $1', [id]);
+      const tradeResult = await query(
+        'SELECT leg1_state, overall_status FROM trades WHERE id = $1',
+        [id],
+      );
       if (tradeResult.length === 0) {
         res.status(404).json({ error: 'Trade not found' });
         return;

@@ -1,8 +1,8 @@
-import { Connection, PublicKey, Keypair } from '@solana/web3.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { BorshCoder, EventParser } from '@coral-xyz/anchor';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { NetworkService } from './networkService';
-import { EventParser, BorshCoder } from '@coral-xyz/anchor';
-import * as fs from 'fs';
-import * as path from 'path';
 
 export class SolanaService {
   private static connections: Map<number, Connection> = new Map();
@@ -39,8 +39,8 @@ export class SolanaService {
    * Get Solana connection for a network
    */
   static async getConnectionForNetwork(networkId: number): Promise<Connection> {
-    if (this.connections.has(networkId)) {
-      return this.connections.get(networkId)!;
+    if (SolanaService.connections.has(networkId)) {
+      return SolanaService.connections.get(networkId)!;
     }
 
     const network = await NetworkService.getNetworkById(networkId);
@@ -53,7 +53,7 @@ export class SolanaService {
     }
 
     const connection = new Connection(network.rpcUrl);
-    this.connections.set(networkId, connection);
+    SolanaService.connections.set(networkId, connection);
 
     console.log(`Created Solana connection for ${network.name}: ${network.rpcUrl}`);
     return connection;
@@ -63,8 +63,8 @@ export class SolanaService {
    * Get arbitrator keypair for a network
    */
   static async getArbitratorKeypair(networkId: number): Promise<Keypair> {
-    if (this.keypairs.has(networkId)) {
-      return this.keypairs.get(networkId)!;
+    if (SolanaService.keypairs.has(networkId)) {
+      return SolanaService.keypairs.get(networkId)!;
     }
 
     const network = await NetworkService.getNetworkById(networkId);
@@ -80,13 +80,13 @@ export class SolanaService {
     const arbitratorKeypairEnv = process.env.SOLANA_ARBITRATOR_KEYPAIR;
     if (!arbitratorKeypairEnv) {
       throw new Error(
-        `SOLANA_ARBITRATOR_KEYPAIR environment variable not set for network ${network.name}`
+        `SOLANA_ARBITRATOR_KEYPAIR environment variable not set for network ${network.name}`,
       );
     }
 
     try {
-      const keypair = this.loadKeypair(arbitratorKeypairEnv);
-      this.keypairs.set(networkId, keypair);
+      const keypair = SolanaService.loadKeypair(arbitratorKeypairEnv);
+      SolanaService.keypairs.set(networkId, keypair);
 
       console.log(`Loaded arbitrator keypair for ${network.name}: ${keypair.publicKey.toBase58()}`);
       return keypair;
@@ -105,7 +105,7 @@ export class SolanaService {
       console.log(
         `Keypair validation for ${keypair.publicKey.toBase58()}: ${
           accountInfo ? 'valid' : 'account not found'
-        }`
+        }`,
       );
       return true; // If we can query the account, the keypair is valid
     } catch (error) {
@@ -118,8 +118,8 @@ export class SolanaService {
    * Get event parser for a network
    */
   static async getEventParser(networkId: number): Promise<EventParser> {
-    if (this.eventParsers.has(networkId)) {
-      return this.eventParsers.get(networkId)!;
+    if (SolanaService.eventParsers.has(networkId)) {
+      return SolanaService.eventParsers.get(networkId)!;
     }
 
     const network = await NetworkService.getNetworkById(networkId);
@@ -139,10 +139,10 @@ export class SolanaService {
       // Load IDL from the program (this would need to be available)
       // For now, we'll create a basic event parser
       const programId = new PublicKey(network.programId);
-      const borshCoder = await this.getBorshCoder(networkId);
+      const borshCoder = await SolanaService.getBorshCoder(networkId);
       const eventParser = new EventParser(programId, borshCoder);
 
-      this.eventParsers.set(networkId, eventParser);
+      SolanaService.eventParsers.set(networkId, eventParser);
       console.log(`Created event parser for ${network.name}`);
       return eventParser;
     } catch (error) {
@@ -154,8 +154,8 @@ export class SolanaService {
    * Get BorshCoder for a network
    */
   static async getBorshCoder(networkId: number): Promise<BorshCoder> {
-    if (this.borshCoders.has(networkId)) {
-      return this.borshCoders.get(networkId)!;
+    if (SolanaService.borshCoders.has(networkId)) {
+      return SolanaService.borshCoders.get(networkId)!;
     }
 
     const network = await NetworkService.getNetworkById(networkId);
@@ -181,7 +181,7 @@ export class SolanaService {
       };
       const borshCoder = new BorshCoder(idl);
 
-      this.borshCoders.set(networkId, borshCoder);
+      SolanaService.borshCoders.set(networkId, borshCoder);
       console.log(`Created BorshCoder for ${network.name}`);
       return borshCoder;
     } catch (error) {
@@ -193,9 +193,9 @@ export class SolanaService {
    * Clear all cached connections, keypairs, and parsers
    */
   static clearCache(): void {
-    this.connections.clear();
-    this.keypairs.clear();
-    this.eventParsers.clear();
-    this.borshCoders.clear();
+    SolanaService.connections.clear();
+    SolanaService.keypairs.clear();
+    SolanaService.eventParsers.clear();
+    SolanaService.borshCoders.clear();
   }
 }

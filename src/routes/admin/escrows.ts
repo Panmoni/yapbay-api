@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import { query } from '../../db';
 import { withErrorHandling } from '../../middleware/errorHandler';
 
@@ -15,7 +15,7 @@ router.get(
       return;
     }
     res.json(result[0]);
-  })
+  }),
 );
 
 export default router;

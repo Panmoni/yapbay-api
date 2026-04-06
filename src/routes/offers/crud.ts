@@ -1,10 +1,10 @@
-import express, { Response } from 'express';
+import express, { type Response } from 'express';
 import { query } from '../../db';
-import { requireNetwork } from '../../middleware/networkMiddleware';
+import { type AuthenticatedRequest, restrictToOwner } from '../../middleware';
 import { withErrorHandling } from '../../middleware/errorHandler';
-import { AuthenticatedRequest, restrictToOwner } from '../../middleware';
-import { validateOfferCreation, validateOfferUpdate } from './validation';
+import { requireNetwork } from '../../middleware/networkMiddleware';
 import { sendNetworkResponse } from '../../utils/routeHelpers';
+import { validateOfferCreation, validateOfferUpdate } from './validation';
 
 const router = express.Router();
 
@@ -32,13 +32,13 @@ router.post(
         '15 minutes',
         '30 minutes',
         networkId,
-      ]
+      ],
     );
     res.status(201).json({
       network: req.network!.name,
-      offer: result[0]
+      offer: result[0],
     });
-  })
+  }),
 );
 
 // Update an offer (restricted to creator)
@@ -65,9 +65,15 @@ router.put(
       } = req.body;
 
       const formatTimeLimit = (limit: undefined | null | string | { minutes: number }) => {
-        if (!limit) return null;
-        if (typeof limit === 'string') return limit;
-        if (limit.minutes) return `${limit.minutes} minutes`;
+        if (!limit) {
+          return null;
+        }
+        if (typeof limit === 'string') {
+          return limit;
+        }
+        if (limit.minutes) {
+          return `${limit.minutes} minutes`;
+        }
         return null;
       };
 
@@ -98,19 +104,19 @@ router.put(
           token || null,
           id,
           networkId,
-        ]
+        ],
       );
-      
+
       if (result.length === 0) {
         res.status(404).json({ error: 'Offer not found' });
         return;
       }
-      
+
       sendNetworkResponse(res, result[0], req.network!.name, 'offer');
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
-  })
+  }),
 );
 
 // Delete an offer (restricted to creator)
@@ -123,7 +129,10 @@ router.delete(
     const networkId = req.networkId!;
     try {
       // First check if the offer exists and is owned by the caller
-      const offerCheck = await query('SELECT id FROM offers WHERE id = $1 AND network_id = $2', [id, networkId]);
+      const offerCheck = await query('SELECT id FROM offers WHERE id = $1 AND network_id = $2', [
+        id,
+        networkId,
+      ]);
       if (offerCheck.length === 0) {
         res.status(404).json({ error: 'Offer not found' });
         return;
@@ -132,7 +141,7 @@ router.delete(
       // Check for active trades referencing this offer on this network
       const activeTrades = await query(
         "SELECT id FROM trades WHERE leg1_offer_id = $1 AND network_id = $2 AND overall_status NOT IN ('COMPLETED', 'CANCELLED')",
-        [id, networkId]
+        [id, networkId],
       );
 
       if (activeTrades.length > 0) {
@@ -144,7 +153,10 @@ router.delete(
       }
 
       // Proceed with deletion
-      const result = await query('DELETE FROM offers WHERE id = $1 AND network_id = $2 RETURNING id', [id, networkId]);
+      const result = await query(
+        'DELETE FROM offers WHERE id = $1 AND network_id = $2 RETURNING id',
+        [id, networkId],
+      );
 
       if (result.length === 0) {
         res.status(500).json({ error: 'Unexpected error deleting offer' });
@@ -168,7 +180,7 @@ router.delete(
         });
       }
     }
-  })
+  }),
 );
 
 export default router;

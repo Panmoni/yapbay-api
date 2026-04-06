@@ -1,12 +1,11 @@
-import { ethers } from 'ethers';
-import { Keypair } from '@solana/web3.js';
-import { CeloService } from '../celo';
-import { SolanaService } from './solanaService';
-import { NetworkService } from './networkService';
-import { YapBayEscrow } from '../types/YapBayEscrow';
-
-import pool, { syncEscrowBalance, recordBalanceValidation } from '../db';
+import type { Keypair } from '@solana/web3.js';
 import * as dotenv from 'dotenv';
+import { ethers } from 'ethers';
+import { CeloService } from '../celo';
+import pool, { recordBalanceValidation, syncEscrowBalance } from '../db';
+import type { YapBayEscrow } from '../types/YapBayEscrow';
+import { NetworkService } from './networkService';
+import { SolanaService } from './solanaService';
 
 dotenv.config();
 
@@ -15,23 +14,23 @@ const USE_TESTNET = process.env.NODE_ENV === 'development' || process.env.USE_TE
 const _NETWORK_NAME = USE_TESTNET ? 'Alfajores Testnet' : 'Celo Mainnet';
 
 interface EscrowDetails {
-  escrowId: number;
-  tradeId: string;
-  seller: string;
   amount: string;
-  state: number;
   depositDeadline: number;
+  escrowId: number;
   fiatDeadline: number;
   fiatPaid: boolean;
+  seller: string;
+  state: number;
+  tradeId: string;
 }
 
 interface AutoCancellationResult {
+  errorMessage?: string;
   escrowId: number;
+  gasPrice?: string;
+  gasUsed?: number;
   success: boolean;
   transactionHash?: string;
-  gasUsed?: number;
-  gasPrice?: string;
-  errorMessage?: string;
 }
 
 /**
@@ -47,7 +46,7 @@ export class EscrowMonitoringService {
   constructor() {
     // This constructor is deprecated - use createForNetwork instead
     console.warn(
-      '⚠️  WARNING: Using deprecated constructor. Use EscrowMonitoringService.createForNetwork() instead.'
+      '⚠️  WARNING: Using deprecated constructor. Use EscrowMonitoringService.createForNetwork() instead.',
     );
   }
 
@@ -72,12 +71,13 @@ export class EscrowMonitoringService {
       service.arbitratorWallet = new ethers.Wallet(arbitratorPrivateKey, provider);
       service.contract = await CeloService.getContractForNetwork(
         networkId,
-        service.arbitratorWallet
+        service.arbitratorWallet,
       );
 
       console.log(`✅ Created EVM escrow monitoring service for ${network.name}`);
       return service;
-    } else if (network.networkFamily === 'solana') {
+    }
+    if (network.networkFamily === 'solana') {
       // Handle Solana networks
       try {
         service.arbitratorKeypair = await SolanaService.getArbitratorKeypair(networkId);
@@ -89,7 +89,7 @@ export class EscrowMonitoringService {
         return service;
       } catch (error) {
         throw new Error(
-          `Failed to create Solana escrow monitoring service for ${network.name}: ${error}`
+          `Failed to create Solana escrow monitoring service for ${network.name}: ${error}`,
         );
       }
     } else {
@@ -107,7 +107,7 @@ export class EscrowMonitoringService {
     console.log(
       `[EscrowMonitor] Starting expired escrow check on ${networkName} (${
         this.networkFamily
-      }): ${new Date().toISOString()}`
+      }): ${new Date().toISOString()}`,
     );
 
     try {
@@ -120,7 +120,7 @@ export class EscrowMonitoringService {
         throw new Error(`Unsupported network family: ${this.networkFamily}`);
       }
     } catch (error) {
-      console.error(`[ERROR] Failed to start escrow monitoring:`, error);
+      console.error('[ERROR] Failed to start escrow monitoring:', error);
       throw error;
     }
   }
@@ -140,8 +140,8 @@ export class EscrowMonitoringService {
     console.log(`[EscrowMonitor] Checking ${activeEscrows.length} active escrows`);
 
     // Check eligibility and cancel in batches
-    const batchSize = parseInt(process.env.ESCROW_MONITOR_BATCH_SIZE || '50');
-    const delayHours = parseInt(process.env.AUTO_CANCEL_DELAY_HOURS || '1');
+    const batchSize = Number.parseInt(process.env.ESCROW_MONITOR_BATCH_SIZE || '50', 10);
+    const delayHours = Number.parseInt(process.env.AUTO_CANCEL_DELAY_HOURS || '1', 10);
 
     for (let i = 0; i < activeEscrows.length; i += batchSize) {
       const batch = activeEscrows.slice(i, i + batchSize);
@@ -153,9 +153,9 @@ export class EscrowMonitoringService {
    * Monitor Solana escrows (placeholder implementation)
    */
   private async monitorSolanaEscrows(): Promise<void> {
-    console.log(`[EscrowMonitor] Solana escrow monitoring not yet implemented`);
+    console.log('[EscrowMonitor] Solana escrow monitoring not yet implemented');
     console.log(
-      `[EscrowMonitor] Arbitrator keypair available: ${this.arbitratorKeypair?.publicKey.toBase58()}`
+      `[EscrowMonitor] Arbitrator keypair available: ${this.arbitratorKeypair?.publicKey.toBase58()}`,
     );
 
     // TODO: Implement Solana escrow monitoring
@@ -170,7 +170,9 @@ export class EscrowMonitoringService {
    * Process a batch of escrows for auto-cancellation
    */
   private async processBatch(escrowIds: number[], delayHours: number): Promise<void> {
-    const eligibilityPromises = escrowIds.map(id => this.checkEligibilityWithDelay(id, delayHours));
+    const eligibilityPromises = escrowIds.map((id) =>
+      this.checkEligibilityWithDelay(id, delayHours),
+    );
     const eligibilityResults = await Promise.allSettled(eligibilityPromises);
 
     const eligibleEscrows: number[] = [];
@@ -181,14 +183,14 @@ export class EscrowMonitoringService {
       } else if (result.status === 'rejected') {
         console.error(
           `[EscrowMonitor] Failed to check eligibility for escrow ${escrowIds[index]}:`,
-          result.reason
+          result.reason,
         );
       }
     });
 
     if (eligibleEscrows.length > 0) {
       console.log(
-        `[EscrowMonitor] Found ${eligibleEscrows.length} eligible escrows for auto-cancellation`
+        `[EscrowMonitor] Found ${eligibleEscrows.length} eligible escrows for auto-cancellation`,
       );
       await this.performAutoCancellations(eligibleEscrows);
     }
@@ -201,7 +203,7 @@ export class EscrowMonitoringService {
     try {
       if (!this.contract) {
         throw new Error(
-          'Contract not initialized - only EVM networks supported for eligibility checking'
+          'Contract not initialized - only EVM networks supported for eligibility checking',
         );
       }
 
@@ -258,7 +260,7 @@ export class EscrowMonitoringService {
         state: Number(escrowInfo.state || escrowInfo[3] || 0),
         depositDeadline: Number(escrowInfo.deposit_deadline || escrowInfo[4] || 0),
         fiatDeadline: Number(escrowInfo.fiat_deadline || escrowInfo[5] || 0),
-        fiatPaid: Boolean(escrowInfo.fiat_paid || escrowInfo[6] || false),
+        fiatPaid: Boolean(escrowInfo.fiat_paid || escrowInfo[6]),
       };
     } catch (error) {
       console.error(`[EscrowMonitor] Error getting escrow details for ${escrowId}:`, error);
@@ -272,7 +274,7 @@ export class EscrowMonitoringService {
   private async performAutoCancellations(escrowIds: number[]): Promise<void> {
     if (!this.contract) {
       throw new Error(
-        'Contract not initialized - only EVM networks supported for auto-cancellation'
+        'Contract not initialized - only EVM networks supported for auto-cancellation',
       );
     }
 
@@ -291,13 +293,13 @@ export class EscrowMonitoringService {
           const calculatedFormatted = ethers.formatUnits(calculatedBalance, 6);
 
           console.log(
-            `[EscrowMonitor] Escrow ${escrowId} balance validation - Stored: ${storedFormatted} USDC, Calculated: ${calculatedFormatted} USDC`
+            `[EscrowMonitor] Escrow ${escrowId} balance validation - Stored: ${storedFormatted} USDC, Calculated: ${calculatedFormatted} USDC`,
           );
 
           // Get database balance for comparison
           const dbResult = await pool.query(
             'SELECT current_balance FROM escrows WHERE onchain_escrow_id = $1',
-            [escrowId.toString()]
+            [escrowId.toString()],
           );
 
           if (dbResult.rows.length > 0) {
@@ -308,18 +310,18 @@ export class EscrowMonitoringService {
               escrowId.toString(),
               storedFormatted,
               calculatedFormatted,
-              dbBalance
+              dbBalance,
             );
 
             // Sync database if needed
-            if (Math.abs(parseFloat(storedFormatted) - dbBalance) > 0.000001) {
+            if (Math.abs(Number.parseFloat(storedFormatted) - dbBalance) > 0.000_001) {
               console.warn(
-                `[EscrowMonitor] Database balance mismatch for escrow ${escrowId}: DB=${dbBalance}, Contract=${storedFormatted}`
+                `[EscrowMonitor] Database balance mismatch for escrow ${escrowId}: DB=${dbBalance}, Contract=${storedFormatted}`,
               );
               await syncEscrowBalance(
                 escrowId.toString(),
                 storedFormatted,
-                'Auto-cancel validation sync'
+                'Auto-cancel validation sync',
               );
             }
           }
@@ -327,13 +329,13 @@ export class EscrowMonitoringService {
           // Log warning if contract balances don't match expectations
           if (storedBalance !== calculatedBalance) {
             console.warn(
-              `[EscrowMonitor] Contract balance mismatch for escrow ${escrowId}: stored=${storedFormatted}, calculated=${calculatedFormatted}`
+              `[EscrowMonitor] Contract balance mismatch for escrow ${escrowId}: stored=${storedFormatted}, calculated=${calculatedFormatted}`,
             );
           }
         } catch (balanceError) {
           console.warn(
             `[EscrowMonitor] Could not validate balance for escrow ${escrowId}:`,
-            balanceError
+            balanceError,
           );
         }
 
@@ -343,11 +345,11 @@ export class EscrowMonitoringService {
 
         // Execute the auto-cancellation
         const tx = await this.contract.autoCancel(escrowId, {
-          gasLimit: gasLimit,
+          gasLimit,
         });
 
         console.log(
-          `[EscrowMonitor] Auto-cancel transaction submitted for escrow ${escrowId}: ${tx.hash}`
+          `[EscrowMonitor] Auto-cancel transaction submitted for escrow ${escrowId}: ${tx.hash}`,
         );
 
         // Wait for confirmation
@@ -403,12 +405,12 @@ export class EscrowMonitoringService {
 
       const escrowIds: number[] = [];
 
-      rows.forEach(row => {
+      rows.forEach((row) => {
         if (row.leg1_id && row.leg1_id !== '0' && ['CREATED', 'FUNDED'].includes(row.leg1_state)) {
-          escrowIds.push(parseInt(row.leg1_id));
+          escrowIds.push(Number.parseInt(row.leg1_id, 10));
         }
         if (row.leg2_id && row.leg2_id !== '0' && ['CREATED', 'FUNDED'].includes(row.leg2_state)) {
-          escrowIds.push(parseInt(row.leg2_id));
+          escrowIds.push(Number.parseInt(row.leg2_id, 10));
         }
       });
 
@@ -422,7 +424,9 @@ export class EscrowMonitoringService {
    * Record auto-cancellation results in database
    */
   private async recordAutoCancellationResults(results: AutoCancellationResult[]): Promise<void> {
-    if (results.length === 0) return;
+    if (results.length === 0) {
+      return;
+    }
 
     const client = await pool.connect();
     try {
@@ -442,13 +446,13 @@ export class EscrowMonitoringService {
             result.gasPrice || null,
             result.success ? 'SUCCESS' : 'FAILED',
             result.errorMessage || null,
-          ]
+          ],
         );
 
         console.log(
           `[EscrowMonitor] Recorded auto-cancellation result for escrow ${result.escrowId}: ${
             result.success ? 'SUCCESS' : 'FAILED'
-          }`
+          }`,
         );
       }
 
@@ -489,16 +493,16 @@ export class EscrowMonitoringService {
           // Get database balance
           const dbResult = await pool.query(
             'SELECT current_balance FROM escrows WHERE onchain_escrow_id = $1',
-            [escrowId.toString()]
+            [escrowId.toString()],
           );
 
           if (dbResult.rows.length > 0) {
             const dbBalance = dbResult.rows[0].current_balance;
 
             // Check for significant differences (more than 1 micro-USDC)
-            if (Math.abs(parseFloat(storedFormatted) - dbBalance) > 0.000001) {
+            if (Math.abs(Number.parseFloat(storedFormatted) - dbBalance) > 0.000_001) {
               console.warn(
-                `[EscrowMonitor] Balance sync needed for escrow ${escrowId}: DB=${dbBalance}, Contract=${storedFormatted}, Calculated=${calculatedFormatted}`
+                `[EscrowMonitor] Balance sync needed for escrow ${escrowId}: DB=${dbBalance}, Contract=${storedFormatted}, Calculated=${calculatedFormatted}`,
               );
               await syncEscrowBalance(escrowId.toString(), storedFormatted, 'Validation sync');
             }
@@ -548,7 +552,7 @@ export async function monitorExpiredEscrows(): Promise<void> {
       } catch (networkError) {
         console.error(
           `[EscrowMonitor] Error monitoring network ${network.name} (ID: ${network.id}):`,
-          networkError
+          networkError,
         );
         // Continue with other networks
       }

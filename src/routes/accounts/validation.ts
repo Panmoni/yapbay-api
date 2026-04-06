@@ -1,8 +1,12 @@
-import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../../middleware/auth';
+import type { NextFunction, Response } from 'express';
+import type { AuthenticatedRequest } from '../../middleware/auth';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 
-export const validateAccountCreation = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+export const validateAccountCreation = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): void => {
   const { wallet_address, username } = req.body;
 
   const jwtWalletAddress = getWalletAddressFromJWT(req);
@@ -29,7 +33,11 @@ export const validateAccountCreation = (req: AuthenticatedRequest, res: Response
   next();
 };
 
-export const validateAccountUpdate = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+export const validateAccountUpdate = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): void => {
   const { username } = req.body;
 
   if (username && username.length > 25) {

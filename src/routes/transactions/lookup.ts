@@ -1,9 +1,9 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import { query } from '../../db';
-import { withErrorHandling } from '../../middleware/errorHandler';
 import { logError } from '../../logger';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { withErrorHandling } from '../../middleware/errorHandler';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
-import { AuthenticatedRequest } from '../../middleware/auth';
 
 const router = express.Router();
 
@@ -69,7 +69,7 @@ router.get(
       const result = await query(sql, params);
 
       // Process results to parse any metadata stored in error_message
-      const transactions = result.map(tx => {
+      const transactions = result.map((tx) => {
         let metadata = null;
         if (tx.error_message && tx.status !== 'FAILED') {
           try {
@@ -78,7 +78,7 @@ router.get(
           } catch (error) {
             // Not valid JSON, leave as is (probably an actual error message)
             console.debug(
-              `Could not parse metadata from error_message: ${(error as Error).message}`
+              `Could not parse metadata from error_message: ${(error as Error).message}`,
             );
           }
         }
@@ -98,7 +98,7 @@ router.get(
         details: 'Error occurred while fetching trade transactions',
       });
     }
-  })
+  }),
 );
 
 // GET /transactions/user - Get all transactions for authenticated user
@@ -166,7 +166,7 @@ router.get(
       const result = await query(sql, params);
 
       // Process results to parse any metadata stored in error_message
-      const transactions = result.map(tx => {
+      const transactions = result.map((tx) => {
         let metadata = null;
         if (tx.error_message && tx.status !== 'FAILED') {
           try {
@@ -175,7 +175,7 @@ router.get(
           } catch (error) {
             // Not valid JSON, leave as is (probably an actual error message)
             console.debug(
-              `Could not parse metadata from error_message: ${(error as Error).message}`
+              `Could not parse metadata from error_message: ${(error as Error).message}`,
             );
           }
         }
@@ -194,7 +194,7 @@ router.get(
         details: 'Error occurred while fetching user transactions',
       });
     }
-  })
+  }),
 );
 
 export default router;

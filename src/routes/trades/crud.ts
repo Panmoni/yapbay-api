@@ -1,13 +1,13 @@
-import express, { Response } from 'express';
-import { query, withTransaction, decimalMath } from '../../db';
-import { requireNetwork } from '../../middleware/networkMiddleware';
+import express, { type Response } from 'express';
+import { decimalMath, query, withTransaction } from '../../db';
+import type { AuthenticatedRequest } from '../../middleware/auth';
 import { withErrorHandling } from '../../middleware/errorHandler';
-import { AuthenticatedRequest } from '../../middleware/auth';
-import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
-import { validateTradeCreation, validateTradeUpdate } from './validation';
-import { requireTradeParticipant, requireTradeParticipantForUpdate } from './middleware';
-import { sendNetworkResponse, handleConditionalRequest } from '../../utils/routeHelpers';
+import { requireNetwork } from '../../middleware/networkMiddleware';
 import { isDevMode } from '../../utils/envConfig';
+import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
+import { handleConditionalRequest, sendNetworkResponse } from '../../utils/routeHelpers';
+import { requireTradeParticipant, requireTradeParticipantForUpdate } from './middleware';
+import { validateTradeCreation, validateTradeUpdate } from './validation';
 
 const router = express.Router();
 
@@ -17,7 +17,9 @@ router.post(
   requireNetwork,
   validateTradeCreation,
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    if (isDevMode) console.log('POST /trades - Request body:', JSON.stringify(req.body));
+    if (isDevMode) {
+      console.log('POST /trades - Request body:', JSON.stringify(req.body));
+    }
     const {
       leg1_offer_id,
       leg2_offer_id,
@@ -38,7 +40,7 @@ router.post(
       // Lock the offer row to prevent concurrent depletion
       const offerRows = await client.query(
         'SELECT * FROM offers WHERE id = $1 AND network_id = $2 FOR UPDATE',
-        [leg1_offer_id, networkId]
+        [leg1_offer_id, networkId],
       );
 
       if (offerRows.rows.length === 0) {
@@ -48,9 +50,10 @@ router.post(
       const leg1Offer = offerRows.rows[0];
 
       // Use safe decimal math instead of parseFloat
-      const amountStr = leg1_crypto_amount != null
-        ? decimalMath.parse(leg1_crypto_amount)
-        : decimalMath.parse(leg1Offer.min_amount);
+      const amountStr =
+        leg1_crypto_amount == null
+          ? decimalMath.parse(leg1Offer.min_amount)
+          : decimalMath.parse(leg1_crypto_amount);
 
       if (amountStr === null) {
         throw Object.assign(new Error('Invalid crypto amount'), { statusCode: 400 });
@@ -61,7 +64,9 @@ router.post(
       const minAmountStr = String(leg1Offer.min_amount);
 
       if (decimalMath.compare(newTotalAvailable, '0') < 0) {
-        throw Object.assign(new Error('Insufficient available amount for this trade'), { statusCode: 400 });
+        throw Object.assign(new Error('Insufficient available amount for this trade'), {
+          statusCode: 400,
+        });
       }
 
       const isSeller = leg1Offer.offer_type === 'SELL';
@@ -96,7 +101,7 @@ router.post(
           leg1Offer.escrow_deposit_time_limit,
           leg1Offer.fiat_payment_time_limit,
           networkId,
-        ]
+        ],
       );
 
       // Update offer available amount within the same transaction
@@ -104,19 +109,19 @@ router.post(
         if (decimalMath.compare(newTotalAvailable, minAmountStr) < 0) {
           await client.query(
             'UPDATE offers SET total_available_amount = $1, max_amount = $1, min_amount = $1 WHERE id = $2',
-            [newTotalAvailable, leg1_offer_id]
+            [newTotalAvailable, leg1_offer_id],
           );
         } else {
           await client.query(
             'UPDATE offers SET total_available_amount = $1, max_amount = $1 WHERE id = $2',
-            [newTotalAvailable, leg1_offer_id]
+            [newTotalAvailable, leg1_offer_id],
           );
         }
       } else {
-        await client.query(
-          'UPDATE offers SET total_available_amount = $1 WHERE id = $2',
-          [newTotalAvailable, leg1_offer_id]
-        );
+        await client.query('UPDATE offers SET total_available_amount = $1 WHERE id = $2', [
+          newTotalAvailable,
+          leg1_offer_id,
+        ]);
       }
 
       return tradeResult.rows[0];
@@ -126,7 +131,7 @@ router.post(
       network: req.network!.name,
       trade: result,
     });
-  })
+  }),
 );
 
 // List trades for authenticated user
@@ -145,13 +150,13 @@ router.get(
     }
     const result = await query(
       'SELECT t.* FROM trades t JOIN accounts a ON t.leg1_seller_account_id = a.id OR t.leg1_buyer_account_id = a.id WHERE LOWER(a.wallet_address) = LOWER($1) AND t.network_id = $2 ORDER BY t.created_at DESC LIMIT $3 OFFSET $4',
-      [jwtWalletAddress, networkId, limit, offset]
+      [jwtWalletAddress, networkId, limit, offset],
     );
 
     // Find the most recently updated trade
     const lastModifiedTime =
       result.length > 0
-        ? Math.max(...result.map(trade => trade.updated_at?.getTime() || 0))
+        ? Math.max(...result.map((trade) => trade.updated_at?.getTime() || 0))
         : Date.now();
     const lastModified = new Date(lastModifiedTime);
 
@@ -161,7 +166,7 @@ router.get(
     }
 
     sendNetworkResponse(res, result, req.network!.name, 'trades');
-  })
+  }),
 );
 
 // Get trade details (restricted to participants)
@@ -181,7 +186,7 @@ router.get(
     }
 
     sendNetworkResponse(res, tradeData, req.network!.name, 'trade');
-  })
+  }),
 );
 
 // Update trade info (restricted to trade participants)
@@ -197,7 +202,7 @@ router.put(
     if (fiat_paid === true) {
       await query(
         'UPDATE trades SET leg1_fiat_paid_at = NOW() WHERE id = $1 AND leg1_fiat_paid_at IS NULL',
-        [id]
+        [id],
       );
     } else if (fiat_paid === false) {
       await query('UPDATE trades SET leg1_fiat_paid_at = NULL WHERE id = $1', [id]);
@@ -213,7 +218,7 @@ router.put(
 
       // If setting leg1_state to CANCELLED, also set cancelled = TRUE
       if (leg1_state === 'CANCELLED') {
-        updateFields.push(`cancelled = TRUE`);
+        updateFields.push('cancelled = TRUE');
       }
     }
     if (overall_status !== undefined) {
@@ -222,14 +227,14 @@ router.put(
 
       // If setting overall_status to CANCELLED, also set cancelled = TRUE
       if (overall_status === 'CANCELLED') {
-        updateFields.push(`cancelled = TRUE`);
+        updateFields.push('cancelled = TRUE');
       }
     }
 
     if (updateFields.length > 0) {
       updateParams.push(id);
       const sql = `UPDATE trades SET ${updateFields.join(
-        ', '
+        ', ',
       )} WHERE id = $${paramIndex} RETURNING id`;
       const result = await query(sql, updateParams);
       if (result.length > 0) {
@@ -237,12 +242,12 @@ router.put(
       } else {
         res.status(404).json({ error: 'Trade not found during update' });
       }
-    } else if (fiat_paid !== undefined) {
-      res.json({ id: parseInt(id, 10) });
-    } else {
+    } else if (fiat_paid === undefined) {
       res.status(400).json({ error: 'No fields provided for update' });
+    } else {
+      res.json({ id: Number.parseInt(id, 10) });
     }
-  })
+  }),
 );
 
 export default router;

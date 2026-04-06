@@ -1,4 +1,4 @@
-export { requireJWT, requireAdmin, AuthenticatedRequest } from './auth';
-export { restrictToOwner } from './ownership';
 export * from './auth';
+export { AuthenticatedRequest, requireAdmin, requireJWT } from './auth';
 export * from './ownership';
+export { restrictToOwner } from './ownership';

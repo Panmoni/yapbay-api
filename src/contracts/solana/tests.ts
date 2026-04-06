@@ -1,11 +1,11 @@
 import * as anchor from "@coral-xyz/anchor";
-import { Program, BN } from "@coral-xyz/anchor";
-import { Keypair, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { BN, Program } from "@coral-xyz/anchor";
+import * as token from "@solana/spl-token";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { assert } from "chai";
 import * as dotenv from "dotenv";
 import * as fs from "fs";
 import * as path from "path";
-import * as token from "@solana/spl-token";
 import { LocalsolanaContracts } from "../target/types/localsolana_contracts";
 
 dotenv.config();

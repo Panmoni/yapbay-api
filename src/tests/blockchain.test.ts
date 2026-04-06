@@ -1,13 +1,13 @@
 import { expect } from 'chai';
+import dotenv from 'dotenv';
+import { ethers } from 'ethers';
 import { CeloService } from '../celo';
 import { NetworkService } from '../services/networkService';
-import { NetworkConfig } from '../types/networks';
-import { ethers } from 'ethers';
-import dotenv from 'dotenv';
+import type { NetworkConfig } from '../types/networks';
 
 dotenv.config();
 
-describe.skip('Blockchain Contract Integration (Celo - DISABLED)', function () {
+describe.skip('Blockchain Contract Integration (Celo - DISABLED)', () => {
   // These tests require a connection to the Celo Alfajores testnet
   // and will be skipped if the environment variables are not set
   // DISABLED: Celo networks are currently inactive, focusing on Solana
@@ -27,28 +27,28 @@ describe.skip('Blockchain Contract Integration (Celo - DISABLED)', function () {
     }
   });
 
-  it('should connect to the Celo network', async function () {
+  it('should connect to the Celo network', async () => {
     const network = await provider.getNetwork();
     expect(network.chainId).to.equal(BigInt(defaultNetwork.chainId));
   });
 
-  it('should load the YapBayEscrow contract', function () {
+  it('should load the YapBayEscrow contract', () => {
     expect(contract.target).to.equal(defaultNetwork.contractAddress);
   });
 
-  it('should correctly format USDC amounts', function () {
+  it('should correctly format USDC amounts', () => {
     const amount = 100.5;
     const formatted = CeloService.formatUSDC(amount);
     expect(formatted.toString()).to.equal('100500000'); // 100.5 * 10^6
   });
 
-  it('should correctly parse USDC amounts', function () {
+  it('should correctly parse USDC amounts', () => {
     const amount = BigInt('100500000'); // 100.5 USDC in wei
     const parsed = CeloService.parseUSDC(amount);
     expect(parsed).to.equal(100.5);
   });
 
-  it('should be able to read contract constants', async function () {
+  it('should be able to read contract constants', async () => {
     // Test reading a constant from the contract
     const maxAmount = await contract.MAX_AMOUNT();
     expect(maxAmount).to.be.a('bigint');
@@ -60,12 +60,12 @@ describe.skip('Blockchain Contract Integration (Celo - DISABLED)', function () {
     expect(Number(depositDuration)).to.be.greaterThan(0);
   });
 
-  it('should be able to read the next escrow ID', async function () {
+  it('should be able to read the next escrow ID', async () => {
     const nextEscrowId = await contract.nextEscrowId();
     expect(nextEscrowId).to.be.a('bigint');
   });
 
-  it('should be able to read the arbitrator address', async function () {
+  it('should be able to read the arbitrator address', async () => {
     const arbitrator = await contract.fixedArbitrator();
     expect(ethers.isAddress(arbitrator)).to.be.true;
   });

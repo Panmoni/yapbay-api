@@ -1,17 +1,15 @@
 import { expect } from 'chai';
 import pool from '../db';
 import { NetworkService } from '../services/networkService';
-import { BlockchainServiceFactory } from '../services/blockchainService';
-import { NetworkFamily } from '../types/networks';
 
-describe('Multi-Network Transaction Tests', function () {
+describe('Multi-Network Transaction Tests', () => {
   let client: any;
   let solanaDevnetNetwork: any;
   let solanaMainnetNetwork: any;
   let consoleLogStub: any;
 
   before(async function () {
-    this.timeout(10000);
+    this.timeout(10_000);
 
     client = await pool.connect();
     consoleLogStub = {
@@ -29,7 +27,7 @@ describe('Multi-Network Transaction Tests', function () {
       solanaDevnetNetwork = await NetworkService.getNetworkById(3); // Solana Devnet
       solanaMainnetNetwork = await NetworkService.getNetworkById(4); // Solana Mainnet
 
-      if (!solanaDevnetNetwork || !solanaMainnetNetwork) {
+      if (!(solanaDevnetNetwork && solanaMainnetNetwork)) {
         throw new Error('Solana networks not properly configured');
       }
     } catch (error) {
@@ -38,16 +36,16 @@ describe('Multi-Network Transaction Tests', function () {
     }
   });
 
-  beforeEach(async function () {
+  beforeEach(async () => {
     await client.query('BEGIN');
   });
 
-  afterEach(async function () {
+  afterEach(async () => {
     await client.query('ROLLBACK');
     consoleLogStub.reset();
   });
 
-  after(async function () {
+  after(async () => {
     if (client) {
       await client.release();
     }
@@ -56,14 +54,14 @@ describe('Multi-Network Transaction Tests', function () {
     }
   });
 
-  describe('Solana Transaction Recording', function () {
-    it('should record Solana transaction with signature', async function () {
+  describe('Solana Transaction Recording', () => {
+    it('should record Solana transaction with signature', async () => {
       // Create test account and escrow
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_tx_test_${Date.now()}`, `solana_tx_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_tx_test_${Date.now()}`, `solana_tx_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -83,7 +81,7 @@ describe('Multi-Network Transaction Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -106,7 +104,7 @@ describe('Multi-Network Transaction Tests', function () {
           'solana',
           solanaDevnetNetwork.programId,
           'TxTestPDA123456789012345678901234567890',
-        ]
+        ],
       );
       const escrowId = escrowResult.rows[0].id;
 
@@ -126,9 +124,9 @@ describe('Multi-Network Transaction Tests', function () {
           'TxTestPDA123456789012345678901234567890',
           'FUND_ESCROW',
           'solana',
-          123456789, // Solana slot number
+          123_456_789, // Solana slot number
           solanaSignature, // signature (Solana)
-        ]
+        ],
       );
 
       expect(transactionResult.rows).to.have.length(1);
@@ -146,17 +144,17 @@ describe('Multi-Network Transaction Tests', function () {
       expect(tx.network_id).to.equal(solanaDevnetNetwork.id);
       expect(tx.transaction_hash).to.be.null; // EVM only
       expect(tx.signature).to.equal(solanaSignature);
-      expect(parseInt(tx.slot)).to.equal(123456789);
+      expect(Number.parseInt(tx.slot, 10)).to.equal(123_456_789);
       expect(tx.type).to.equal('FUND_ESCROW');
     });
 
-    it('should validate Solana signature format', async function () {
+    it('should validate Solana signature format', async () => {
       // Create test escrow
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_sig_test_${Date.now()}`, `solana_sig_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_sig_test_${Date.now()}`, `solana_sig_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -176,7 +174,7 @@ describe('Multi-Network Transaction Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -199,7 +197,7 @@ describe('Multi-Network Transaction Tests', function () {
           'solana',
           solanaDevnetNetwork.programId,
           'SigTestPDA123456789012345678901234567890',
-        ]
+        ],
       );
       const escrowId = escrowResult.rows[0].id;
 
@@ -226,25 +224,25 @@ describe('Multi-Network Transaction Tests', function () {
             'SigTestPDA123456789012345678901234567890',
             'FUND_ESCROW',
             'solana',
-            123456789 + i,
+            123_456_789 + i,
             signature, // signature (Solana)
-          ]
+          ],
         );
 
         expect(transactionResult.rows).to.have.length(1);
-        expect(parseInt(transactionResult.rows[0].id)).to.be.a('number');
+        expect(Number.parseInt(transactionResult.rows[0].id, 10)).to.be.a('number');
       }
     });
   });
 
-  describe('Solana Slot Tracking', function () {
-    it('should track Solana slot numbers for transactions', async function () {
+  describe('Solana Slot Tracking', () => {
+    it('should track Solana slot numbers for transactions', async () => {
       // Create test escrow
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_slot_test_${Date.now()}`, `solana_slot_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_slot_test_${Date.now()}`, `solana_slot_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -264,7 +262,7 @@ describe('Multi-Network Transaction Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -287,12 +285,12 @@ describe('Multi-Network Transaction Tests', function () {
           'solana',
           solanaDevnetNetwork.programId,
           'SlotTestPDA123456789012345678901234567890',
-        ]
+        ],
       );
       const escrowId = escrowResult.rows[0].id;
 
       // Record transactions with different slot numbers
-      const slotNumbers = [123456789, 123456790, 123456791];
+      const slotNumbers = [123_456_789, 123_456_790, 123_456_791];
       const transactionIds: number[] = [];
 
       for (let i = 0; i < slotNumbers.length; i++) {
@@ -314,7 +312,7 @@ describe('Multi-Network Transaction Tests', function () {
             'solana',
             slot,
             signature, // signature (Solana)
-          ]
+          ],
         );
 
         transactionIds.push(transactionResult.rows[0].id);
@@ -323,32 +321,32 @@ describe('Multi-Network Transaction Tests', function () {
       // Query transactions by slot number range
       const slotRangeQuery = await client.query(
         'SELECT * FROM transactions WHERE slot BETWEEN $1 AND $2 ORDER BY slot',
-        [123456789, 123456791]
+        [123_456_789, 123_456_791],
       );
 
       expect(slotRangeQuery.rows).to.have.length(3);
       slotRangeQuery.rows.forEach((tx: any, index: number) => {
-        expect(parseInt(tx.slot)).to.equal(slotNumbers[index]);
+        expect(Number.parseInt(tx.slot, 10)).to.equal(slotNumbers[index]);
         expect(tx.network_family).to.equal('solana');
       });
 
       // Query latest transactions by slot number
       const latestSlotQuery = await client.query(
         'SELECT * FROM transactions WHERE network_id = $1 ORDER BY slot DESC LIMIT 1',
-        [solanaDevnetNetwork.id]
+        [solanaDevnetNetwork.id],
       );
 
       expect(latestSlotQuery.rows).to.have.length(1);
-      expect(parseInt(latestSlotQuery.rows[0].slot)).to.equal(123456791);
+      expect(Number.parseInt(latestSlotQuery.rows[0].slot, 10)).to.equal(123_456_791);
     });
 
-    it('should handle slot-based transaction ordering', async function () {
+    it('should handle slot-based transaction ordering', async () => {
       // Create test escrow
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `slot_order_test_${Date.now()}`, `slot_order_${Date.now()}@example.com`]
+        [uniqueWallet, `slot_order_test_${Date.now()}`, `slot_order_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -368,7 +366,7 @@ describe('Multi-Network Transaction Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -391,15 +389,15 @@ describe('Multi-Network Transaction Tests', function () {
           'solana',
           solanaDevnetNetwork.programId,
           'OrderTestPDA123456789012345678901234567890',
-        ]
+        ],
       );
       const escrowId = escrowResult.rows[0].id;
 
       // Insert transactions in non-chronological order
       const transactionData = [
-        { slot: 123456792, type: 'RELEASE_ESCROW' },
-        { slot: 123456790, type: 'FUND_ESCROW' },
-        { slot: 123456791, type: 'OTHER' },
+        { slot: 123_456_792, type: 'RELEASE_ESCROW' },
+        { slot: 123_456_790, type: 'FUND_ESCROW' },
+        { slot: 123_456_791, type: 'OTHER' },
       ];
 
       for (let i = 0; i < transactionData.length; i++) {
@@ -421,34 +419,34 @@ describe('Multi-Network Transaction Tests', function () {
             'solana',
             data.slot,
             signature, // signature (Solana)
-          ]
+          ],
         );
       }
 
       // Query transactions ordered by slot number
       const orderedTransactions = await client.query(
         'SELECT * FROM transactions WHERE related_escrow_db_id = $1 ORDER BY slot ASC',
-        [escrowId]
+        [escrowId],
       );
 
       expect(orderedTransactions.rows).to.have.length(3);
       expect(orderedTransactions.rows[0].type).to.equal('FUND_ESCROW');
-      expect(parseInt(orderedTransactions.rows[0].slot)).to.equal(123456790);
+      expect(Number.parseInt(orderedTransactions.rows[0].slot, 10)).to.equal(123_456_790);
       expect(orderedTransactions.rows[1].type).to.equal('OTHER');
-      expect(parseInt(orderedTransactions.rows[1].slot)).to.equal(123456791);
+      expect(Number.parseInt(orderedTransactions.rows[1].slot, 10)).to.equal(123_456_791);
       expect(orderedTransactions.rows[2].type).to.equal('RELEASE_ESCROW');
-      expect(parseInt(orderedTransactions.rows[2].slot)).to.equal(123456792);
+      expect(Number.parseInt(orderedTransactions.rows[2].slot, 10)).to.equal(123_456_792);
     });
   });
 
-  describe('Cross-Network Transaction Isolation', function () {
-    it('should isolate transactions by network', async function () {
+  describe('Cross-Network Transaction Isolation', () => {
+    it('should isolate transactions by network', async () => {
       // Create test accounts and escrows on different networks
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `isolation_test_${Date.now()}`, `isolation_${Date.now()}@example.com`]
+        [uniqueWallet, `isolation_test_${Date.now()}`, `isolation_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -469,7 +467,7 @@ describe('Multi-Network Transaction Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const devnetTradeId = devnetTradeResult.rows[0].id;
 
@@ -489,7 +487,7 @@ describe('Multi-Network Transaction Tests', function () {
           100,
           'USD',
           solanaMainnetNetwork.id,
-        ]
+        ],
       );
       const mainnetTradeId = mainnetTradeResult.rows[0].id;
 
@@ -513,7 +511,7 @@ describe('Multi-Network Transaction Tests', function () {
           'solana',
           solanaDevnetNetwork.programId,
           'DevnetIsolationPDA1234567890123456789012345',
-        ]
+        ],
       );
       const devnetEscrowId = devnetEscrowResult.rows[0].id;
 
@@ -536,7 +534,7 @@ describe('Multi-Network Transaction Tests', function () {
           'solana',
           solanaMainnetNetwork.programId || solanaDevnetNetwork.programId, // Fallback if mainnet programId is null
           'MainnetIsolationPDA1234567890123456789012345',
-        ]
+        ],
       );
       const mainnetEscrowId = mainnetEscrowResult.rows[0].id;
 
@@ -556,9 +554,9 @@ describe('Multi-Network Transaction Tests', function () {
           'DevnetIsolationPDA1234567890123456789012345',
           'FUND_ESCROW',
           'solana',
-          123456789,
+          123_456_789,
           devnetSignature, // signature (Solana)
-        ]
+        ],
       );
 
       const mainnetSignature =
@@ -576,20 +574,20 @@ describe('Multi-Network Transaction Tests', function () {
           'MainnetIsolationPDA1234567890123456789012345',
           'FUND_ESCROW',
           'solana',
-          987654321,
+          987_654_321,
           mainnetSignature, // signature (Solana)
-        ]
+        ],
       );
 
       // Query transactions by network - should be isolated
       const devnetTransactions = await client.query(
         'SELECT * FROM transactions WHERE network_id = $1',
-        [solanaDevnetNetwork.id]
+        [solanaDevnetNetwork.id],
       );
 
       const mainnetTransactions = await client.query(
         'SELECT * FROM transactions WHERE network_id = $1',
-        [solanaMainnetNetwork.id]
+        [solanaMainnetNetwork.id],
       );
 
       // Verify isolation
@@ -598,27 +596,27 @@ describe('Multi-Network Transaction Tests', function () {
 
       expect(devnetTransactions.rows[0].network_id).to.equal(solanaDevnetNetwork.id);
       expect(devnetTransactions.rows[0].signature).to.equal(devnetSignature);
-      expect(parseInt(devnetTransactions.rows[0].slot)).to.equal(123456789);
+      expect(Number.parseInt(devnetTransactions.rows[0].slot, 10)).to.equal(123_456_789);
 
       expect(mainnetTransactions.rows[0].network_id).to.equal(solanaMainnetNetwork.id);
       expect(mainnetTransactions.rows[0].signature).to.equal(mainnetSignature);
-      expect(parseInt(mainnetTransactions.rows[0].slot)).to.equal(987654321);
+      expect(Number.parseInt(mainnetTransactions.rows[0].slot, 10)).to.equal(987_654_321);
 
       // Verify no cross-network leakage
       const crossNetworkQuery = await client.query(
-        'SELECT COUNT(*) FROM transactions t1 JOIN transactions t2 ON t1.signature = t2.signature WHERE t1.network_id != t2.network_id'
+        'SELECT COUNT(*) FROM transactions t1 JOIN transactions t2 ON t1.signature = t2.signature WHERE t1.network_id != t2.network_id',
       );
 
-      expect(parseInt(crossNetworkQuery.rows[0].count)).to.equal(0);
+      expect(Number.parseInt(crossNetworkQuery.rows[0].count, 10)).to.equal(0);
     });
 
-    it('should prevent cross-network data leakage in transaction queries', async function () {
+    it('should prevent cross-network data leakage in transaction queries', async () => {
       // Create test data on multiple networks
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `leakage_test_${Date.now()}`, `leakage_${Date.now()}@example.com`]
+        [uniqueWallet, `leakage_test_${Date.now()}`, `leakage_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -635,7 +633,7 @@ describe('Multi-Network Transaction Tests', function () {
             leg1_state, leg1_seller_account_id, leg1_buyer_account_id,
             leg1_crypto_amount, leg1_fiat_currency, network_id
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-          ['IN_PROGRESS', 'USD', 'USD', 'CREATED', accountId, accountId, 100, 'USD', network.id]
+          ['IN_PROGRESS', 'USD', 'USD', 'CREATED', accountId, accountId, 100, 'USD', network.id],
         );
         const tradeId = tradeResult.rows[0].id;
 
@@ -658,7 +656,7 @@ describe('Multi-Network Transaction Tests', function () {
             'solana',
             network.programId || solanaDevnetNetwork.programId, // Fallback if mainnet programId is null
             `LeakageTestPDA${i}1234567890123456789012345`,
-          ]
+          ],
         );
         const escrowId = escrowResult.rows[0].id;
 
@@ -676,9 +674,9 @@ describe('Multi-Network Transaction Tests', function () {
             `LeakageTestPDA${i}1234567890123456789012345`,
             'FUND_ESCROW',
             'solana',
-            123456789 + i * 1000,
+            123_456_789 + i * 1000,
             signature, // signature (Solana)
-          ]
+          ],
         );
 
         transactionIds.push(transactionResult.rows[0].id);
@@ -691,7 +689,7 @@ describe('Multi-Network Transaction Tests', function () {
         // Query transactions for specific network
         const networkTransactions = await client.query(
           'SELECT * FROM transactions WHERE network_id = $1',
-          [network.id]
+          [network.id],
         );
 
         expect(networkTransactions.rows).to.have.length(1);
@@ -707,7 +705,7 @@ describe('Multi-Network Transaction Tests', function () {
       // Verify total isolation
       const allTransactions = await client.query(
         'SELECT network_id, COUNT(*) as count FROM transactions WHERE id IN ($1, $2) GROUP BY network_id',
-        transactionIds
+        transactionIds,
       );
 
       expect(allTransactions.rows).to.have.length(2);
@@ -717,14 +715,14 @@ describe('Multi-Network Transaction Tests', function () {
     });
   });
 
-  describe('Transaction Type Validation', function () {
-    it('should support various Solana transaction types', async function () {
+  describe('Transaction Type Validation', () => {
+    it('should support various Solana transaction types', async () => {
       // Create test escrow
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `tx_type_test_${Date.now()}`, `tx_type_${Date.now()}@example.com`]
+        [uniqueWallet, `tx_type_test_${Date.now()}`, `tx_type_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -744,7 +742,7 @@ describe('Multi-Network Transaction Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -767,7 +765,7 @@ describe('Multi-Network Transaction Tests', function () {
           'solana',
           solanaDevnetNetwork.programId,
           'TypeTestPDA123456789012345678901234567890',
-        ]
+        ],
       );
       const escrowId = escrowResult.rows[0].id;
 
@@ -798,9 +796,9 @@ describe('Multi-Network Transaction Tests', function () {
             'TypeTestPDA123456789012345678901234567890',
             txType,
             'solana',
-            123456789 + i,
+            123_456_789 + i,
             signature, // signature (Solana)
-          ]
+          ],
         );
 
         expect(transactionResult.rows).to.have.length(1);
@@ -809,13 +807,13 @@ describe('Multi-Network Transaction Tests', function () {
       // Verify all transaction types were recorded
       const allTransactions = await client.query(
         'SELECT type, COUNT(*) as count FROM transactions WHERE related_escrow_db_id = $1 GROUP BY type ORDER BY type',
-        [escrowId]
+        [escrowId],
       );
 
       expect(allTransactions.rows).to.have.length(transactionTypes.length);
 
       const recordedTypes = allTransactions.rows.map((row: any) => row.type);
-      transactionTypes.forEach(type => {
+      transactionTypes.forEach((type) => {
         expect(recordedTypes).to.include(type);
       });
     });

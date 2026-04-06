@@ -1,10 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import * as dotenv from 'dotenv';
-import { query, recordTransaction, TransactionType } from '../db';
 import { NetworkService } from '../services/networkService';
-import { NetworkConfig, NetworkFamily } from '../types/networks';
-import fs from 'fs';
-import path from 'path';
-import { SolanaEventListener, closeSolanaLogStream } from './solanaEvents';
+import { type NetworkConfig, NetworkFamily } from '../types/networks';
+import { closeSolanaLogStream, SolanaEventListener } from './solanaEvents';
 
 dotenv.config();
 
@@ -21,8 +20,8 @@ function closeLogStream() {
 }
 
 class NetworkEventListener {
-  private solanaListener?: SolanaEventListener;
-  private network: NetworkConfig;
+  private readonly solanaListener?: SolanaEventListener;
+  readonly network: NetworkConfig;
   private isRunning = false;
 
   constructor(network: NetworkConfig) {
@@ -33,7 +32,7 @@ class NetworkEventListener {
       this.solanaListener = new SolanaEventListener(network);
     } else {
       throw new Error(
-        `Unsupported network family: ${network.networkFamily}. Only Solana networks are supported.`
+        `Unsupported network family: ${network.networkFamily}. Only Solana networks are supported.`,
       );
     }
   }
@@ -53,7 +52,7 @@ class NetworkEventListener {
 
       this.isRunning = true;
       console.log(
-        `Event listener started for ${this.network.name} (${this.network.networkFamily})`
+        `Event listener started for ${this.network.name} (${this.network.networkFamily})`,
       );
       fileLog(`Event listener started for ${this.network.name} (${this.network.networkFamily})`);
     } catch (error) {
@@ -87,7 +86,7 @@ class NetworkEventListener {
 }
 
 export class MultiNetworkEventListener {
-  private listeners: Map<number, NetworkEventListener> = new Map();
+  private readonly listeners: Map<number, NetworkEventListener> = new Map();
 
   async startAllListeners(): Promise<void> {
     console.log('🚀 Starting multi-network event listeners...');
@@ -95,7 +94,7 @@ export class MultiNetworkEventListener {
 
     try {
       const networks = await NetworkService.getAllNetworks();
-      const activeNetworks = networks.filter(network => network.isActive);
+      const activeNetworks = networks.filter((network) => network.isActive);
 
       console.log(`Found ${activeNetworks.length} active networks`);
       fileLog(`Found ${activeNetworks.length} active networks`);
@@ -119,10 +118,10 @@ export class MultiNetworkEventListener {
       }
 
       console.log(
-        `🎉 Multi-network event listeners startup completed. Active listeners: ${this.listeners.size}`
+        `🎉 Multi-network event listeners startup completed. Active listeners: ${this.listeners.size}`,
       );
       fileLog(
-        `🎉 Multi-network event listeners startup completed. Active listeners: ${this.listeners.size}`
+        `🎉 Multi-network event listeners startup completed. Active listeners: ${this.listeners.size}`,
       );
     } catch (error) {
       console.error('❌ Failed to start multi-network event listeners:', error);
@@ -135,11 +134,11 @@ export class MultiNetworkEventListener {
     console.log('🛑 Stopping all event listeners...');
     fileLog('🛑 Stopping all event listeners...');
 
-    const stopPromises = Array.from(this.listeners.values()).map(listener =>
-      listener.stop().catch(error => {
+    const stopPromises = Array.from(this.listeners.values()).map((listener) =>
+      listener.stop().catch((error) => {
         console.error('Error stopping listener:', error);
         fileLog(`Error stopping listener: ${error}`);
-      })
+      }),
     );
 
     await Promise.all(stopPromises);
@@ -151,8 +150,8 @@ export class MultiNetworkEventListener {
 
   getActiveListeners(): NetworkConfig[] {
     return Array.from(this.listeners.values())
-      .filter(listener => listener.isListening())
-      .map(listener => listener['network']);
+      .filter((listener) => listener.isListening())
+      .map((listener) => listener.network);
   }
 
   getListenerCount(): number {

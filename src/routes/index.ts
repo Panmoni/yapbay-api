@@ -1,17 +1,16 @@
 import express from 'express';
 import { requestLogger } from '../logger';
-import { requireJWT, requireAdmin } from '../middleware';
+import { requireAdmin, requireJWT } from '../middleware';
+import accountsRouter from './accounts';
 import adminRouter from './admin';
-import transactionRouter from './transactions';
-
+import authRouter from './auth';
+import escrowsRouter from './escrows';
+import healthRouter from './health';
+import offersRouter from './offers';
 // Import modular routes
 import publicRouter from './public';
-import authRouter from './auth';
-import healthRouter from './health';
-import accountsRouter from './accounts';
-import offersRouter from './offers';
 import tradesRouter from './trades';
-import escrowsRouter from './escrows';
+import transactionRouter from './transactions';
 
 const router = express.Router();
 

@@ -1,11 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import * as dotenv from 'dotenv';
-import { CeloService } from '../celo';
-import { NetworkService } from '../services/networkService';
-import { query, recordTransaction, TransactionType } from '../db';
 import type { LogDescription, ParamType } from 'ethers';
-import fs from 'fs';
-import path from 'path';
-import pool from '../db';
+import { CeloService } from '../celo';
+import pool, { query, recordTransaction, type TransactionType } from '../db';
+import { NetworkService } from '../services/networkService';
 
 dotenv.config();
 
@@ -27,10 +26,10 @@ export function closeLegacyLogStream() {
 // Typed representation of chain log with necessary fields
 interface ContractLog {
   blockNumber: number;
-  transactionHash: string;
+  data: string;
   logIndex: number;
   topics: string[];
-  data: string;
+  transactionHash: string;
 }
 
 export async function startEventListener() {
@@ -50,7 +49,9 @@ export async function startEventListener() {
   wsProvider.on(filter, async (log: ContractLog) => {
     try {
       const parsed = contract.interface.parseLog(log) as LogDescription;
-      if (!parsed) return;
+      if (!parsed) {
+        return;
+      }
       // Build args object
       const argsObj: Record<string, unknown> = {};
       parsed.fragment.inputs.forEach((input: ParamType, idx: number) => {
@@ -58,7 +59,7 @@ export async function startEventListener() {
         argsObj[input.name] = typeof raw === 'bigint' ? raw.toString() : raw;
       });
       const tradeIdValue =
-        parsed.args.tradeId !== undefined ? Number(parsed.args.tradeId.toString()) : null;
+        parsed.args.tradeId === undefined ? null : Number(parsed.args.tradeId.toString());
 
       const insertSql = `
         INSERT INTO contract_events
@@ -114,8 +115,12 @@ export async function startEventListener() {
       ) {
         metadataObj.escrow_id = parsed.args.escrowId?.toString();
 
-        if (parsed.args.seller) metadataObj.seller = parsed.args.seller;
-        if (parsed.args.buyer) metadataObj.buyer = parsed.args.buyer;
+        if (parsed.args.seller) {
+          metadataObj.seller = parsed.args.seller;
+        }
+        if (parsed.args.buyer) {
+          metadataObj.buyer = parsed.args.buyer;
+        }
       }
 
       const transactionId = await recordTransaction({
@@ -131,7 +136,7 @@ export async function startEventListener() {
       });
 
       // Ensure log_index is never null (use 0 as default if missing)
-      const logIndex = log.logIndex !== undefined ? log.logIndex : 0;
+      const logIndex = log.logIndex === undefined ? 0 : log.logIndex;
 
       const params = [
         parsed.name,
@@ -147,12 +152,12 @@ export async function startEventListener() {
       console.log(
         `Logged event ${parsed.name} tx=${
           log.transactionHash
-        } logIndex=${logIndex} args=${JSON.stringify(argsObj)}`
+        } logIndex=${logIndex} args=${JSON.stringify(argsObj)}`,
       );
       fileLog(
         `Logged event ${parsed.name} tx=${
           log.transactionHash
-        } logIndex=${logIndex} args=${JSON.stringify(argsObj)}`
+        } logIndex=${logIndex} args=${JSON.stringify(argsObj)}`,
       );
 
       // Sync normalized escrow & trade state
@@ -176,33 +181,34 @@ export async function startEventListener() {
           // Check if this escrow already exists in the database
           const existingEscrow = await query(
             'SELECT id, state FROM escrows WHERE onchain_escrow_id = $1',
-            [escrowId]
+            [escrowId],
           );
 
           if (existingEscrow.length > 0) {
             // Escrow already exists - update it if needed but don't create a duplicate
             // Only update if it's not in a terminal state
+            // biome-ignore lint/style/noNegationElse: negation form matches the comment and financial intent
             if (!['RELEASED', 'CANCELLED', 'RESOLVED'].includes(existingEscrow[0].state)) {
               await query(
                 'UPDATE escrows SET deposit_deadline = $1, fiat_deadline = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
-                [depositDate, fiatDate, existingEscrow[0].id]
+                [depositDate, fiatDate, existingEscrow[0].id],
               );
               console.log(
                 `EscrowCreated: Updated existing escrow id=${
                   existingEscrow[0].id
-                } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
+                } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`,
               );
               fileLog(
                 `EscrowCreated: Updated existing escrow id=${
                   existingEscrow[0].id
-                } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`
+                } deposit_deadline=${depositDate.toISOString()} fiat_deadline=${fiatDate.toISOString()}`,
               );
             } else {
               console.log(
-                `EscrowCreated: Escrow onchainId=${escrowId} already exists in terminal state ${existingEscrow[0].state}. No update needed.`
+                `EscrowCreated: Escrow onchainId=${escrowId} already exists in terminal state ${existingEscrow[0].state}. No update needed.`,
               );
               fileLog(
-                `EscrowCreated: Escrow onchainId=${escrowId} already exists in terminal state ${existingEscrow[0].state}. No update needed.`
+                `EscrowCreated: Escrow onchainId=${escrowId} already exists in terminal state ${existingEscrow[0].state}. No update needed.`,
               );
             }
           } else {
@@ -223,40 +229,40 @@ export async function startEventListener() {
                 depositDate,
                 fiatDate,
                 defaultNetwork.id,
-              ]
+              ],
             );
 
             const newEscrowId = insertResult[0]?.id;
             console.log(
-              `EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId} with database ID=${newEscrowId}`
+              `EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId} with database ID=${newEscrowId}`,
             );
             fileLog(
-              `EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId} with database ID=${newEscrowId}`
+              `EscrowCreated: Inserted escrow onchainId=${escrowId} for tradeId=${tradeId} with database ID=${newEscrowId}`,
             );
 
             // Create a mapping record to help with ID synchronization
             await query(
               'INSERT INTO escrow_id_mapping (blockchain_id, database_id) VALUES ($1, $2) ON CONFLICT (blockchain_id) DO UPDATE SET database_id = $2',
-              [escrowId, newEscrowId]
+              [escrowId, newEscrowId],
             );
             console.log(
-              `EscrowCreated: Created ID mapping between blockchain ID ${escrowId} and database ID ${newEscrowId}`
+              `EscrowCreated: Created ID mapping between blockchain ID ${escrowId} and database ID ${newEscrowId}`,
             );
             fileLog(
-              `EscrowCreated: Created ID mapping between blockchain ID ${escrowId} and database ID ${newEscrowId}`
+              `EscrowCreated: Created ID mapping between blockchain ID ${escrowId} and database ID ${newEscrowId}`,
             );
           }
 
           // Update trade leg state - only if not already in a later state
           await query(
             'UPDATE trades SET leg1_state = $1, leg1_escrow_onchain_id = $2 WHERE id = $3 AND (leg1_state IS NULL OR leg1_state = $4)',
-            ['CREATED', escrowId, tradeId, 'CREATED']
+            ['CREATED', escrowId, tradeId, 'CREATED'],
           );
           console.log(
-            `EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`
+            `EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`,
           );
           fileLog(
-            `EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`
+            `EscrowCreated: Updated trade id=${tradeId} leg1_state=CREATED onchainEscrowId=${escrowId}`,
           );
           break;
         }
@@ -269,7 +275,7 @@ export async function startEventListener() {
             // Get current escrow and trade state to ensure proper transitions
             const escrowResult = await query(
               'SELECT state, fiat_paid FROM escrows WHERE onchain_escrow_id = $1',
-              [escrowId]
+              [escrowId],
             );
 
             const tradeResult = await query('SELECT leg1_state FROM trades WHERE id = $1', [
@@ -279,79 +285,73 @@ export async function startEventListener() {
             // Validate that escrow exists
             if (escrowResult.length === 0) {
               console.error(
-                `FiatMarkedPaid: Escrow with onchain ID ${escrowId} not found in database`
+                `FiatMarkedPaid: Escrow with onchain ID ${escrowId} not found in database`,
               );
               fileLog(`FiatMarkedPaid: Escrow with onchain ID ${escrowId} not found in database`);
 
               // Try to create a mapping record if it exists in another form
               const alternateEscrow = await query(
                 'SELECT id FROM escrows WHERE trade_id = $1 ORDER BY created_at DESC LIMIT 1',
-                [tradeId]
+                [tradeId],
               );
 
               if (alternateEscrow.length > 0) {
                 try {
                   await query(
                     'INSERT INTO escrow_id_mapping (blockchain_id, database_id) VALUES ($1, $2) ON CONFLICT (blockchain_id) DO UPDATE SET database_id = $2',
-                    [escrowId, alternateEscrow[0].id]
+                    [escrowId, alternateEscrow[0].id],
                   );
                   console.log(
-                    `FiatMarkedPaid: Created recovery mapping between blockchain ID ${escrowId} and database ID ${alternateEscrow[0].id}`
+                    `FiatMarkedPaid: Created recovery mapping between blockchain ID ${escrowId} and database ID ${alternateEscrow[0].id}`,
                   );
                   fileLog(
-                    `FiatMarkedPaid: Created recovery mapping between blockchain ID ${escrowId} and database ID ${alternateEscrow[0].id}`
+                    `FiatMarkedPaid: Created recovery mapping between blockchain ID ${escrowId} and database ID ${alternateEscrow[0].id}`,
                   );
                 } catch (err) {
                   console.error(
-                    `FiatMarkedPaid: Failed to create recovery mapping: ${(err as Error).message}`
+                    `FiatMarkedPaid: Failed to create recovery mapping: ${(err as Error).message}`,
                   );
                   fileLog(
-                    `FiatMarkedPaid: Failed to create recovery mapping: ${(err as Error).message}`
+                    `FiatMarkedPaid: Failed to create recovery mapping: ${(err as Error).message}`,
                   );
                 }
               }
+            } else if (escrowResult[0].fiat_paid) {
+              console.log(
+                `FiatMarkedPaid: Escrow onchainId=${escrowId} already marked as fiat_paid=TRUE, skipping update`,
+              );
+              fileLog(
+                `FiatMarkedPaid: Escrow onchainId=${escrowId} already marked as fiat_paid=TRUE, skipping update`,
+              );
             } else {
-              // Only update if not already marked as paid
-              if (!escrowResult[0].fiat_paid) {
-                // Update escrow fiat_paid status
-                await query(
-                  'UPDATE escrows SET fiat_paid = TRUE, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $1 AND fiat_paid = FALSE',
-                  [escrowId]
-                );
-                console.log(`FiatMarkedPaid: Updated escrow onchainId=${escrowId} fiat_paid=TRUE`);
-                fileLog(`FiatMarkedPaid: Updated escrow onchainId=${escrowId} fiat_paid=TRUE`);
-              } else {
-                console.log(
-                  `FiatMarkedPaid: Escrow onchainId=${escrowId} already marked as fiat_paid=TRUE, skipping update`
-                );
-                fileLog(
-                  `FiatMarkedPaid: Escrow onchainId=${escrowId} already marked as fiat_paid=TRUE, skipping update`
-                );
-              }
+              // Update escrow fiat_paid status
+              await query(
+                'UPDATE escrows SET fiat_paid = TRUE, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $1 AND fiat_paid = FALSE',
+                [escrowId],
+              );
+              console.log(`FiatMarkedPaid: Updated escrow onchainId=${escrowId} fiat_paid=TRUE`);
+              fileLog(`FiatMarkedPaid: Updated escrow onchainId=${escrowId} fiat_paid=TRUE`);
             }
 
             // Validate that trade exists
             if (tradeResult.length === 0) {
               console.error(`FiatMarkedPaid: Trade with ID ${tradeId} not found in database`);
               fileLog(`FiatMarkedPaid: Trade with ID ${tradeId} not found in database`);
+            } else if (tradeResult[0].leg1_state === 'FIAT_PAID') {
+              console.log(
+                `FiatMarkedPaid: Trade id=${tradeId} already in leg1_state=FIAT_PAID, skipping update`,
+              );
+              fileLog(
+                `FiatMarkedPaid: Trade id=${tradeId} already in leg1_state=FIAT_PAID, skipping update`,
+              );
             } else {
-              // Only update if not already in FIAT_PAID state
-              if (tradeResult[0].leg1_state !== 'FIAT_PAID') {
-                // Update trade leg1_state to FIAT_PAID
-                await query(
-                  'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE id = $3 AND leg1_state <> $1',
-                  ['FIAT_PAID', timestamp, tradeId]
-                );
-                console.log(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
-                fileLog(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
-              } else {
-                console.log(
-                  `FiatMarkedPaid: Trade id=${tradeId} already in leg1_state=FIAT_PAID, skipping update`
-                );
-                fileLog(
-                  `FiatMarkedPaid: Trade id=${tradeId} already in leg1_state=FIAT_PAID, skipping update`
-                );
-              }
+              // Update trade leg1_state to FIAT_PAID
+              await query(
+                'UPDATE trades SET leg1_state = $1, leg1_fiat_paid_at = to_timestamp($2) WHERE id = $3 AND leg1_state <> $1',
+                ['FIAT_PAID', timestamp, tradeId],
+              );
+              console.log(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
+              fileLog(`FiatMarkedPaid: Updated trade id=${tradeId} leg1_state=FIAT_PAID`);
             }
 
             // Record this event in a dedicated transaction record for better tracking
@@ -368,12 +368,12 @@ export async function startEventListener() {
                 network_id: defaultNetwork.id,
               });
               console.log(
-                `FiatMarkedPaid: Recorded transaction record for tx=${log.transactionHash}`
+                `FiatMarkedPaid: Recorded transaction record for tx=${log.transactionHash}`,
               );
               fileLog(`FiatMarkedPaid: Recorded transaction record for tx=${log.transactionHash}`);
             } catch (err) {
               console.error(
-                `FiatMarkedPaid: Failed to record transaction: ${(err as Error).message}`
+                `FiatMarkedPaid: Failed to record transaction: ${(err as Error).message}`,
               );
               fileLog(`FiatMarkedPaid: Failed to record transaction: ${(err as Error).message}`);
             }
@@ -416,19 +416,19 @@ export async function startEventListener() {
           // Update the escrow state and balance
           await query(
             'UPDATE escrows SET state = $1, counter = $2, current_balance = $3, updated_at = CURRENT_TIMESTAMP, sequential = $4 WHERE onchain_escrow_id = $5',
-            ['FUNDED', counter, amountInDecimal, false, escrowId]
+            ['FUNDED', counter, amountInDecimal, false, escrowId],
           );
           console.log(
-            `FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED current_balance=${amountInDecimal}`
+            `FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED current_balance=${amountInDecimal}`,
           );
           fileLog(
-            `FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED current_balance=${amountInDecimal}`
+            `FundsDeposited: Updated escrow onchainId=${escrowId} state=FUNDED current_balance=${amountInDecimal}`,
           );
 
           // Update the trade state
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
-            ['FUNDED', escrowId]
+            ['FUNDED', escrowId],
           );
           console.log(`FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
           fileLog(`FundsDeposited: Updated trade leg1_state=FUNDED for escrowId=${escrowId}`);
@@ -441,32 +441,32 @@ export async function startEventListener() {
           // Update the escrow state and set balance to 0 (funds released)
           await query(
             'UPDATE escrows SET state = $1, current_balance = $2, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($3) WHERE onchain_escrow_id = $4',
-            ['RELEASED', 0, timestamp, escrowId]
+            ['RELEASED', 0, timestamp, escrowId],
           );
           console.log(
-            `EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED current_balance=0`
+            `EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED current_balance=0`,
           );
           fileLog(
-            `EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED current_balance=0`
+            `EscrowReleased: Updated escrow onchainId=${escrowId} state=RELEASED current_balance=0`,
           );
 
           // Update the trade state
           await query(
             'UPDATE trades SET leg1_state = $1, leg1_released_at = to_timestamp($2), overall_status = $3 WHERE leg1_escrow_onchain_id = $4 AND leg1_state <> $1',
-            ['RELEASED', timestamp, 'COMPLETED', escrowId]
+            ['RELEASED', timestamp, 'COMPLETED', escrowId],
           );
           console.log(
-            `EscrowReleased: Updated trade leg1_state=RELEASED overall_status=COMPLETED for escrowId=${escrowId}`
+            `EscrowReleased: Updated trade leg1_state=RELEASED overall_status=COMPLETED for escrowId=${escrowId}`,
           );
           fileLog(
-            `EscrowReleased: Updated trade leg1_state=RELEASED overall_status=COMPLETED for escrowId=${escrowId}`
+            `EscrowReleased: Updated trade leg1_state=RELEASED overall_status=COMPLETED for escrowId=${escrowId}`,
           );
           break;
         }
         case 'EscrowCancelled': {
           const escrowId = parsed.args.escrowId.toString();
           const timestamp = Number(
-            parsed.args.timestamp?.toString() || Math.floor(Date.now() / 1000)
+            parsed.args.timestamp?.toString() || Math.floor(Date.now() / 1000),
           );
 
           // Check if this was an auto-cancellation by examining the transaction
@@ -478,7 +478,7 @@ export async function startEventListener() {
             // Check if this cancellation was triggered by our monitoring service
             const autoCancelResult = await pool.query(
               'SELECT id FROM contract_auto_cancellations WHERE escrow_id = $1 AND transaction_hash = $2',
-              [escrowId, txHash]
+              [escrowId, txHash],
             );
 
             if (autoCancelResult.rows.length > 0) {
@@ -489,10 +489,10 @@ export async function startEventListener() {
               // If cancelled by arbitrator address but not found in our records, likely an auto-cancellation
               isAutoCancellation = true;
               console.log(
-                `EscrowCancelled: Detected likely auto-cancellation by arbitrator for escrow ${escrowId}`
+                `EscrowCancelled: Detected likely auto-cancellation by arbitrator for escrow ${escrowId}`,
               );
               fileLog(
-                `EscrowCancelled: Detected likely auto-cancellation by arbitrator for escrow ${escrowId}`
+                `EscrowCancelled: Detected likely auto-cancellation by arbitrator for escrow ${escrowId}`,
               );
 
               // Update our auto-cancellation record if it exists but wasn't linked to tx hash
@@ -502,11 +502,11 @@ export async function startEventListener() {
                 SET transaction_hash = $1, status = 'SUCCESS'
                 WHERE escrow_id = $2 AND transaction_hash IS NULL AND status = 'PENDING'
               `,
-                [txHash, escrowId]
+                [txHash, escrowId],
               );
             }
           } catch (error) {
-            console.error(`EscrowCancelled: Error checking auto-cancellation status:`, error);
+            console.error('EscrowCancelled: Error checking auto-cancellation status:', error);
             fileLog(`EscrowCancelled: Error checking auto-cancellation status: ${error}`);
           }
 
@@ -514,35 +514,35 @@ export async function startEventListener() {
           const cancellationNote = isAutoCancellation ? 'AUTO_CANCELLED' : 'CANCELLED';
           await query(
             'UPDATE escrows SET state = $1, current_balance = $2, updated_at = CURRENT_TIMESTAMP, completed_at = to_timestamp($3) WHERE onchain_escrow_id = $4 AND state <> $1',
-            [cancellationNote, 0, timestamp, escrowId]
+            [cancellationNote, 0, timestamp, escrowId],
           );
           console.log(
-            `EscrowCancelled: Updated escrow onchainId=${escrowId} state=${cancellationNote} current_balance=0 at timestamp=${timestamp}`
+            `EscrowCancelled: Updated escrow onchainId=${escrowId} state=${cancellationNote} current_balance=0 at timestamp=${timestamp}`,
           );
           fileLog(
-            `EscrowCancelled: Updated escrow onchainId=${escrowId} state=${cancellationNote} current_balance=0 at timestamp=${timestamp}`
+            `EscrowCancelled: Updated escrow onchainId=${escrowId} state=${cancellationNote} current_balance=0 at timestamp=${timestamp}`,
           );
 
           // Update trade state to CANCELLED
           await query(
             'UPDATE trades SET leg1_state = $1, cancelled = TRUE WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
-            ['CANCELLED', escrowId]
+            ['CANCELLED', escrowId],
           );
           console.log(
-            `EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`
+            `EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`,
           );
           fileLog(`EscrowCancelled: Updated trade leg1_state=CANCELLED for escrowId=${escrowId}`);
 
           // Also update leg2 if it exists
           await query(
             'UPDATE trades SET leg2_state = $1, cancelled = TRUE WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
-            ['CANCELLED', escrowId]
+            ['CANCELLED', escrowId],
           );
 
           // Get trade ID for this escrow to record completion (cancellation is also a form of completion)
           const tradeResult = await query(
             'SELECT id FROM trades WHERE leg1_escrow_onchain_id = $1 OR leg2_escrow_onchain_id = $1 LIMIT 1',
-            [escrowId]
+            [escrowId],
           );
 
           if (tradeResult.length > 0) {
@@ -551,7 +551,7 @@ export async function startEventListener() {
             // Check if both legs are cancelled or if this is a single-leg trade
             const tradeStateResult = await query(
               'SELECT leg1_state, leg2_state, leg2_escrow_onchain_id FROM trades WHERE id = $1',
-              [tradeId]
+              [tradeId],
             );
 
             if (tradeStateResult.length > 0) {
@@ -564,13 +564,13 @@ export async function startEventListener() {
               ) {
                 await query(
                   'UPDATE trades SET completed = TRUE, completed_at = to_timestamp($1), cancelled = TRUE WHERE id = $2 AND completed = FALSE',
-                  [timestamp, tradeId]
+                  [timestamp, tradeId],
                 );
                 console.log(
-                  `EscrowCancelled: Marked trade ${tradeId} as completed (cancelled) at timestamp=${timestamp}`
+                  `EscrowCancelled: Marked trade ${tradeId} as completed (cancelled) at timestamp=${timestamp}`,
                 );
                 fileLog(
-                  `EscrowCancelled: Marked trade ${tradeId} as completed (cancelled) at timestamp=${timestamp}`
+                  `EscrowCancelled: Marked trade ${tradeId} as completed (cancelled) at timestamp=${timestamp}`,
                 );
               }
             }
@@ -583,20 +583,20 @@ export async function startEventListener() {
           // mark escrow disputed
           await query(
             'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
-            ['DISPUTED', escrowId]
+            ['DISPUTED', escrowId],
           );
           console.log(`DisputeOpened: Updated escrow onchainId=${escrowId} state=DISPUTED`);
           fileLog(`DisputeOpened: Updated escrow onchainId=${escrowId} state=DISPUTED`);
           // update trade legs disputed
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
-            ['DISPUTED', escrowId]
+            ['DISPUTED', escrowId],
           );
           console.log(`DisputeOpened: Updated trade leg1_state=DISPUTED for escrowId=${escrowId}`);
           fileLog(`DisputeOpened: Updated trade leg1_state=DISPUTED for escrowId=${escrowId}`);
           await query(
             'UPDATE trades SET leg2_state = $1 WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
-            ['DISPUTED', escrowId]
+            ['DISPUTED', escrowId],
           );
           console.log(`DisputeOpened: Updated trade leg2_state=DISPUTED for escrowId=${escrowId}`);
           fileLog(`DisputeOpened: Updated trade leg2_state=DISPUTED for escrowId=${escrowId}`);
@@ -607,25 +607,25 @@ export async function startEventListener() {
           // mark escrow resolved
           await query(
             'UPDATE escrows SET state = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2 AND state <> $1',
-            ['RESOLVED', escrowId]
+            ['RESOLVED', escrowId],
           );
           console.log(`DisputeResponse: Updated escrow onchainId=${escrowId} state=RESOLVED`);
           fileLog(`DisputeResponse: Updated escrow onchainId=${escrowId} state=RESOLVED`);
           // update trade legs resolved
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
-            ['RESOLVED', escrowId]
+            ['RESOLVED', escrowId],
           );
           console.log(
-            `DisputeResponse: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`
+            `DisputeResponse: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`,
           );
           fileLog(`DisputeResponse: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`);
           await query(
             'UPDATE trades SET leg2_state = $1 WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
-            ['RESOLVED', escrowId]
+            ['RESOLVED', escrowId],
           );
           console.log(
-            `DisputeResponse: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`
+            `DisputeResponse: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`,
           );
           fileLog(`DisputeResponse: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`);
           break;
@@ -636,31 +636,31 @@ export async function startEventListener() {
           // mark escrow resolved and set balance to 0 (funds distributed)
           await query(
             'UPDATE escrows SET state = $1, current_balance = $2, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $3 AND state <> $1',
-            ['RESOLVED', 0, escrowId]
+            ['RESOLVED', 0, escrowId],
           );
           console.log(
-            `DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED current_balance=0`
+            `DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED current_balance=0`,
           );
           fileLog(
-            `DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED current_balance=0`
+            `DisputeResolved: Updated escrow onchainId=${escrowId} state=RESOLVED current_balance=0`,
           );
 
           // update trade legs resolved
           await query(
             'UPDATE trades SET leg1_state = $1 WHERE leg1_escrow_onchain_id = $2 AND leg1_state <> $1',
-            ['RESOLVED', escrowId]
+            ['RESOLVED', escrowId],
           );
           console.log(
-            `DisputeResolved: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`
+            `DisputeResolved: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`,
           );
           fileLog(`DisputeResolved: Updated trade leg1_state=RESOLVED for escrowId=${escrowId}`);
 
           await query(
             'UPDATE trades SET leg2_state = $1 WHERE leg2_escrow_onchain_id = $2 AND leg2_state <> $1',
-            ['RESOLVED', escrowId]
+            ['RESOLVED', escrowId],
           );
           console.log(
-            `DisputeResolved: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`
+            `DisputeResolved: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`,
           );
           fileLog(`DisputeResolved: Updated trade leg2_state=RESOLVED for escrowId=${escrowId}`);
           break;
@@ -671,13 +671,13 @@ export async function startEventListener() {
 
           await query(
             'UPDATE escrows SET sequential_escrow_address = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2',
-            [newAddress, escrowId]
+            [newAddress, escrowId],
           );
           console.log(
-            `SequentialAddressUpdated: Updated escrow onchainId=${escrowId} sequential_escrow_address=${newAddress}`
+            `SequentialAddressUpdated: Updated escrow onchainId=${escrowId} sequential_escrow_address=${newAddress}`,
           );
           fileLog(
-            `SequentialAddressUpdated: Updated escrow onchainId=${escrowId} sequential_escrow_address=${newAddress}`
+            `SequentialAddressUpdated: Updated escrow onchainId=${escrowId} sequential_escrow_address=${newAddress}`,
           );
           break;
         }
@@ -691,13 +691,13 @@ export async function startEventListener() {
 
           await query(
             'UPDATE escrows SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2',
-            [balanceInDecimal, escrowId]
+            [balanceInDecimal, escrowId],
           );
           console.log(
-            `EscrowBalanceChanged: Updated escrow onchainId=${escrowId} current_balance=${balanceInDecimal} reason=${reason}`
+            `EscrowBalanceChanged: Updated escrow onchainId=${escrowId} current_balance=${balanceInDecimal} reason=${reason}`,
           );
           fileLog(
-            `EscrowBalanceChanged: Updated escrow onchainId=${escrowId} current_balance=${balanceInDecimal} reason=${reason}`
+            `EscrowBalanceChanged: Updated escrow onchainId=${escrowId} current_balance=${balanceInDecimal} reason=${reason}`,
           );
           break;
         }

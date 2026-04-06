@@ -1,5 +1,5 @@
-import { Pool, PoolClient } from 'pg';
 import * as dotenv from 'dotenv';
+import { Pool, type PoolClient } from 'pg';
 
 dotenv.config();
 
@@ -12,9 +12,7 @@ const pool = new Pool({
  * Automatically handles BEGIN, COMMIT, and ROLLBACK.
  * The callback receives a PoolClient that must be used for all queries within the transaction.
  */
-export async function withTransaction<T>(
-  callback: (client: PoolClient) => Promise<T>
-): Promise<T> {
+export async function withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -34,7 +32,7 @@ export async function withTransaction<T>(
  * All amounts use 6 decimal places (USDC standard).
  */
 const DECIMAL_PLACES = 6;
-const SCALE = Math.pow(10, DECIMAL_PLACES);
+const SCALE = 10 ** DECIMAL_PLACES;
 
 export const decimalMath = {
   /** Convert a decimal string/number to integer micro-units for safe arithmetic */
@@ -68,9 +66,13 @@ export const decimalMath = {
 
   /** Parse a value safely, returning null if not a valid number */
   parse(value: unknown): string | null {
-    if (value === null || value === undefined) return null;
+    if (value === null || value === undefined) {
+      return null;
+    }
     const num = Number(value);
-    if (!Number.isFinite(num)) return null;
+    if (!Number.isFinite(num)) {
+      return null;
+    }
     return num.toFixed(DECIMAL_PLACES);
   },
 };
@@ -102,7 +104,7 @@ export async function query(text: string, params?: unknown[]) {
       if (retries > 0) {
         console.log(`[DB] Transient error, retrying... (${retries} attempts left)`);
         // Wait a bit before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, (3 - retries) * 200));
+        await new Promise((resolve) => setTimeout(resolve, (3 - retries) * 200));
       }
     } finally {
       client.release();
@@ -118,7 +120,7 @@ export async function query(text: string, params?: unknown[]) {
 export async function syncEscrowBalance(
   onchainEscrowId: string,
   contractBalance: string,
-  reason?: string
+  reason?: string,
 ) {
   const balanceInDecimal = decimalMath.parse(contractBalance);
   if (balanceInDecimal === null) {
@@ -127,12 +129,12 @@ export async function syncEscrowBalance(
   }
   await query(
     'UPDATE escrows SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2',
-    [balanceInDecimal, onchainEscrowId]
+    [balanceInDecimal, onchainEscrowId],
   );
 
   if (reason) {
     console.log(
-      `[DB] Synced balance for escrow ${onchainEscrowId}: ${contractBalance} USDC (${reason})`
+      `[DB] Synced balance for escrow ${onchainEscrowId}: ${contractBalance} USDC (${reason})`,
     );
   }
 }
@@ -155,7 +157,7 @@ export async function recordBalanceValidation(
   onchainEscrowId: string,
   storedBalance: string,
   calculatedBalance: string,
-  dbBalance: number
+  dbBalance: number,
 ) {
   await query(
     `
@@ -163,14 +165,14 @@ export async function recordBalanceValidation(
     VALUES ($1, 'BALANCE_CHECK', $2)
   `,
     [
-      parseInt(onchainEscrowId),
+      Number.parseInt(onchainEscrowId, 10),
       JSON.stringify({
         stored_balance: storedBalance,
         calculated_balance: calculatedBalance,
         db_balance: dbBalance,
         timestamp: new Date().toISOString(),
       }),
-    ]
+    ],
   );
 }
 
@@ -193,20 +195,20 @@ export type TransactionType =
   | 'OTHER';
 
 export interface TransactionData {
-  transaction_hash?: string; // EVM transaction hash
-  signature?: string; // Solana transaction signature
-  status: TransactionStatus;
-  type: TransactionType;
   block_number?: number | bigint | null; // EVM block number
-  slot?: number | bigint | null; // Solana slot number
-  sender_address?: string | null;
-  receiver_or_contract_address?: string | null;
-  gas_used?: number | bigint | null;
   error_message?: string | null;
-  related_trade_id?: number | null;
-  related_escrow_db_id?: number | null;
-  network_id: number;
+  gas_used?: number | bigint | null;
   network_family?: 'evm' | 'solana'; // Network family for multi-network support
+  network_id: number;
+  receiver_or_contract_address?: string | null;
+  related_escrow_db_id?: number | null;
+  related_trade_id?: number | null;
+  sender_address?: string | null;
+  signature?: string; // Solana transaction signature
+  slot?: number | bigint | null; // Solana slot number
+  status: TransactionStatus;
+  transaction_hash?: string; // EVM transaction hash
+  type: TransactionType;
 }
 
 /**
@@ -247,7 +249,7 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
   if (!uniqueId) {
     logError(
       'No transaction_hash or signature provided for transaction recording',
-      new Error('Missing unique identifier')
+      new Error('Missing unique identifier'),
     );
     return null;
   }
@@ -309,7 +311,7 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
     // If no result returned (shouldn't happen with RETURNING), fetch the ID
     const fetchResult = await query(
       `SELECT id FROM transactions WHERE ${uniqueIdField} = $1 AND network_id = $2`,
-      [uniqueId, network_id]
+      [uniqueId, network_id],
     );
 
     if (fetchResult.length > 0) {
@@ -319,7 +321,7 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
 
     logError(
       `Transaction ${uniqueId} recorded via ON CONFLICT but failed to return/fetch ID.`,
-      new Error('Failed to retrieve ID after ON CONFLICT')
+      new Error('Failed to retrieve ID after ON CONFLICT'),
     );
     return null;
   } catch (err) {
@@ -329,12 +331,12 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
     try {
       const fetchResult = await query(
         `SELECT id FROM transactions WHERE ${uniqueIdField} = $1 AND network_id = $2`,
-        [uniqueId, network_id]
+        [uniqueId, network_id],
       );
 
       if (fetchResult.length > 0) {
         console.log(
-          `[DB] Fetched existing transaction ${uniqueId} with ID: ${fetchResult[0].id} after recording error.`
+          `[DB] Fetched existing transaction ${uniqueId} with ID: ${fetchResult[0].id} after recording error.`,
         );
         return fetchResult[0].id;
       }
@@ -343,7 +345,7 @@ export const recordTransaction = async (data: TransactionData): Promise<number |
     } catch (fetchErr) {
       logError(
         `Failed to fetch transaction ID after recording error for ${uniqueId}`,
-        fetchErr as Error
+        fetchErr as Error,
       );
       return null; // Indicate failure
     }

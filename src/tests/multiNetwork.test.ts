@@ -1,11 +1,11 @@
 import { expect } from 'chai';
-import pool from '../db';
 import { CeloService } from '../celo';
-import { NetworkService } from '../services/networkService';
-import { NetworkType, NetworkConfig } from '../types/networks';
+import pool from '../db';
 import { expireDeadlinesForNetwork } from '../services/deadlineService';
+import { NetworkService } from '../services/networkService';
+import { type NetworkConfig, NetworkType } from '../types/networks';
 
-describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
+describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', () => {
   // DISABLED: Celo networks are currently inactive, focusing on Solana
   // These tests will be re-enabled when Celo networks are reactivated
   let client: any;
@@ -14,7 +14,7 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
   let consoleLogStub: any;
 
   before(async function () {
-    this.timeout(10000);
+    this.timeout(10_000);
 
     client = await pool.connect();
     consoleLogStub = {
@@ -30,13 +30,13 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
     try {
       // Get network configurations
       alfajoresNetwork = (await NetworkService.getNetworkByName(
-        NetworkType.CELO_ALFAJORES
+        NetworkType.CELO_ALFAJORES,
       )) as NetworkConfig;
       mainnetNetwork = (await NetworkService.getNetworkByName(
-        NetworkType.CELO_MAINNET
+        NetworkType.CELO_MAINNET,
       )) as NetworkConfig;
 
-      if (!alfajoresNetwork || !mainnetNetwork) {
+      if (!(alfajoresNetwork && mainnetNetwork)) {
         throw new Error('Networks not properly configured');
       }
     } catch (error) {
@@ -45,16 +45,16 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
     }
   });
 
-  beforeEach(async function () {
+  beforeEach(async () => {
     await client.query('BEGIN');
   });
 
-  afterEach(async function () {
+  afterEach(async () => {
     await client.query('ROLLBACK');
     consoleLogStub.reset();
   });
 
-  after(async function () {
+  after(async () => {
     if (client) {
       await client.release();
     }
@@ -63,34 +63,34 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
     }
   });
 
-  describe('Network Service', function () {
-    it('should return active networks', async function () {
+  describe('Network Service', () => {
+    it('should return active networks', async () => {
       const networks = await NetworkService.getActiveNetworks();
       expect(networks).to.be.an('array');
       expect(networks.length).to.be.greaterThan(0);
 
-      const networkNames = networks.map(n => n.name);
+      const networkNames = networks.map((n) => n.name);
       expect(networkNames).to.include(NetworkType.CELO_ALFAJORES);
       expect(networkNames).to.include(NetworkType.CELO_MAINNET);
     });
 
-    it('should get network by ID', async function () {
+    it('should get network by ID', async () => {
       const network = await NetworkService.getNetworkById(alfajoresNetwork.id);
       expect(network).to.not.be.null;
       expect(network!.name).to.equal(NetworkType.CELO_ALFAJORES);
-      expect(network!.chainId).to.equal(44787);
+      expect(network!.chainId).to.equal(44_787);
     });
 
-    it('should get network by name', async function () {
+    it('should get network by name', async () => {
       const network = await NetworkService.getNetworkByName(NetworkType.CELO_MAINNET);
       expect(network).to.not.be.null;
       expect(network!.name).to.equal(NetworkType.CELO_MAINNET);
-      expect(network!.chainId).to.equal(42220);
+      expect(network!.chainId).to.equal(42_220);
     });
   });
 
-  describe('Celo Service Multi-Network', function () {
-    it('should create providers for different networks', async function () {
+  describe('Celo Service Multi-Network', () => {
+    it('should create providers for different networks', async () => {
       const alfajoresProvider = await CeloService.getProviderForNetwork(alfajoresNetwork.id);
       const mainnetProvider = await CeloService.getProviderForNetwork(mainnetNetwork.id);
 
@@ -99,11 +99,11 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
       const alfajoresNetwork_result = await alfajoresProvider.getNetwork();
       const mainnetNetwork_result = await mainnetProvider.getNetwork();
 
-      expect(Number(alfajoresNetwork_result.chainId)).to.equal(44787);
-      expect(Number(mainnetNetwork_result.chainId)).to.equal(42220);
+      expect(Number(alfajoresNetwork_result.chainId)).to.equal(44_787);
+      expect(Number(mainnetNetwork_result.chainId)).to.equal(42_220);
     });
 
-    it('should create contracts for different networks', async function () {
+    it('should create contracts for different networks', async () => {
       const alfajoresContract = await CeloService.getContractForNetwork(alfajoresNetwork.id);
       const mainnetContract = await CeloService.getContractForNetwork(mainnetNetwork.id);
 
@@ -113,37 +113,37 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
     });
   });
 
-  describe('Data Isolation', function () {
-    it('should isolate offers by network', async function () {
+  describe('Data Isolation', () => {
+    it('should isolate offers by network', async () => {
       // Create test account with unique wallet address
       const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '0')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `testuser_${Date.now()}`, `test_${Date.now()}@example.com`]
+        [uniqueWallet, `testuser_${Date.now()}`, `test_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
       // Create offer on Alfajores
       const alfajoresOffer = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [accountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
+        [accountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id],
       );
 
       // Create offer on Mainnet
       const mainnetOffer = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [accountId, 'SELL', 150, 300, 600, 1.03, mainnetNetwork.id]
+        [accountId, 'SELL', 150, 300, 600, 1.03, mainnetNetwork.id],
       );
 
       // Query offers by network AND account to ensure we only get our test data
       const alfajoresOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [alfajoresNetwork.id, accountId]
+        [alfajoresNetwork.id, accountId],
       );
 
       const mainnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [mainnetNetwork.id, accountId]
+        [mainnetNetwork.id, accountId],
       );
 
       // Verify isolation
@@ -155,12 +155,12 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
       expect(mainnetOffers.rows[0].offer_type).to.equal('SELL');
     });
 
-    it('should isolate trades by network', async function () {
+    it('should isolate trades by network', async () => {
       // Create test account with unique wallet address
       const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '1')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `testuser2_${Date.now()}`, `test2_${Date.now()}@example.com`]
+        [uniqueWallet, `testuser2_${Date.now()}`, `test2_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -181,7 +181,7 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           100,
           'USD',
           alfajoresNetwork.id,
-        ]
+        ],
       );
       const alfajoresTradeId = alfajoresTrade.rows[0].id;
 
@@ -192,19 +192,29 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           leg1_state, leg1_seller_account_id, leg1_buyer_account_id,
           leg1_crypto_amount, leg1_fiat_currency, network_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-        ['IN_PROGRESS', 'EUR', 'EUR', 'FUNDED', accountId, accountId, 200, 'EUR', mainnetNetwork.id]
+        [
+          'IN_PROGRESS',
+          'EUR',
+          'EUR',
+          'FUNDED',
+          accountId,
+          accountId,
+          200,
+          'EUR',
+          mainnetNetwork.id,
+        ],
       );
       const mainnetTradeId = mainnetTrade.rows[0].id;
 
       // Query trades by network AND specific IDs to ensure we only get our test data
       const alfajoresTrades = await client.query(
         'SELECT * FROM trades WHERE network_id = $1 AND id = $2',
-        [alfajoresNetwork.id, alfajoresTradeId]
+        [alfajoresNetwork.id, alfajoresTradeId],
       );
 
       const mainnetTrades = await client.query(
         'SELECT * FROM trades WHERE network_id = $1 AND id = $2',
-        [mainnetNetwork.id, mainnetTradeId]
+        [mainnetNetwork.id, mainnetTradeId],
       );
 
       // Verify isolation
@@ -216,12 +226,12 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
       expect(mainnetTrades.rows[0].leg1_state).to.equal('FUNDED');
     });
 
-    it('should isolate escrows by network', async function () {
+    it('should isolate escrows by network', async () => {
       // Create test account with unique wallet address
       const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '2')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `testuser3_${Date.now()}`, `test3_${Date.now()}@example.com`]
+        [uniqueWallet, `testuser3_${Date.now()}`, `test3_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -242,7 +252,7 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           100,
           'USD',
           alfajoresNetwork.id,
-        ]
+        ],
       );
       const alfajoresTradeId = alfajoresTradeResult.rows[0].id;
 
@@ -253,7 +263,17 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           leg1_state, leg1_seller_account_id, leg1_buyer_account_id,
           leg1_crypto_amount, leg1_fiat_currency, network_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-        ['IN_PROGRESS', 'EUR', 'EUR', 'FUNDED', accountId, accountId, 200, 'EUR', mainnetNetwork.id]
+        [
+          'IN_PROGRESS',
+          'EUR',
+          'EUR',
+          'FUNDED',
+          accountId,
+          accountId,
+          200,
+          'EUR',
+          mainnetNetwork.id,
+        ],
       );
       const mainnetTradeId = mainnetTradeResult.rows[0].id;
 
@@ -277,7 +297,7 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           false,
           null,
           alfajoresNetwork.id,
-        ]
+        ],
       );
       const alfajoresEscrowId = alfajoresEscrowResult.rows[0].id;
 
@@ -301,19 +321,19 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           true,
           '0x1234567890123456789012345678901234567898',
           mainnetNetwork.id,
-        ]
+        ],
       );
       const mainnetEscrowId = mainnetEscrowResult.rows[0].id;
 
       // Query escrows by network AND specific IDs to ensure we only get our test data
       const alfajoresEscrows = await client.query(
         'SELECT * FROM escrows WHERE network_id = $1 AND id = $2',
-        [alfajoresNetwork.id, alfajoresEscrowId]
+        [alfajoresNetwork.id, alfajoresEscrowId],
       );
 
       const mainnetEscrows = await client.query(
         'SELECT * FROM escrows WHERE network_id = $1 AND id = $2',
-        [mainnetNetwork.id, mainnetEscrowId]
+        [mainnetNetwork.id, mainnetEscrowId],
       );
 
       // Verify isolation
@@ -326,17 +346,17 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
     });
   });
 
-  describe('Multi-Network Deadline Processing', function () {
-    it('should process deadlines separately per network', async function () {
+  describe('Multi-Network Deadline Processing', () => {
+    it('should process deadlines separately per network', async () => {
       // Create test account with unique wallet address
       const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '5')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `deadlineuser_${Date.now()}`, `deadline_${Date.now()}@example.com`]
+        [uniqueWallet, `deadlineuser_${Date.now()}`, `deadline_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
-      const past = new Date(Date.now() - 3600000).toISOString();
+      const past = new Date(Date.now() - 3_600_000).toISOString();
 
       // Create expired trade on Alfajores
       const alfajoresTrade = await client.query(
@@ -356,7 +376,7 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           'USD',
           past,
           alfajoresNetwork.id,
-        ]
+        ],
       );
 
       // Create expired trade on Mainnet
@@ -377,7 +397,7 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           'EUR',
           past,
           mainnetNetwork.id,
-        ]
+        ],
       );
 
       // Commit so deadline service can see the trades
@@ -392,12 +412,12 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
       // Check results
       const alfajoresResult = await client.query(
         'SELECT overall_status, leg1_state FROM trades WHERE id = $1',
-        [alfajoresTrade.rows[0].id]
+        [alfajoresTrade.rows[0].id],
       );
 
       const mainnetResult = await client.query(
         'SELECT overall_status, leg1_state FROM trades WHERE id = $1',
-        [mainnetTrade.rows[0].id]
+        [mainnetTrade.rows[0].id],
       );
 
       // Alfajores trade should be cancelled
@@ -410,44 +430,44 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
     });
   });
 
-  describe('Cross-Network Data Integrity', function () {
-    it('should not find offers from other networks in filtered queries', async function () {
+  describe('Cross-Network Data Integrity', () => {
+    it('should not find offers from other networks in filtered queries', async () => {
       // Create test account with unique wallet address
       const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '3')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `testuser4_${Date.now()}`, `test4_${Date.now()}@example.com`]
+        [uniqueWallet, `testuser4_${Date.now()}`, `test4_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
       // Create offer on Alfajores only
       await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [accountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
+        [accountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id],
       );
 
       // Query for offers on Mainnet for this specific account (should find none)
       const mainnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [mainnetNetwork.id, accountId]
+        [mainnetNetwork.id, accountId],
       );
 
       expect(mainnetOffers.rows).to.have.length(0);
     });
 
-    it('should maintain referential integrity within networks', async function () {
+    it('should maintain referential integrity within networks', async () => {
       // Create test account with unique wallet address
       const uniqueWallet = `0x${Date.now().toString(16).padStart(40, '4')}`;
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `testuser5_${Date.now()}`, `test5_${Date.now()}@example.com`]
+        [uniqueWallet, `testuser5_${Date.now()}`, `test5_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
       // Create offer on Alfajores
       const offerResult = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [accountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id]
+        [accountId, 'BUY', 100, 200, 500, 1.05, alfajoresNetwork.id],
       );
       const offerId = offerResult.rows[0].id;
 
@@ -469,7 +489,7 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
           'USD',
           offerId,
           alfajoresNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -479,7 +499,7 @@ describe.skip('Multi-Network Integration Tests (Celo - DISABLED)', function () {
          FROM trades t 
          JOIN offers o ON t.leg1_offer_id = o.id 
          WHERE t.network_id = $1 AND o.network_id = $1 AND t.id = $2`,
-        [alfajoresNetwork.id, tradeId]
+        [alfajoresNetwork.id, tradeId],
       );
 
       expect(trades.rows).to.have.length(1);

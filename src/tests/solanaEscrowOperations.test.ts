@@ -1,16 +1,14 @@
 import { expect } from 'chai';
 import pool from '../db';
 import { NetworkService } from '../services/networkService';
-import { BlockchainServiceFactory } from '../services/blockchainService';
-import { NetworkFamily } from '../types/networks';
 
-describe('Solana Escrow Operations Tests', function () {
+describe('Solana Escrow Operations Tests', () => {
   let client: any;
   let solanaDevnetNetwork: any;
   let consoleLogStub: any;
 
   before(async function () {
-    this.timeout(10000);
+    this.timeout(10_000);
 
     client = await pool.connect();
     consoleLogStub = {
@@ -36,16 +34,16 @@ describe('Solana Escrow Operations Tests', function () {
     }
   });
 
-  beforeEach(async function () {
+  beforeEach(async () => {
     await client.query('BEGIN');
   });
 
-  afterEach(async function () {
+  afterEach(async () => {
     await client.query('ROLLBACK');
     consoleLogStub.reset();
   });
 
-  after(async function () {
+  after(async () => {
     if (client) {
       await client.release();
     }
@@ -54,8 +52,8 @@ describe('Solana Escrow Operations Tests', function () {
     }
   });
 
-  describe('Solana Escrow Creation', function () {
-    it('should create escrow with Solana-specific fields', async function () {
+  describe('Solana Escrow Creation', () => {
+    it('should create escrow with Solana-specific fields', async () => {
       // Create test account
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
@@ -65,7 +63,7 @@ describe('Solana Escrow Operations Tests', function () {
           uniqueWallet,
           `solana_escrow_test_${Date.now()}`,
           `solana_escrow_${Date.now()}@example.com`,
-        ]
+        ],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -86,7 +84,7 @@ describe('Solana Escrow Operations Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -113,7 +111,7 @@ describe('Solana Escrow Operations Tests', function () {
           'TestTokenAccount123456789012345678901234567',
           '12345',
           '67890',
-        ]
+        ],
       );
 
       const escrowId = escrowResult.rows[0].id;
@@ -133,7 +131,7 @@ describe('Solana Escrow Operations Tests', function () {
       expect(escrow.state).to.equal('CREATED');
     });
 
-    it('should validate Solana address formats in escrow creation', async function () {
+    it('should validate Solana address formats in escrow creation', async () => {
       // Create test account
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
@@ -143,7 +141,7 @@ describe('Solana Escrow Operations Tests', function () {
           uniqueWallet,
           `solana_validation_test_${Date.now()}`,
           `solana_validation_${Date.now()}@example.com`,
-        ]
+        ],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -164,7 +162,7 @@ describe('Solana Escrow Operations Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -193,7 +191,7 @@ describe('Solana Escrow Operations Tests', function () {
           solanaDevnetNetwork.programId,
           validPDA,
           validTokenAccount,
-        ]
+        ],
       );
 
       expect(escrowResult.rows).to.have.length(1);
@@ -201,16 +199,16 @@ describe('Solana Escrow Operations Tests', function () {
     });
   });
 
-  describe('Solana Escrow State Management', function () {
+  describe('Solana Escrow State Management', () => {
     let testEscrowId: number;
 
-    beforeEach(async function () {
+    beforeEach(async () => {
       // Create test escrow for state management tests
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_state_test_${Date.now()}`, `solana_state_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_state_test_${Date.now()}`, `solana_state_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -230,7 +228,7 @@ describe('Solana Escrow Operations Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -253,13 +251,13 @@ describe('Solana Escrow Operations Tests', function () {
           'solana',
           solanaDevnetNetwork.programId,
           'StateTestPDA123456789012345678901234567890',
-        ]
+        ],
       );
 
       testEscrowId = escrowResult.rows[0].id;
     });
 
-    it('should transition escrow from CREATED to FUNDED', async function () {
+    it('should transition escrow from CREATED to FUNDED', async () => {
       // Update escrow state to FUNDED
       await client.query('UPDATE escrows SET state = $1, current_balance = $2 WHERE id = $3', [
         'FUNDED',
@@ -269,14 +267,14 @@ describe('Solana Escrow Operations Tests', function () {
 
       const updatedEscrow = await client.query(
         'SELECT state, current_balance FROM escrows WHERE id = $1',
-        [testEscrowId]
+        [testEscrowId],
       );
 
       expect(updatedEscrow.rows[0].state).to.equal('FUNDED');
-      expect(parseFloat(updatedEscrow.rows[0].current_balance)).to.equal(75.0);
+      expect(Number.parseFloat(updatedEscrow.rows[0].current_balance)).to.equal(75.0);
     });
 
-    it('should transition escrow from FUNDED to RELEASED', async function () {
+    it('should transition escrow from FUNDED to RELEASED', async () => {
       // First fund the escrow
       await client.query('UPDATE escrows SET state = $1, current_balance = $2 WHERE id = $3', [
         'FUNDED',
@@ -287,20 +285,20 @@ describe('Solana Escrow Operations Tests', function () {
       // Then release the escrow
       await client.query(
         'UPDATE escrows SET state = $1, current_balance = $2, completed_at = NOW() WHERE id = $3',
-        ['RELEASED', 0.0, testEscrowId]
+        ['RELEASED', 0.0, testEscrowId],
       );
 
       const releasedEscrow = await client.query(
         'SELECT state, current_balance, completed_at FROM escrows WHERE id = $1',
-        [testEscrowId]
+        [testEscrowId],
       );
 
       expect(releasedEscrow.rows[0].state).to.equal('RELEASED');
-      expect(parseFloat(releasedEscrow.rows[0].current_balance)).to.equal(0.0);
+      expect(Number.parseFloat(releasedEscrow.rows[0].current_balance)).to.equal(0.0);
       expect(releasedEscrow.rows[0].completed_at).to.not.be.null;
     });
 
-    it('should transition escrow to CANCELLED state', async function () {
+    it('should transition escrow to CANCELLED state', async () => {
       // Cancel the escrow
       await client.query('UPDATE escrows SET state = $1, completed_at = NOW() WHERE id = $2', [
         'CANCELLED',
@@ -309,14 +307,14 @@ describe('Solana Escrow Operations Tests', function () {
 
       const cancelledEscrow = await client.query(
         'SELECT state, completed_at FROM escrows WHERE id = $1',
-        [testEscrowId]
+        [testEscrowId],
       );
 
       expect(cancelledEscrow.rows[0].state).to.equal('CANCELLED');
       expect(cancelledEscrow.rows[0].completed_at).to.not.be.null;
     });
 
-    it('should handle DISPUTED state for Solana escrows', async function () {
+    it('should handle DISPUTED state for Solana escrows', async () => {
       // Get the trade ID from the escrow
       const escrowData = await client.query('SELECT trade_id FROM escrows WHERE id = $1', [
         testEscrowId,
@@ -335,7 +333,7 @@ describe('Solana Escrow Operations Tests', function () {
           process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ',
           10.0,
           'OPENED',
-        ]
+        ],
       );
 
       // Update escrow to DISPUTED state
@@ -347,7 +345,7 @@ describe('Solana Escrow Operations Tests', function () {
 
       const disputedEscrow = await client.query(
         'SELECT state, dispute_id FROM escrows WHERE id = $1',
-        [testEscrowId]
+        [testEscrowId],
       );
 
       expect(disputedEscrow.rows[0].state).to.equal('DISPUTED');
@@ -355,8 +353,8 @@ describe('Solana Escrow Operations Tests', function () {
     });
   });
 
-  describe('Solana Escrow Monitoring', function () {
-    it('should query escrows by network family', async function () {
+  describe('Solana Escrow Monitoring', () => {
+    it('should query escrows by network family', async () => {
       // Create multiple escrows on Solana network
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
@@ -366,7 +364,7 @@ describe('Solana Escrow Operations Tests', function () {
           uniqueWallet,
           `solana_monitor_test_${Date.now()}`,
           `solana_monitor_${Date.now()}@example.com`,
-        ]
+        ],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -388,7 +386,7 @@ describe('Solana Escrow Operations Tests', function () {
             100 + i * 10,
             'USD',
             solanaDevnetNetwork.id,
-          ]
+          ],
         );
         const tradeId = tradeResult.rows[0].id;
 
@@ -411,14 +409,14 @@ describe('Solana Escrow Operations Tests', function () {
             'solana',
             solanaDevnetNetwork.programId,
             `MonitorTestPDA${i}1234567890123456789012345678`,
-          ]
+          ],
         );
       }
 
       // Query escrows by network family
       const solanaEscrows = await client.query(
         'SELECT * FROM escrows WHERE network_family = $1 AND network_id = $2',
-        ['solana', solanaDevnetNetwork.id]
+        ['solana', solanaDevnetNetwork.id],
       );
 
       expect(solanaEscrows.rows).to.have.length(3);
@@ -429,7 +427,7 @@ describe('Solana Escrow Operations Tests', function () {
       });
     });
 
-    it('should query escrows by state for monitoring', async function () {
+    it('should query escrows by state for monitoring', async () => {
       // Create escrows in different states
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
@@ -439,7 +437,7 @@ describe('Solana Escrow Operations Tests', function () {
           uniqueWallet,
           `solana_state_monitor_${Date.now()}`,
           `solana_state_monitor_${Date.now()}@example.com`,
-        ]
+        ],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -462,7 +460,7 @@ describe('Solana Escrow Operations Tests', function () {
             100,
             'USD',
             solanaDevnetNetwork.id,
-          ]
+          ],
         );
         const tradeId = tradeResult.rows[0].id;
 
@@ -485,24 +483,24 @@ describe('Solana Escrow Operations Tests', function () {
             'solana',
             solanaDevnetNetwork.programId,
             `StateMonitorPDA${i}1234567890123456789012345678`,
-          ]
+          ],
         );
       }
 
       // Query escrows by specific state
       const createdEscrows = await client.query(
         'SELECT * FROM escrows WHERE state = $1 AND network_family = $2',
-        ['CREATED', 'solana']
+        ['CREATED', 'solana'],
       );
 
       const fundedEscrows = await client.query(
         'SELECT * FROM escrows WHERE state = $1 AND network_family = $2',
-        ['FUNDED', 'solana']
+        ['FUNDED', 'solana'],
       );
 
       const releasedEscrows = await client.query(
         'SELECT * FROM escrows WHERE state = $1 AND network_family = $2',
-        ['RELEASED', 'solana']
+        ['RELEASED', 'solana'],
       );
 
       expect(createdEscrows.rows).to.have.length(1);
@@ -515,8 +513,8 @@ describe('Solana Escrow Operations Tests', function () {
     });
   });
 
-  describe('Solana Escrow Cancellation', function () {
-    it('should handle auto-cancellation for Solana escrows', async function () {
+  describe('Solana Escrow Cancellation', () => {
+    it('should handle auto-cancellation for Solana escrows', async () => {
       // Create test escrow
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
@@ -526,7 +524,7 @@ describe('Solana Escrow Operations Tests', function () {
           uniqueWallet,
           `solana_cancel_test_${Date.now()}`,
           `solana_cancel_${Date.now()}@example.com`,
-        ]
+        ],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -546,7 +544,7 @@ describe('Solana Escrow Operations Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
@@ -569,7 +567,7 @@ describe('Solana Escrow Operations Tests', function () {
           'solana',
           solanaDevnetNetwork.programId,
           'CancelTestPDA123456789012345678901234567890',
-        ]
+        ],
       );
 
       const escrowId = escrowResult.rows[0].id;
@@ -585,17 +583,17 @@ describe('Solana Escrow Operations Tests', function () {
         `INSERT INTO contract_auto_cancellations (
           escrow_id, network_id, status, created_at
         ) VALUES ($1, $2, $3, NOW())`,
-        [escrowId, solanaDevnetNetwork.id, 'SUCCESS']
+        [escrowId, solanaDevnetNetwork.id, 'SUCCESS'],
       );
 
       const cancelledEscrow = await client.query(
         'SELECT state, completed_at FROM escrows WHERE id = $1',
-        [escrowId]
+        [escrowId],
       );
 
       const autoCancellation = await client.query(
         'SELECT * FROM contract_auto_cancellations WHERE escrow_id = $1',
-        [escrowId]
+        [escrowId],
       );
 
       expect(cancelledEscrow.rows[0].state).to.equal('AUTO_CANCELLED');

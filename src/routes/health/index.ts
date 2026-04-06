@@ -1,16 +1,16 @@
-import express, { Request, Response } from 'express';
+import { Connection } from '@solana/web3.js';
+import express, { type Request, type Response } from 'express';
 import { query } from '../../db';
-import { NetworkService } from '../../services/networkService';
-import { BlockchainServiceFactory } from '../../services/blockchainService';
-import { optionalNetwork } from '../../middleware/networkMiddleware';
-import { withErrorHandling } from '../../middleware/errorHandler';
 import { logError } from '../../logger';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { withErrorHandling } from '../../middleware/errorHandler';
+import { optionalNetwork } from '../../middleware/networkMiddleware';
+import { getListenerHealth } from '../../server';
+import { BlockchainServiceFactory } from '../../services/blockchainService';
+import { NetworkService } from '../../services/networkService';
+import { type NetworkConfig, NetworkFamily } from '../../types/networks';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { getVersionInfo } from '../../utils/versionUtils';
-import { AuthenticatedRequest } from '../../middleware/auth';
-import { NetworkConfig, NetworkFamily } from '../../types/networks';
-import { Connection } from '@solana/web3.js';
-import { getListenerHealth } from '../../server';
 
 const router = express.Router();
 
@@ -23,18 +23,18 @@ router.get(
     let walletAddress: string | undefined;
     try {
       walletAddress = getWalletAddressFromJWT(req as AuthenticatedRequest);
-    } catch (err) {
+    } catch (_err) {
       // JWT not present or invalid - that's fine for public health check
       walletAddress = undefined;
     }
     let dbOk = false;
     interface NetworkStatus extends NetworkConfig {
-      status: string;
+      blockExplorerUrl?: string;
       error: string | null;
       providerChainId?: number;
       providerName?: string;
+      status: string;
       warning?: string;
-      blockExplorerUrl?: string;
     }
     const networksStatus: NetworkStatus[] = [];
 
@@ -63,11 +63,11 @@ router.get(
           ]);
 
         dbCounts = {
-          accounts: parseInt(accountsResult[0].count),
-          escrows: parseInt(escrowsResult[0].count),
-          offers: parseInt(offersResult[0].count),
-          trades: parseInt(tradesResult[0].count),
-          transactions: parseInt(transactionsResult[0].count),
+          accounts: Number.parseInt(accountsResult[0].count, 10),
+          escrows: Number.parseInt(escrowsResult[0].count, 10),
+          offers: Number.parseInt(offersResult[0].count, 10),
+          trades: Number.parseInt(tradesResult[0].count, 10),
+          transactions: Number.parseInt(transactionsResult[0].count, 10),
         };
       } catch (countErr) {
         logError('Health check DB count queries failed', countErr as Error);
@@ -79,7 +79,7 @@ router.get(
     // Get active networks and check their status
     try {
       const allNetworks = await NetworkService.getAllNetworks();
-      const activeNetworks = allNetworks.filter(network => network.isActive);
+      const activeNetworks = allNetworks.filter((network) => network.isActive);
 
       for (const network of activeNetworks) {
         const networkStatus: NetworkStatus = {
@@ -99,7 +99,7 @@ router.get(
             networkStatus.status = 'Connected';
             networkStatus.providerName = 'Solana';
             networkStatus.blockExplorerUrl = blockchainService.getBlockExplorerUrl(
-              '1111111111111111111111111111111111111111111111111111111111111111'
+              '1111111111111111111111111111111111111111111111111111111111111111',
             );
           } else {
             // Skip health check for inactive networks
@@ -147,14 +147,15 @@ router.get(
       },
       summary: {
         totalNetworks: networksStatus.length,
-        activeNetworks: networksStatus.filter(n => n.isActive).length,
-        connectedNetworks: networksStatus.filter(n => n.status === 'Connected').length,
-        errorNetworks: networksStatus.filter(n => n.status === 'Error').length,
-        evmNetworks: networksStatus.filter(n => n.networkFamily === NetworkFamily.EVM).length,
-        solanaNetworks: networksStatus.filter(n => n.networkFamily === NetworkFamily.SOLANA).length,
+        activeNetworks: networksStatus.filter((n) => n.isActive).length,
+        connectedNetworks: networksStatus.filter((n) => n.status === 'Connected').length,
+        errorNetworks: networksStatus.filter((n) => n.status === 'Error').length,
+        evmNetworks: networksStatus.filter((n) => n.networkFamily === NetworkFamily.EVM).length,
+        solanaNetworks: networksStatus.filter((n) => n.networkFamily === NetworkFamily.SOLANA)
+          .length,
       },
     });
-  })
+  }),
 );
 
 export default router;

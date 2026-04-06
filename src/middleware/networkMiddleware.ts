@@ -1,11 +1,11 @@
-import { Request, Response, NextFunction } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { NetworkService } from '../services/networkService';
 import {
-  NetworkConfig,
-  NetworkRequest,
   InvalidNetworkError,
+  type NetworkConfig,
   NetworkInactiveError,
   NetworkNotFoundError,
+  type NetworkRequest,
   NetworkType,
 } from '../types/networks';
 
@@ -33,7 +33,7 @@ function getValidNetworks(): string[] {
 export async function requireNetwork(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   try {
     const network = await NetworkService.getNetworkFromRequest(req);
@@ -80,7 +80,7 @@ export async function requireNetwork(
 export async function optionalNetwork(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   try {
     const network = await NetworkService.getNetworkFromRequest(req);
@@ -113,7 +113,7 @@ export async function optionalNetwork(
 export async function requireNetworkAdmin(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   try {
     const networkName = req.headers['x-network-name'] as string;
@@ -154,12 +154,12 @@ export async function requireNetworkAdmin(
 export async function validateNetworkParam(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   try {
-    const networkId = parseInt(req.params.networkId);
+    const networkId = Number.parseInt(req.params.networkId, 10);
 
-    if (isNaN(networkId)) {
+    if (Number.isNaN(networkId)) {
       res.status(400).json({
         error: 'Invalid network ID',
         message: 'Network ID must be a valid number',

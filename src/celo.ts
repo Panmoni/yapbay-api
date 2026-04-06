@@ -11,11 +11,12 @@
  * Status: Disabled but functional
  */
 
-import { ethers } from 'ethers';
 import * as dotenv from 'dotenv';
+import { ethers } from 'ethers';
 import YapBayEscrowABI from './contracts/evm/YapBayEscrow.json';
-import { YapBayEscrow } from './types/YapBayEscrow';
 import { NetworkService } from './services/networkService';
+import type { YapBayEscrow } from './types/YapBayEscrow';
+
 dotenv.config();
 
 const CELO_PRIVATE_KEY = process.env.CELO_PRIVATE_KEY;
@@ -34,8 +35,8 @@ export class CeloService {
    * Get JSON RPC provider for a specific network
    */
   static async getProviderForNetwork(networkId: number): Promise<ethers.JsonRpcProvider> {
-    if (this.providers.has(networkId)) {
-      return this.providers.get(networkId)!;
+    if (CeloService.providers.has(networkId)) {
+      return CeloService.providers.get(networkId)!;
     }
 
     const network = await NetworkService.getNetworkById(networkId);
@@ -47,7 +48,7 @@ export class CeloService {
     if (network.networkFamily !== 'evm') {
       throw new Error(
         `Provider creation not supported for ${network.networkFamily} networks. ` +
-          `This network requires a Solana-specific connection. Network: ${network.name} (ID: ${networkId})`
+          `This network requires a Solana-specific connection. Network: ${network.name} (ID: ${networkId})`,
       );
     }
 
@@ -57,7 +58,7 @@ export class CeloService {
     };
 
     const provider = new ethers.JsonRpcProvider(network.rpcUrl, celoNetwork);
-    this.providers.set(networkId, provider);
+    CeloService.providers.set(networkId, provider);
 
     console.log(`Created provider for ${network.name}: ${network.rpcUrl}`);
     return provider;
@@ -67,8 +68,8 @@ export class CeloService {
    * Get WebSocket provider for a specific network
    */
   static async getWsProviderForNetwork(networkId: number): Promise<ethers.WebSocketProvider> {
-    if (this.wsProviders.has(networkId)) {
-      return this.wsProviders.get(networkId)!;
+    if (CeloService.wsProviders.has(networkId)) {
+      return CeloService.wsProviders.get(networkId)!;
     }
 
     const network = await NetworkService.getNetworkById(networkId);
@@ -80,7 +81,7 @@ export class CeloService {
     if (network.networkFamily !== 'evm') {
       throw new Error(
         `WebSocket provider creation not supported for ${network.networkFamily} networks. ` +
-          `This network requires a Solana-specific event listener. Network: ${network.name} (ID: ${networkId})`
+          `This network requires a Solana-specific event listener. Network: ${network.name} (ID: ${networkId})`,
       );
     }
 
@@ -94,7 +95,7 @@ export class CeloService {
     };
 
     const wsProvider = new ethers.WebSocketProvider(network.wsUrl, celoNetwork);
-    this.wsProviders.set(networkId, wsProvider);
+    CeloService.wsProviders.set(networkId, wsProvider);
 
     console.log(`Created WebSocket provider for ${network.name}: ${network.wsUrl}`);
     return wsProvider;
@@ -105,7 +106,7 @@ export class CeloService {
    */
   static async getContractForNetwork(
     networkId: number,
-    signerOrProvider?: ethers.ContractRunner
+    signerOrProvider?: ethers.ContractRunner,
   ): Promise<YapBayEscrow> {
     const network = await NetworkService.getNetworkById(networkId);
     if (!network) {
@@ -116,7 +117,7 @@ export class CeloService {
     if (network.networkFamily !== 'evm') {
       throw new Error(
         `Contract creation not supported for ${network.networkFamily} networks. ` +
-          `This network requires a Solana-specific program interface. Network: ${network.name} (ID: ${networkId})`
+          `This network requires a Solana-specific program interface. Network: ${network.name} (ID: ${networkId})`,
       );
     }
 
@@ -124,12 +125,12 @@ export class CeloService {
       throw new Error(`Contract address not configured for network ${network.name}`);
     }
 
-    const runner = signerOrProvider || (await this.getProviderForNetwork(networkId));
+    const runner = signerOrProvider || (await CeloService.getProviderForNetwork(networkId));
 
     return new ethers.Contract(
       network.contractAddress,
       YapBayEscrowABI.abi,
-      runner
+      runner,
     ) as unknown as YapBayEscrow;
   }
 
@@ -141,10 +142,10 @@ export class CeloService {
       throw new Error('CELO_PRIVATE_KEY not set in environment variables');
     }
 
-    const provider = await this.getProviderForNetwork(networkId);
+    const provider = await CeloService.getProviderForNetwork(networkId);
     const signer = new ethers.Wallet(CELO_PRIVATE_KEY, provider);
 
-    return await this.getContractForNetwork(networkId, signer);
+    return await CeloService.getContractForNetwork(networkId, signer);
   }
 
   /**
@@ -155,7 +156,7 @@ export class CeloService {
       throw new Error('CELO_PRIVATE_KEY not set in environment variables');
     }
 
-    const provider = await this.getProviderForNetwork(networkId);
+    const provider = await CeloService.getProviderForNetwork(networkId);
     return new ethers.Wallet(CELO_PRIVATE_KEY, provider);
   }
 
@@ -178,9 +179,9 @@ export class CeloService {
    */
   static async getEscrowBalance(
     networkId: number,
-    escrowId: number
+    escrowId: number,
   ): Promise<{ stored: string; calculated: string }> {
-    const contract = await this.getContractForNetwork(networkId);
+    const contract = await CeloService.getContractForNetwork(networkId);
     const [stored, calculated] = await Promise.all([
       contract.getStoredEscrowBalance(escrowId),
       contract.getCalculatedEscrowBalance(escrowId),
@@ -196,7 +197,7 @@ export class CeloService {
    * Get sequential escrow information
    */
   static async getSequentialInfo(networkId: number, escrowId: number) {
-    const contract = await this.getContractForNetwork(networkId);
+    const contract = await CeloService.getContractForNetwork(networkId);
     const info = await contract.getSequentialEscrowInfo(escrowId);
 
     return {
@@ -211,7 +212,7 @@ export class CeloService {
    * Check if escrow is eligible for auto-cancellation
    */
   static async checkAutoCancelEligible(networkId: number, escrowId: number): Promise<boolean> {
-    const contract = await this.getContractForNetwork(networkId);
+    const contract = await CeloService.getContractForNetwork(networkId);
     return await contract.isEligibleForAutoCancel(escrowId);
   }
 
@@ -219,9 +220,9 @@ export class CeloService {
    * Clear cached providers and contracts (useful for testing)
    */
   static clearCache(): void {
-    this.providers.clear();
-    this.wsProviders.clear();
-    this.contracts.clear();
+    CeloService.providers.clear();
+    CeloService.wsProviders.clear();
+    CeloService.contracts.clear();
   }
 }
 
@@ -237,7 +238,7 @@ export const getDefaultWsProvider = async (): Promise<ethers.WebSocketProvider> 
 };
 
 export const getDefaultContract = async (
-  signerOrProvider?: ethers.ContractRunner
+  signerOrProvider?: ethers.ContractRunner,
 ): Promise<YapBayEscrow> => {
   const defaultNetwork = await NetworkService.getDefaultNetwork();
   return CeloService.getContractForNetwork(defaultNetwork.id, signerOrProvider);
@@ -254,11 +255,13 @@ export const getDefaultSigner = async (): Promise<ethers.Wallet> => {
 };
 
 // Legacy exports for backward compatibility - these should be replaced with network-aware versions
-export { getDefaultProvider as provider };
-export { getDefaultWsProvider as wsProvider };
-export { getDefaultSigner as getSigner };
-export { getDefaultContract as getContract };
-export { getDefaultSignedContract as getSignedContract };
+export {
+  getDefaultContract as getContract,
+  getDefaultProvider as provider,
+  getDefaultSignedContract as getSignedContract,
+  getDefaultSigner as getSigner,
+  getDefaultWsProvider as wsProvider,
+};
 export const formatUSDC = CeloService.formatUSDC;
 export const parseUSDC = CeloService.parseUSDC;
 export const getEscrowBalance = async (escrowId: number) => {

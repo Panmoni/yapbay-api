@@ -1,4 +1,4 @@
-import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken';
+import jwt, { type JwtPayload, type SignOptions } from 'jsonwebtoken';
 
 // Define a more flexible type combining JwtPayload and our custom structure
 export interface CustomJwtPayload extends JwtPayload {
@@ -43,7 +43,7 @@ export const getWalletAddressFromJWT = (req: RequestLike): string | undefined =>
       format: string;
       address?: string;
       [key: string]: string | number | boolean | null | undefined;
-    }) => cred && cred.format === 'blockchain'
+    }) => cred && cred.format === 'blockchain',
   );
   // console.log('[getWalletAddressFromJWT] Found blockchain credential:', JSON.stringify(blockchainCred, null, 2));
 

@@ -1,18 +1,18 @@
+import { Connection } from '@solana/web3.js';
 import { expect } from 'chai';
 import pool from '../db';
-import { NetworkService } from '../services/networkService';
 import { BlockchainServiceFactory } from '../services/blockchainService';
+import { NetworkService } from '../services/networkService';
 import { NetworkFamily } from '../types/networks';
-import { Connection } from '@solana/web3.js';
 
-describe('Solana Multi-Network Integration Tests', function () {
+describe('Solana Multi-Network Integration Tests', () => {
   let client: any;
   let solanaDevnetNetwork: any;
   let solanaMainnetNetwork: any;
   let consoleLogStub: any;
 
   before(async function () {
-    this.timeout(10000);
+    this.timeout(10_000);
 
     client = await pool.connect();
     consoleLogStub = {
@@ -30,7 +30,7 @@ describe('Solana Multi-Network Integration Tests', function () {
       solanaDevnetNetwork = await NetworkService.getNetworkById(3); // Solana Devnet
       solanaMainnetNetwork = await NetworkService.getNetworkById(4); // Solana Mainnet
 
-      if (!solanaDevnetNetwork || !solanaMainnetNetwork) {
+      if (!(solanaDevnetNetwork && solanaMainnetNetwork)) {
         throw new Error('Solana networks not properly configured');
       }
     } catch (error) {
@@ -39,16 +39,16 @@ describe('Solana Multi-Network Integration Tests', function () {
     }
   });
 
-  beforeEach(async function () {
+  beforeEach(async () => {
     await client.query('BEGIN');
   });
 
-  afterEach(async function () {
+  afterEach(async () => {
     await client.query('ROLLBACK');
     consoleLogStub.reset();
   });
 
-  after(async function () {
+  after(async () => {
     if (client) {
       await client.release();
     }
@@ -57,20 +57,20 @@ describe('Solana Multi-Network Integration Tests', function () {
     }
   });
 
-  describe('Network Service', function () {
-    it('should return Solana networks in active networks', async function () {
+  describe('Network Service', () => {
+    it('should return Solana networks in active networks', async () => {
       const networks = await NetworkService.getActiveNetworks();
       expect(networks).to.be.an('array');
       expect(networks.length).to.be.greaterThan(0);
 
-      const solanaNetworks = networks.filter(n => n.networkFamily === NetworkFamily.SOLANA);
+      const solanaNetworks = networks.filter((n) => n.networkFamily === NetworkFamily.SOLANA);
       expect(solanaNetworks.length).to.be.greaterThan(0);
 
-      const networkNames = solanaNetworks.map(n => n.name);
+      const networkNames = solanaNetworks.map((n) => n.name);
       expect(networkNames).to.include('solana-devnet');
     });
 
-    it('should get Solana Devnet by ID', async function () {
+    it('should get Solana Devnet by ID', async () => {
       const network = await NetworkService.getNetworkById(solanaDevnetNetwork.id);
       expect(network).to.not.be.null;
       expect(network!.name).to.equal('solana-devnet');
@@ -78,7 +78,7 @@ describe('Solana Multi-Network Integration Tests', function () {
       expect(network!.isActive).to.be.true;
     });
 
-    it('should get Solana Mainnet by ID', async function () {
+    it('should get Solana Mainnet by ID', async () => {
       const network = await NetworkService.getNetworkById(solanaMainnetNetwork.id);
       expect(network).to.not.be.null;
       expect(network!.name).to.equal('solana-mainnet');
@@ -86,7 +86,7 @@ describe('Solana Multi-Network Integration Tests', function () {
       expect(network!.isActive).to.be.false; // Currently inactive
     });
 
-    it('should get Solana networks by name', async function () {
+    it('should get Solana networks by name', async () => {
       const devnetNetwork = await NetworkService.getNetworkByName('solana-devnet');
       const mainnetNetwork = await NetworkService.getNetworkByName('solana-mainnet');
 
@@ -97,8 +97,8 @@ describe('Solana Multi-Network Integration Tests', function () {
     });
   });
 
-  describe('Solana Blockchain Service Multi-Network', function () {
-    it('should create blockchain services for different Solana networks', function () {
+  describe('Solana Blockchain Service Multi-Network', () => {
+    it('should create blockchain services for different Solana networks', () => {
       const devnetService = BlockchainServiceFactory.create(solanaDevnetNetwork);
       const mainnetService = BlockchainServiceFactory.create(solanaMainnetNetwork);
 
@@ -107,7 +107,7 @@ describe('Solana Multi-Network Integration Tests', function () {
       expect(mainnetService.getNetworkFamily()).to.equal(NetworkFamily.SOLANA);
     });
 
-    it('should create Solana connections for different networks', function () {
+    it('should create Solana connections for different networks', () => {
       const devnetConnection = new Connection(solanaDevnetNetwork.rpcUrl);
       const mainnetConnection = new Connection(solanaMainnetNetwork.rpcUrl);
 
@@ -116,7 +116,7 @@ describe('Solana Multi-Network Integration Tests', function () {
       expect(mainnetConnection.rpcEndpoint).to.equal(solanaMainnetNetwork.rpcUrl);
     });
 
-    it('should validate different program IDs for different networks', function () {
+    it('should validate different program IDs for different networks', () => {
       // Only test Solana Devnet as Mainnet program ID is currently NULL
       expect(solanaDevnetNetwork.programId).to.be.a('string');
       expect(solanaDevnetNetwork.programId).to.not.be.null;
@@ -124,38 +124,38 @@ describe('Solana Multi-Network Integration Tests', function () {
     });
   });
 
-  describe('Data Isolation', function () {
-    it('should isolate offers by Solana network', async function () {
+  describe('Data Isolation', () => {
+    it('should isolate offers by Solana network', async () => {
       // Create test account with real Solana address from .env
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_testuser_${Date.now()}`, `solana_test_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_testuser_${Date.now()}`, `solana_test_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
       // Create offer on Solana Devnet
       const devnetOffer = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [accountId, 'BUY', 100, 200, 500, 1.05, solanaDevnetNetwork.id]
+        [accountId, 'BUY', 100, 200, 500, 1.05, solanaDevnetNetwork.id],
       );
 
       // Create offer on Solana Mainnet
       const mainnetOffer = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [accountId, 'SELL', 150, 300, 600, 1.03, solanaMainnetNetwork.id]
+        [accountId, 'SELL', 150, 300, 600, 1.03, solanaMainnetNetwork.id],
       );
 
       // Query offers by network AND account to ensure we only get our test data
       const devnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [solanaDevnetNetwork.id, accountId]
+        [solanaDevnetNetwork.id, accountId],
       );
 
       const mainnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [solanaMainnetNetwork.id, accountId]
+        [solanaMainnetNetwork.id, accountId],
       );
 
       // Verify isolation
@@ -167,13 +167,13 @@ describe('Solana Multi-Network Integration Tests', function () {
       expect(mainnetOffers.rows[0].offer_type).to.equal('SELL');
     });
 
-    it('should isolate trades by Solana network', async function () {
+    it('should isolate trades by Solana network', async () => {
       // Create test account with real Solana address from .env
       const uniqueWallet =
         process.env.SOLANA_SELLER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_testuser2_${Date.now()}`, `solana_test2_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_testuser2_${Date.now()}`, `solana_test2_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -194,7 +194,7 @@ describe('Solana Multi-Network Integration Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const devnetTradeId = devnetTrade.rows[0].id;
 
@@ -215,19 +215,19 @@ describe('Solana Multi-Network Integration Tests', function () {
           200,
           'EUR',
           solanaMainnetNetwork.id,
-        ]
+        ],
       );
       const mainnetTradeId = mainnetTrade.rows[0].id;
 
       // Query trades by network AND specific IDs to ensure we only get our test data
       const devnetTrades = await client.query(
         'SELECT * FROM trades WHERE network_id = $1 AND id = $2',
-        [solanaDevnetNetwork.id, devnetTradeId]
+        [solanaDevnetNetwork.id, devnetTradeId],
       );
 
       const mainnetTrades = await client.query(
         'SELECT * FROM trades WHERE network_id = $1 AND id = $2',
-        [solanaMainnetNetwork.id, mainnetTradeId]
+        [solanaMainnetNetwork.id, mainnetTradeId],
       );
 
       // Verify isolation
@@ -239,13 +239,13 @@ describe('Solana Multi-Network Integration Tests', function () {
       expect(mainnetTrades.rows[0].leg1_state).to.equal('FUNDED');
     });
 
-    it('should isolate escrows by Solana network', async function () {
+    it('should isolate escrows by Solana network', async () => {
       // Create test account with real Solana address from .env
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_testuser3_${Date.now()}`, `solana_test3_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_testuser3_${Date.now()}`, `solana_test3_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
@@ -266,7 +266,7 @@ describe('Solana Multi-Network Integration Tests', function () {
           100,
           'USD',
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const devnetTradeId = devnetTradeResult.rows[0].id;
 
@@ -287,7 +287,7 @@ describe('Solana Multi-Network Integration Tests', function () {
           200,
           'EUR',
           solanaMainnetNetwork.id,
-        ]
+        ],
       );
       const mainnetTradeId = mainnetTradeResult.rows[0].id;
 
@@ -307,7 +307,7 @@ describe('Solana Multi-Network Integration Tests', function () {
           'CREATED',
           false,
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
 
       // Create escrow on Solana Mainnet
@@ -326,18 +326,18 @@ describe('Solana Multi-Network Integration Tests', function () {
           'FUNDED',
           false,
           solanaMainnetNetwork.id,
-        ]
+        ],
       );
 
       // Query escrows by network
       const devnetEscrows = await client.query(
         'SELECT * FROM escrows WHERE network_id = $1 AND id = $2',
-        [solanaDevnetNetwork.id, devnetEscrow.rows[0].id]
+        [solanaDevnetNetwork.id, devnetEscrow.rows[0].id],
       );
 
       const mainnetEscrows = await client.query(
         'SELECT * FROM escrows WHERE network_id = $1 AND id = $2',
-        [solanaMainnetNetwork.id, mainnetEscrow.rows[0].id]
+        [solanaMainnetNetwork.id, mainnetEscrow.rows[0].id],
       );
 
       // Verify isolation
@@ -350,39 +350,39 @@ describe('Solana Multi-Network Integration Tests', function () {
     });
   });
 
-  describe('Cross-Network Data Integrity', function () {
-    it('should not find offers from other Solana networks in filtered queries', async function () {
+  describe('Cross-Network Data Integrity', () => {
+    it('should not find offers from other Solana networks in filtered queries', async () => {
       // Create test account
       const uniqueWallet =
         process.env.SOLANA_SELLER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_testuser4_${Date.now()}`, `solana_test4_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_testuser4_${Date.now()}`, `solana_test4_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
       // Create offer on Solana Devnet
       await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [accountId, 'BUY', 100, 200, 500, 1.05, solanaDevnetNetwork.id]
+        [accountId, 'BUY', 100, 200, 500, 1.05, solanaDevnetNetwork.id],
       );
 
       // Create offer on Solana Mainnet
       await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-        [accountId, 'SELL', 150, 300, 600, 1.03, solanaMainnetNetwork.id]
+        [accountId, 'SELL', 150, 300, 600, 1.03, solanaMainnetNetwork.id],
       );
 
       // Query offers for Solana Devnet only
       const devnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [solanaDevnetNetwork.id, accountId]
+        [solanaDevnetNetwork.id, accountId],
       );
 
       // Query offers for Solana Mainnet only
       const mainnetOffers = await client.query(
         'SELECT * FROM offers WHERE network_id = $1 AND creator_account_id = $2',
-        [solanaMainnetNetwork.id, accountId]
+        [solanaMainnetNetwork.id, accountId],
       );
 
       // Verify cross-network isolation
@@ -392,20 +392,20 @@ describe('Solana Multi-Network Integration Tests', function () {
       expect(mainnetOffers.rows[0].network_id).to.equal(solanaMainnetNetwork.id);
     });
 
-    it('should maintain referential integrity within Solana networks', async function () {
+    it('should maintain referential integrity within Solana networks', async () => {
       // Create test account
       const uniqueWallet =
         process.env.SOLANA_BUYER_ADDRESS || '9KxEUVkoJVrE2nKadJomSNkgSsksgGvRavSJy3eJUdtQ';
       const accountResult = await client.query(
         'INSERT INTO accounts (wallet_address, username, email) VALUES ($1, $2, $3) RETURNING id',
-        [uniqueWallet, `solana_testuser5_${Date.now()}`, `solana_test5_${Date.now()}@example.com`]
+        [uniqueWallet, `solana_testuser5_${Date.now()}`, `solana_test5_${Date.now()}@example.com`],
       );
       const accountId = accountResult.rows[0].id;
 
       // Create offer on Solana Devnet
       const offerResult = await client.query(
         'INSERT INTO offers (creator_account_id, offer_type, min_amount, max_amount, total_available_amount, rate_adjustment, network_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-        [accountId, 'BUY', 100, 200, 500, 1.05, solanaDevnetNetwork.id]
+        [accountId, 'BUY', 100, 200, 500, 1.05, solanaDevnetNetwork.id],
       );
       const offerId = offerResult.rows[0].id;
 
@@ -427,14 +427,14 @@ describe('Solana Multi-Network Integration Tests', function () {
           'USD',
           offerId,
           solanaDevnetNetwork.id,
-        ]
+        ],
       );
       const tradeId = tradeResult.rows[0].id;
 
       // Verify referential integrity
       const tradeWithOffer = await client.query(
         'SELECT t.*, o.id as offer_id FROM trades t JOIN offers o ON t.leg1_offer_id = o.id WHERE t.id = $1',
-        [tradeId]
+        [tradeId],
       );
 
       expect(tradeWithOffer.rows).to.have.length(1);

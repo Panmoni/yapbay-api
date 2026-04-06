@@ -1,18 +1,18 @@
-import { ethers } from 'ethers';
 import { Connection, PublicKey } from '@solana/web3.js';
-import { NetworkConfig, NetworkFamily, NetworkType } from '../types/networks';
-import { NetworkInfo } from '../types/api';
+import { ethers } from 'ethers';
+import type { NetworkInfo } from '../types/api';
+import { type NetworkConfig, NetworkFamily, NetworkType } from '../types/networks';
 
 export interface BlockchainService {
+  getBlockExplorerUrl(txHash: string): string;
   getNetworkFamily(): NetworkFamily;
+  getNetworkInfo(): Promise<NetworkInfo>;
   validateAddress(address: string): boolean;
   validateTransactionHash(hash: string): boolean;
-  getBlockExplorerUrl(txHash: string): string;
-  getNetworkInfo(): Promise<NetworkInfo>;
 }
 
 export class EVMBlockchainService implements BlockchainService {
-  constructor(private network: NetworkConfig) {}
+  constructor(private readonly network: NetworkConfig) {}
 
   getNetworkFamily(): NetworkFamily {
     return NetworkFamily.EVM;
@@ -44,9 +44,9 @@ export class EVMBlockchainService implements BlockchainService {
 }
 
 export class SolanaBlockchainService implements BlockchainService {
-  private connection: Connection;
+  private readonly connection: Connection;
 
-  constructor(private network: NetworkConfig) {
+  constructor(private readonly network: NetworkConfig) {
     this.connection = new Connection(network.rpcUrl);
   }
 
@@ -81,7 +81,7 @@ export class SolanaBlockchainService implements BlockchainService {
 
       return {
         version: version['solana-core'],
-        slot: slot,
+        slot,
         name: this.network.name,
       };
     } catch (error) {

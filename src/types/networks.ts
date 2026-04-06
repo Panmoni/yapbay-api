@@ -14,25 +14,25 @@ export enum NetworkFamily {
 }
 
 export interface NetworkConfig {
-  id: number;
-  name: NetworkType;
-  chainId: number;
-  rpcUrl: string;
-  wsUrl?: string;
-  contractAddress?: string; // EVM only
-  programId?: string; // Solana only
-  usdcMint?: string; // Solana only
   arbitratorAddress: string;
-  isTestnet: boolean;
-  isActive: boolean;
-  networkFamily: NetworkFamily;
+  chainId: number;
+  contractAddress?: string; // EVM only
   createdAt: Date;
+  id: number;
+  isActive: boolean;
+  isTestnet: boolean;
+  name: NetworkType;
+  networkFamily: NetworkFamily;
+  programId?: string; // Solana only
+  rpcUrl: string;
   updatedAt: Date;
+  usdcMint?: string; // Solana only
+  wsUrl?: string;
 }
 
 export interface NetworkContext {
-  networkId: number;
   network: NetworkConfig;
+  networkId: number;
 }
 
 export interface NetworkRequest {
@@ -42,27 +42,27 @@ export interface NetworkRequest {
 
 // Database row interface for networks table
 export interface NetworkRow {
-  id: number;
-  name: string;
-  chain_id: number;
-  rpc_url: string;
-  ws_url: string | null;
-  contract_address: string | null;
-  program_id: string | null;
-  usdc_mint: string | null;
   arbitrator_address: string | null;
-  is_testnet: boolean;
-  is_active: boolean;
-  network_family: string;
+  chain_id: number;
+  contract_address: string | null;
   created_at: Date;
+  id: number;
+  is_active: boolean;
+  is_testnet: boolean;
+  name: string;
+  network_family: string;
+  program_id: string | null;
+  rpc_url: string;
   updated_at: Date;
+  usdc_mint: string | null;
+  ws_url: string | null;
 }
 
 // Utility type for network-aware database queries
 export interface NetworkFilterOptions {
+  includeInactive?: boolean;
   networkId?: number;
   networkName?: NetworkType;
-  includeInactive?: boolean;
 }
 
 // Error types for network operations

@@ -1,33 +1,37 @@
-import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../../middleware/auth';
-import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
+import type { NextFunction, Response } from 'express';
 import { query } from '../../db';
+import type { AuthenticatedRequest } from '../../middleware/auth';
+import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 
-export const validateOfferCreation = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const validateOfferCreation = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   const { creator_account_id, offer_type, min_amount, fiat_currency = 'USD' } = req.body;
   const jwtWalletAddress = getWalletAddressFromJWT(req);
-  
+
   if (!jwtWalletAddress) {
     res.status(403).json({ error: 'No wallet address in token' });
     return;
   }
-  
+
   if (!['BUY', 'SELL'].includes(offer_type)) {
     res.status(400).json({ error: 'Offer type must be BUY or SELL' });
     return;
   }
-  
+
   if (!/^[A-Z]{3}$/.test(fiat_currency)) {
     res.status(400).json({ error: 'Fiat currency must be a 3-letter uppercase code' });
     return;
   }
-  
+
   if (typeof min_amount !== 'number' || min_amount < 0) {
     res.status(400).json({ error: 'Min amount must be a non-negative number' });
     return;
   }
-  
-  if (min_amount > 1000000) {
+
+  if (min_amount > 1_000_000) {
     res.status(400).json({ error: 'Min amount must not exceed 1,000,000' });
     return;
   }
@@ -54,7 +58,11 @@ export const validateOfferCreation = async (req: AuthenticatedRequest, res: Resp
   next();
 };
 
-export const validateOfferUpdate = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+export const validateOfferUpdate = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+): void => {
   const {
     min_amount,
     max_amount,
@@ -74,12 +82,18 @@ export const validateOfferUpdate = (req: AuthenticatedRequest, res: Response, ne
     return;
   }
 
-  if (total_available_amount !== undefined && (typeof total_available_amount !== 'number' || total_available_amount < 0)) {
+  if (
+    total_available_amount !== undefined &&
+    (typeof total_available_amount !== 'number' || total_available_amount < 0)
+  ) {
     res.status(400).json({ error: 'Total available amount must be a non-negative number' });
     return;
   }
 
-  if (rate_adjustment !== undefined && (typeof rate_adjustment !== 'number' || rate_adjustment <= 0)) {
+  if (
+    rate_adjustment !== undefined &&
+    (typeof rate_adjustment !== 'number' || rate_adjustment <= 0)
+  ) {
     res.status(400).json({ error: 'Rate adjustment must be a positive number' });
     return;
   }

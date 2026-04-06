@@ -1,0 +1,131 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["ultracite/biome/core"],
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        "useFilenamingConvention": "off",
+        "noNonNullAssertion": "off",
+        "noNamespace": "off",
+        "noParameterProperties": "off",
+        "useConsistentMemberAccessibility": "off",
+        "noParameterAssign": "off",
+        "noSubstr": "off",
+        "noNestedTernary": "off",
+        "useDefaultSwitchClause": "off",
+        "useReadonlyClassProperties": "off"
+      },
+      "complexity": {
+        "noForEach": "off",
+        "noStaticOnlyClass": "off",
+        "noExcessiveCognitiveComplexity": "off"
+      },
+      "suspicious": {
+        "useAwait": "off",
+        "noEmptyBlockStatements": "off",
+        "noEvolvingTypes": "off",
+        "noImplicitAnyLet": "off"
+      },
+      "correctness": {
+        "noGlobalDirnameFilename": "off"
+      },
+      "performance": {
+        "noDelete": "off",
+        "noNamespaceImport": "off",
+        "noBarrelFile": "off",
+        "useTopLevelRegex": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.test.ts", "**/*.spec.ts", "src/tests/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      },
+      "javascript": {
+        "globals": [
+          "describe",
+          "it",
+          "expect",
+          "before",
+          "after",
+          "beforeEach",
+          "afterEach"
+        ]
+      }
+    },
+    {
+      "includes": ["src/types/**"],
+      "linter": {
+        "enabled": false
+      }
+    },
+    {
+      "includes": ["docs/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/contracts/solana/tests.ts"],
+      "linter": {
+        "enabled": false
+      },
+      "formatter": {
+        "enabled": false
+      }
+    }
+  ],
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "arrowParentheses": "always"
+    },
+    "globals": [
+      "console",
+      "process",
+      "Buffer",
+      "__dirname",
+      "__filename",
+      "global",
+      "module",
+      "require",
+      "exports"
+    ]
+  },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  }
+}

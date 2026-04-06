@@ -22,7 +22,6 @@ try {
   console.log(JSON.stringify(decoded.header, null, 2));
   console.log('\nDecoded JWT Payload:');
   console.log(JSON.stringify(decoded.payload, null, 2));
-
 } catch (error) {
   console.error('Error decoding token:', error);
   process.exit(1);

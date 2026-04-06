@@ -11,27 +11,27 @@
 
 // Define RequestInit type for fetch API compatibility
 interface RequestInit {
-  method?: string;
-  headers?: Record<string, string> | string[][];
   body?: string | null;
-  mode?: string;
-  credentials?: string;
   cache?: string;
+  credentials?: string;
+  headers?: Record<string, string> | string[][];
+  integrity?: string;
+  keepalive?: boolean;
+  method?: string;
+  mode?: string;
   redirect?: string;
   referrer?: string;
   referrerPolicy?: string;
-  integrity?: string;
-  keepalive?: boolean;
   signal?: any;
   window?: any;
 }
 
 export interface ApiResponse<T = unknown> {
-  success?: boolean;
   data?: T;
   error?: string;
   message?: string;
   network?: string;
+  success?: boolean;
 }
 
 export interface PaginatedResponse<T = unknown> extends ApiResponse<T> {
@@ -46,109 +46,122 @@ export interface PaginatedResponse<T = unknown> extends ApiResponse<T> {
 }
 
 export interface NetworkConfig {
-  id: number;
-  name: string;
-  chainId: number;
-  rpcUrl: string;
-  wsUrl?: string;
-  contractAddress?: string;
-  programId?: string;
-  usdcMint?: string;
   arbitratorAddress: string;
-  isTestnet: boolean;
-  isActive: boolean;
-  networkFamily: 'evm' | 'solana';
+  chainId: number;
+  contractAddress?: string;
   createdAt: Date;
+  id: number;
+  isActive: boolean;
+  isTestnet: boolean;
+  name: string;
+  networkFamily: 'evm' | 'solana';
+  programId?: string;
+  rpcUrl: string;
   updatedAt: Date;
+  usdcMint?: string;
+  wsUrl?: string;
 }
 
 export interface Account {
-  id: number;
-  wallet_address: string;
-  username: string;
-  email: string;
-  telegram_username?: string;
-  telegram_id?: number;
-  profile_photo_url?: string;
-  phone_country_code?: string;
-  phone_number?: string;
   available_from?: string;
   available_to?: string;
-  timezone?: string;
-  role: 'user' | 'admin';
   created_at: Date;
+  email: string;
+  id: number;
+  phone_country_code?: string;
+  phone_number?: string;
+  profile_photo_url?: string;
+  role: 'user' | 'admin';
+  telegram_id?: number;
+  telegram_username?: string;
+  timezone?: string;
   updated_at: Date;
+  username: string;
+  wallet_address: string;
 }
 
 export interface PublicAccount {
-  id: number;
-  username: string;
-  wallet_address: string;
-  telegram_username?: string;
-  telegram_id?: number;
-  profile_photo_url?: string;
   available_from?: string;
   available_to?: string;
-  timezone?: string;
   created_at: Date;
+  id: number;
+  profile_photo_url?: string;
+  telegram_id?: number;
+  telegram_username?: string;
+  timezone?: string;
+  username: string;
+  wallet_address: string;
 }
 
 export interface Offer {
-  id: number;
+  created_at: Date;
   creator_account_id: number;
+  escrow_deposit_time_limit: string;
+  fiat_currency: string;
+  fiat_payment_time_limit: string;
+  id: number;
+  max_amount: number;
+  min_amount: number;
   network_id: number;
   offer_type: 'BUY' | 'SELL';
-  token: string;
-  fiat_currency: string;
-  min_amount: number;
-  max_amount: number;
-  total_available_amount: number;
   rate_adjustment: number;
   terms: string;
-  escrow_deposit_time_limit: string;
-  fiat_payment_time_limit: string;
-  created_at: Date;
+  token: string;
+  total_available_amount: number;
   updated_at: Date;
 }
 
 export interface Trade {
-  id: number;
-  leg1_offer_id: number;
-  leg2_offer_id?: number;
-  overall_status: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
-  from_fiat_currency: string;
+  created_at: Date;
+  destination_bank?: string;
   destination_fiat_currency: string;
   from_bank?: string;
-  destination_bank?: string;
-  leg1_state: 'CREATED' | 'FUNDED' | 'FIAT_PAID' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
-  leg1_seller_account_id: number;
+  from_fiat_currency: string;
+  id: number;
   leg1_buyer_account_id: number;
-  leg1_crypto_token: string;
-  leg1_crypto_amount: number;
-  leg1_fiat_currency: string;
-  leg1_fiat_amount?: number;
-  leg1_escrow_deposit_deadline: Date;
-  leg1_fiat_payment_deadline: Date;
-  leg1_fiat_paid_at?: Date;
-  leg1_released_at?: Date;
   leg1_cancelled_at?: Date;
+  leg1_crypto_amount: number;
+  leg1_crypto_token: string;
+  leg1_escrow_deposit_deadline: Date;
   leg1_escrow_onchain_id?: number;
+  leg1_fiat_amount?: number;
+  leg1_fiat_currency: string;
+  leg1_fiat_paid_at?: Date;
+  leg1_fiat_payment_deadline: Date;
+  leg1_offer_id: number;
+  leg1_released_at?: Date;
+  leg1_seller_account_id: number;
+  leg1_state: 'CREATED' | 'FUNDED' | 'FIAT_PAID' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
+  leg2_offer_id?: number;
   network_id: number;
-  created_at: Date;
+  overall_status: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
   updated_at: Date;
 }
 
 export interface Escrow {
-  id: number;
-  trade_id: number;
-  escrow_address: string;
-  onchain_escrow_id: number;
-  seller_address: string;
-  buyer_address: string;
-  arbitrator_address: string;
-  token_type: string;
   amount: number;
+  arbitrator_address: string;
+  buyer_address: string;
+  completed_at?: Date;
+  counter: number;
+  created_at: Date;
   current_balance?: number;
+  deposit_deadline?: Date;
+  dispute_id?: number;
+  escrow_address: string;
+  escrow_onchain_id?: string;
+  escrow_pda?: string;
+  escrow_token_account?: string;
+  fiat_deadline?: Date;
+  fiat_paid: boolean;
+  id: number;
+  network_family: 'evm' | 'solana';
+  network_id: number;
+  onchain_escrow_id: number;
+  program_id?: string;
+  seller_address: string;
+  sequential: boolean;
+  sequential_escrow_address?: string;
   state:
     | 'CREATED'
     | 'FUNDED'
@@ -157,30 +170,26 @@ export interface Escrow {
     | 'AUTO_CANCELLED'
     | 'DISPUTED'
     | 'RESOLVED';
-  sequential: boolean;
-  sequential_escrow_address?: string;
-  fiat_paid: boolean;
-  counter: number;
-  deposit_deadline?: Date;
-  fiat_deadline?: Date;
-  dispute_id?: number;
-  completed_at?: Date;
-  version?: string;
-  network_family: 'evm' | 'solana';
-  program_id?: string;
-  escrow_pda?: string;
-  escrow_token_account?: string;
-  escrow_onchain_id?: string;
+  token_type: string;
+  trade_id: number;
   trade_onchain_id?: string;
-  network_id: number;
-  created_at: Date;
   updated_at: Date;
+  version?: string;
 }
 
 export interface Transaction {
+  block_number?: number;
+  created_at: Date;
+  error_message?: string;
+  gas_used?: number;
   id: number;
-  transaction_hash?: string;
+  network_id: number;
+  receiver_or_contract_address?: string;
+  related_escrow_db_id?: number;
+  related_trade_id?: number;
+  sender_address?: string;
   status: 'PENDING' | 'SUCCESS' | 'FAILED';
+  transaction_hash?: string;
   type:
     | 'CREATE_ESCROW'
     | 'FUND_ESCROW'
@@ -192,15 +201,6 @@ export interface Transaction {
     | 'RESOLVE_DISPUTE'
     | 'EVENT'
     | 'OTHER';
-  block_number?: number;
-  sender_address?: string;
-  receiver_or_contract_address?: string;
-  gas_used?: number;
-  error_message?: string;
-  related_trade_id?: number;
-  related_escrow_db_id?: number;
-  network_id: number;
-  created_at: Date;
 }
 
 export interface PriceData {
@@ -211,10 +211,6 @@ export interface PriceData {
 }
 
 export interface HealthStatus {
-  status: string;
-  timestamp: string;
-  userWallet: string;
-  dbStatus: string;
   apiVersion: {
     version: string;
     gitCommitHash: string;
@@ -224,6 +220,7 @@ export interface HealthStatus {
     isDirty: boolean;
   };
   contractVersion: string;
+  dbStatus: string;
   networks: Array<
     NetworkConfig & {
       status: string;
@@ -234,6 +231,7 @@ export interface HealthStatus {
       blockExplorerUrl?: string;
     }
   >;
+  status: string;
   summary: {
     totalNetworks: number;
     activeNetworks: number;
@@ -242,92 +240,99 @@ export interface HealthStatus {
     evmNetworks: number;
     solanaNetworks: number;
   };
+  timestamp: string;
+  userWallet: string;
 }
 
 // Request interfaces
 export interface CreateAccountRequest {
-  wallet_address: string;
-  username: string;
   email: string;
+  username: string;
+  wallet_address: string;
 }
 
 export interface UpdateAccountRequest {
-  username?: string;
-  email?: string;
-  telegram_username?: string;
-  telegram_id?: number;
-  profile_photo_url?: string;
-  phone_country_code?: string;
-  phone_number?: string;
   available_from?: string;
   available_to?: string;
+  email?: string;
+  phone_country_code?: string;
+  phone_number?: string;
+  profile_photo_url?: string;
+  telegram_id?: number;
+  telegram_username?: string;
   timezone?: string;
+  username?: string;
 }
 
 export interface CreateOfferRequest {
   creator_account_id: number;
-  offer_type: 'BUY' | 'SELL';
-  token?: string;
+  escrow_deposit_time_limit?: string;
   fiat_currency?: string;
-  min_amount: number;
+  fiat_payment_time_limit?: string;
   max_amount?: number;
-  total_available_amount?: number;
+  min_amount: number;
+  offer_type: 'BUY' | 'SELL';
   rate_adjustment?: number;
   terms?: string;
-  escrow_deposit_time_limit?: string;
-  fiat_payment_time_limit?: string;
+  token?: string;
+  total_available_amount?: number;
 }
 
 export interface UpdateOfferRequest {
-  min_amount?: number;
+  escrow_deposit_time_limit?: string | { minutes: number };
+  fiat_currency?: string;
+  fiat_payment_time_limit?: string | { minutes: number };
   max_amount?: number;
-  total_available_amount?: number;
+  min_amount?: number;
+  offer_type?: 'BUY' | 'SELL';
   rate_adjustment?: number;
   terms?: string;
-  escrow_deposit_time_limit?: string | { minutes: number };
-  fiat_payment_time_limit?: string | { minutes: number };
-  fiat_currency?: string;
-  offer_type?: 'BUY' | 'SELL';
   token?: string;
+  total_available_amount?: number;
 }
 
 export interface CreateTradeRequest {
-  leg1_offer_id: number;
-  leg2_offer_id?: number;
-  leg1_crypto_amount?: number;
-  leg1_fiat_amount?: number;
-  from_fiat_currency?: string;
+  destination_bank?: string;
   destination_fiat_currency?: string;
   from_bank?: string;
-  destination_bank?: string;
+  from_fiat_currency?: string;
+  leg1_crypto_amount?: number;
+  leg1_fiat_amount?: number;
+  leg1_offer_id: number;
+  leg2_offer_id?: number;
 }
 
 export interface UpdateTradeRequest {
+  fiat_paid?: boolean;
   leg1_state?: 'CREATED' | 'FUNDED' | 'FIAT_PAID' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
   overall_status?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
-  fiat_paid?: boolean;
 }
 
 export interface RecordEscrowRequest {
-  trade_id: number;
-  transaction_hash?: string; // EVM
-  signature?: string; // Solana
-  escrow_id: number;
-  seller: string;
-  buyer: string;
   amount: number;
-  sequential: boolean;
-  sequential_escrow_address?: string;
-  // Solana-specific fields
-  program_id?: string;
+  buyer: string;
+  escrow_id: number;
   escrow_pda?: string;
   escrow_token_account?: string;
+  // Solana-specific fields
+  program_id?: string;
+  seller: string;
+  sequential: boolean;
+  sequential_escrow_address?: string;
+  signature?: string; // Solana
+  trade_id: number;
   trade_onchain_id?: string;
+  transaction_hash?: string; // EVM
 }
 
 export interface RecordTransactionRequest {
-  trade_id: number;
+  block_number?: number;
   escrow_id?: number;
+  from_address?: string;
+  metadata?: Record<string, unknown>;
+  status?: 'PENDING' | 'SUCCESS' | 'FAILED';
+  to_address?: string;
+  trade_id: number;
   transaction_hash?: string;
   transaction_type:
     | 'CREATE_ESCROW'
@@ -339,23 +344,18 @@ export interface RecordTransactionRequest {
     | 'RESPOND_DISPUTE'
     | 'RESOLVE_DISPUTE'
     | 'OTHER';
-  from_address?: string;
-  to_address?: string;
-  block_number?: number;
-  metadata?: Record<string, unknown>;
-  status?: 'PENDING' | 'SUCCESS' | 'FAILED';
 }
 
 export interface OfferFilters {
-  type?: 'BUY' | 'SELL';
-  token?: string;
   owner?: 'me';
+  token?: string;
+  type?: 'BUY' | 'SELL';
 }
 
 export interface TransactionFilters {
-  type?: string;
   limit?: number;
   offset?: number;
+  type?: string;
 }
 
 // ============================================================================
@@ -363,11 +363,11 @@ export interface TransactionFilters {
 // ============================================================================
 
 export class YapBayApiClient {
-  private baseUrl: string;
+  private readonly baseUrl: string;
   private token: string | null = null;
   private currentNetworkId: number | null = null;
 
-  constructor(baseUrl: string = 'http://localhost:3000') {
+  constructor(baseUrl = 'http://localhost:3000') {
     this.baseUrl = baseUrl.replace(/\/$/, ''); // Remove trailing slash
   }
 
@@ -496,7 +496,7 @@ export class YapBayApiClient {
    */
   async updateAccount(
     id: number,
-    data: UpdateAccountRequest
+    data: UpdateAccountRequest,
   ): Promise<ApiResponse<{ id: number }>> {
     return this.put<{ id: number }>(`/accounts/${id}`, data);
   }
@@ -509,7 +509,7 @@ export class YapBayApiClient {
    * Create a new offer
    */
   async createOffer(
-    data: CreateOfferRequest
+    data: CreateOfferRequest,
   ): Promise<ApiResponse<{ network: string; offer: Offer }>> {
     return this.post<{ network: string; offer: Offer }>('/offers', data);
   }
@@ -519,9 +519,15 @@ export class YapBayApiClient {
    */
   async getOffers(filters?: OfferFilters): Promise<ApiResponse<Offer[]>> {
     const params = new URLSearchParams();
-    if (filters?.type) params.append('type', filters.type);
-    if (filters?.token) params.append('token', filters.token);
-    if (filters?.owner) params.append('owner', filters.owner);
+    if (filters?.type) {
+      params.append('type', filters.type);
+    }
+    if (filters?.token) {
+      params.append('token', filters.token);
+    }
+    if (filters?.owner) {
+      params.append('owner', filters.owner);
+    }
 
     const queryString = params.toString();
     const endpoint = queryString ? `/offers?${queryString}` : '/offers';
@@ -540,7 +546,7 @@ export class YapBayApiClient {
    */
   async updateOffer(
     id: number,
-    data: UpdateOfferRequest
+    data: UpdateOfferRequest,
   ): Promise<ApiResponse<{ network: string; offer: Offer }>> {
     return this.put<{ network: string; offer: Offer }>(`/offers/${id}`, data);
   }
@@ -560,7 +566,7 @@ export class YapBayApiClient {
    * Create a new trade
    */
   async createTrade(
-    data: CreateTradeRequest
+    data: CreateTradeRequest,
   ): Promise<ApiResponse<{ network: string; trade: Trade }>> {
     return this.post<{ network: string; trade: Trade }>('/trades', data);
   }
@@ -636,7 +642,9 @@ export class YapBayApiClient {
    */
   async getTradeTransactions(tradeId: number, type?: string): Promise<ApiResponse<Transaction[]>> {
     const params = new URLSearchParams();
-    if (type) params.append('type', type);
+    if (type) {
+      params.append('type', type);
+    }
 
     const queryString = params.toString();
     const endpoint = queryString
@@ -650,9 +658,15 @@ export class YapBayApiClient {
    */
   async getUserTransactions(filters?: TransactionFilters): Promise<ApiResponse<Transaction[]>> {
     const params = new URLSearchParams();
-    if (filters?.type) params.append('type', filters.type);
-    if (filters?.limit) params.append('limit', filters.limit.toString());
-    if (filters?.offset) params.append('offset', filters.offset.toString());
+    if (filters?.type) {
+      params.append('type', filters.type);
+    }
+    if (filters?.limit) {
+      params.append('limit', filters.limit.toString());
+    }
+    if (filters?.offset) {
+      params.append('offset', filters.offset.toString());
+    }
 
     const queryString = params.toString();
     const endpoint = queryString ? `/transactions/user?${queryString}` : '/transactions/user';

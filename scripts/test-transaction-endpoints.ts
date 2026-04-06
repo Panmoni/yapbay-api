@@ -16,27 +16,27 @@ const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${JWT_TOKEN}`
-  }
+    Authorization: `Bearer ${JWT_TOKEN}`,
+  },
 });
 
 async function testRecordTransaction(): Promise<number | null> {
   try {
     const response = await api.post('/transactions/record', {
       trade_id: 1, // Replace with a valid trade ID from your database
-      transaction_hash: '0x' + '1'.repeat(64),
+      transaction_hash: `0x${'1'.repeat(64)}`,
       transaction_type: 'FUND_ESCROW',
-      from_address: '0x' + 'a'.repeat(40),
-      to_address: '0x' + 'b'.repeat(40),
+      from_address: `0x${'a'.repeat(40)}`,
+      to_address: `0x${'b'.repeat(40)}`,
       amount: '100',
       token_type: 'USDC',
       status: 'SUCCESS',
       metadata: {
         test: 'metadata',
-        someValue: 123
-      }
+        someValue: 123,
+      },
     });
-    
+
     console.log('Record Transaction Response:', response.data);
     return response.data.transactionId;
   } catch (error) {
@@ -50,7 +50,10 @@ async function testGetTradeTransactions(tradeId: number): Promise<void> {
     const response = await api.get(`/transactions/trade/${tradeId}`);
     console.log('Trade Transactions Response:', response.data);
   } catch (error) {
-    console.error('Error getting trade transactions:', error.response?.data || (error as Error).message);
+    console.error(
+      'Error getting trade transactions:',
+      error.response?.data || (error as Error).message,
+    );
   }
 }
 
@@ -59,24 +62,27 @@ async function testGetUserTransactions(): Promise<void> {
     const response = await api.get('/transactions/user');
     console.log('User Transactions Response:', response.data);
   } catch (error) {
-    console.error('Error getting user transactions:', error.response?.data || (error as Error).message);
+    console.error(
+      'Error getting user transactions:',
+      error.response?.data || (error as Error).message,
+    );
   }
 }
 
 async function runTests(): Promise<void> {
   console.log('Testing transaction endpoints...');
-  
+
   // Test recording a transaction
   const transactionId = await testRecordTransaction();
-  
+
   if (transactionId) {
     // Test getting trade transactions
     await testGetTradeTransactions(1); // Replace with a valid trade ID
-    
+
     // Test getting user transactions
     await testGetUserTransactions();
   }
-  
+
   console.log('Tests completed.');
 }
 

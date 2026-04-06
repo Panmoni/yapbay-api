@@ -1,7 +1,7 @@
-import { NetworkService } from '../src/services/networkService';
-import { BlockchainServiceFactory } from '../src/services/blockchainService';
-import { formatUSDC, parseUSDC } from '../src/celo';
 import * as dotenv from 'dotenv';
+import { formatUSDC, parseUSDC } from '../src/celo';
+import { BlockchainServiceFactory } from '../src/services/blockchainService';
+import { NetworkService } from '../src/services/networkService';
 
 dotenv.config();
 
@@ -13,7 +13,7 @@ async function testConnection() {
     // Get default network (should be Solana Devnet)
     const defaultNetwork = await NetworkService.getDefaultNetwork();
     console.log(
-      `Default network: ${defaultNetwork.name} (family: ${defaultNetwork.networkFamily})`
+      `Default network: ${defaultNetwork.name} (family: ${defaultNetwork.networkFamily})`,
     );
 
     // Create blockchain service
@@ -22,7 +22,7 @@ async function testConnection() {
 
     // Test network info
     const networkInfo = await blockchainService.getNetworkInfo();
-    console.log(`Network info:`, networkInfo);
+    console.log('Network info:', networkInfo);
 
     // Test address validation
     const testSolanaAddress = '11111111111111111111111111111112'; // System program

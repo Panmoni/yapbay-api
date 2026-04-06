@@ -1,7 +1,7 @@
-import { NetworkService } from '../src/services/networkService';
-import { BlockchainServiceFactory } from '../src/services/blockchainService';
-import { query } from '../src/db';
 import * as dotenv from 'dotenv';
+import { query } from '../src/db';
+import { BlockchainServiceFactory } from '../src/services/blockchainService';
+import { NetworkService } from '../src/services/networkService';
 
 dotenv.config();
 
@@ -26,7 +26,7 @@ async function testNetworkConnectivity(network: any): Promise<void> {
 
     // Test network info
     const networkInfo = await blockchainService.getNetworkInfo();
-    console.log(`   ✅ Connected - Network info:`, networkInfo);
+    console.log('   ✅ Connected - Network info:', networkInfo);
 
     // Test address validation
     const testAddress =
@@ -62,11 +62,11 @@ async function testEscrowMonitoring() {
     // Get available networks
     const availableNetworks = await getAvailableNetworks();
     console.log(`\n🌐 Detected ${availableNetworks.length} configured network(s):`);
-    availableNetworks.forEach(network => {
+    availableNetworks.forEach((network) => {
       console.log(
         `   - ${network.name}: ${network.networkFamily} (${
           network.programId || network.contractAddress
-        })`
+        })`,
       );
     });
 
@@ -100,9 +100,9 @@ async function testEscrowMonitoring() {
     if (activeEscrows.length === 0) {
       console.log('   No active escrows found');
     } else {
-      activeEscrows.forEach(escrow => {
+      activeEscrows.forEach((escrow) => {
         console.log(
-          `   - Trade ${escrow.trade_id}: Leg1=${escrow.leg1_id}(${escrow.leg1_state}), Leg2=${escrow.leg2_id}(${escrow.leg2_state})`
+          `   - Trade ${escrow.trade_id}: Leg1=${escrow.leg1_id}(${escrow.leg1_state}), Leg2=${escrow.leg2_id}(${escrow.leg2_state})`,
         );
       });
     }
@@ -121,7 +121,7 @@ async function testEscrowMonitoring() {
     `);
 
     console.log(`\nRecent auto-cancellation attempts: ${autoCancellations.length}`);
-    autoCancellations.forEach(cancel => {
+    autoCancellations.forEach((cancel) => {
       console.log(`   - Escrow ${cancel.escrow_id}: ${cancel.status} at ${cancel.created_at}`);
       if (cancel.transaction_hash) {
         console.log(`     TX: ${cancel.transaction_hash}`);
@@ -141,7 +141,7 @@ async function testEscrowMonitoring() {
     } catch (error) {
       console.error('❌ Auto-cancellation table missing or inaccessible:', error);
       console.log(
-        '📝 Please run the migration: psql -d your_db -f migrations/add_contract_auto_cancellations.sql'
+        '📝 Please run the migration: psql -d your_db -f migrations/add_contract_auto_cancellations.sql',
       );
       return;
     }
@@ -156,7 +156,7 @@ async function testEscrowMonitoring() {
     ];
 
     let envCheckPassed = true;
-    requiredEnvVars.forEach(envVar => {
+    requiredEnvVars.forEach((envVar) => {
       if (process.env[envVar]) {
         console.log(`✅ ${envVar}: configured`);
       } else {
@@ -221,7 +221,7 @@ async function testEscrowMonitoring() {
     // Determine which network the service would actually use
     const defaultNetwork = await NetworkService.getDefaultNetwork();
 
-    console.log(`\n🎯 Default Network for Monitoring Service:`);
+    console.log('\n🎯 Default Network for Monitoring Service:');
     console.log(`   ${defaultNetwork.name} (${defaultNetwork.networkFamily})`);
     console.log(`   Program ID: ${defaultNetwork.programId || 'N/A'}`);
     console.log(`   Contract Address: ${defaultNetwork.contractAddress || 'N/A'}`);
@@ -237,7 +237,7 @@ async function testEscrowMonitoring() {
     console.log(`   - Active escrows for monitoring: ${activeEscrows.length}`);
     console.log(`   - Auto-cancellation attempts: ${autoCancellations.length}`);
     console.log(
-      `   - Monitoring enabled: ${process.env.ESCROW_MONITOR_ENABLED === 'true' ? 'YES' : 'NO'}`
+      `   - Monitoring enabled: ${process.env.ESCROW_MONITOR_ENABLED === 'true' ? 'YES' : 'NO'}`,
     );
     console.log(`   - Check interval: ${optionalConfig.ESCROW_MONITOR_CRON_SCHEDULE}`);
     console.log(`   - Auto-cancel delay: ${optionalConfig.AUTO_CANCEL_DELAY_HOURS} hours`);
@@ -256,7 +256,7 @@ async function testEscrowMonitoring() {
 }
 
 // Run the test
-testEscrowMonitoring().catch(error => {
+testEscrowMonitoring().catch((error) => {
   console.error('💥 Critical test failure:', error);
   process.exit(1);
 });

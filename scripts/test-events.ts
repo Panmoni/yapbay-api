@@ -16,13 +16,17 @@ const main = async () => {
   const defaultNetwork = await NetworkService.getDefaultNetwork();
   const provider = await CeloService.getProviderForNetwork(defaultNetwork.id);
   const contract = await CeloService.getContractForNetwork(defaultNetwork.id, provider);
-  
+
   // Determine network and appropriate FROM_BLOCK
-  const isMainnet = defaultNetwork.id === 42220; // Celo Mainnet chainId
-  const fromBlock = isMainnet 
-    ? (process.env.FROM_BLOCK_MAINNET ? Number(process.env.FROM_BLOCK_MAINNET) : 0)
-    : (process.env.FROM_BLOCK_TESTNET ? Number(process.env.FROM_BLOCK_TESTNET) : 0);
-    
+  const isMainnet = defaultNetwork.id === 42_220; // Celo Mainnet chainId
+  const fromBlock = isMainnet
+    ? process.env.FROM_BLOCK_MAINNET
+      ? Number(process.env.FROM_BLOCK_MAINNET)
+      : 0
+    : process.env.FROM_BLOCK_TESTNET
+      ? Number(process.env.FROM_BLOCK_TESTNET)
+      : 0;
+
   console.log(`Network: ${defaultNetwork.name} (ChainId: ${defaultNetwork.id})`);
   console.log(`Fetching events from block ${fromBlock} to latest...`);
 
@@ -33,7 +37,7 @@ const main = async () => {
     toBlock: 'latest',
   });
   console.log(`Found ${logs.length} logs`);
-  const evts = logs.map(log => {
+  const evts = logs.map((log) => {
     const parsed = contract.interface.parseLog(log) as any;
     return {
       ...parsed,
@@ -54,7 +58,7 @@ const main = async () => {
     }
 
     const rawLog: any = receipt.logs.find(
-      (l: any) => l.data === evt.data && JSON.stringify(l.topics) === JSON.stringify(evt.topics)
+      (l: any) => l.data === evt.data && JSON.stringify(l.topics) === JSON.stringify(evt.topics),
     );
 
     const name = (evt as any).event ?? (evt as any).fragment?.name;
@@ -74,16 +78,15 @@ const main = async () => {
         const rawVal = evt.args[idx];
         argsObj[input.name] = typeof rawVal === 'bigint' ? rawVal.toString() : rawVal;
       });
-      const tradeIdValue = evt.args.tradeId !== undefined
-        ? Number(evt.args.tradeId.toString())
-        : null;
+      const tradeIdValue =
+        evt.args.tradeId === undefined ? null : Number(evt.args.tradeId.toString());
       const transactionId = await recordTransaction({
         transaction_hash: evt.transactionHash,
         status: 'SUCCESS',
         type: 'OTHER',
         block_number: evt.blockNumber,
         related_trade_id: tradeIdValue,
-        network_id: defaultNetwork.id
+        network_id: defaultNetwork.id,
       });
       const insertSql = `
         INSERT INTO contract_events
@@ -99,14 +102,16 @@ const main = async () => {
         JSON.stringify(argsObj),
         tradeIdValue,
         transactionId,
-        defaultNetwork.id
+        defaultNetwork.id,
       ]);
-      console.log(`Inserted event ${name} tx=${evt.transactionHash} logIndex=${logIndex} trade=${tradeIdValue}`);
+      console.log(
+        `Inserted event ${name} tx=${evt.transactionHash} logIndex=${logIndex} trade=${tradeIdValue}`,
+      );
     }
   }
 };
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Error fetching events:', err);
   process.exit(1);
 });

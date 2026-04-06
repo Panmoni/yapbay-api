@@ -32,7 +32,7 @@ const EVENT_DISCRIMINATORS = {
 };
 
 class EventDataVerifier {
-  private borshCoder: BorshCoder;
+  private readonly borshCoder: BorshCoder;
 
   constructor() {
     // Initialize BorshCoder with the actual IDL
@@ -40,25 +40,10 @@ class EventDataVerifier {
   }
 
   /**
-   * Convert hex string to number (little-endian)
-   */
-  private hexToNumber(hex: string): number {
-    if (!hex) return 0;
-
-    // Remove any '0x' prefix
-    const cleanHex = hex.replace(/^0x/, '');
-
-    // Convert hex to buffer, reverse for little-endian, then parse
-    const buffer = Buffer.from(cleanHex, 'hex');
-    const reversed = Buffer.from(buffer.reverse());
-    return parseInt(reversed.toString('hex'), 16);
-  }
-
-  /**
    * Format USDC amounts for display
    */
   private formatUsdcAmount(amount: number): string {
-    return (amount / 1_000_000).toFixed(6) + ' USDC';
+    return `${(amount / 1_000_000).toFixed(6)} USDC`;
   }
 
   /**
@@ -143,7 +128,7 @@ class EventDataVerifier {
    * Display decoded event data
    */
   private displayDecodedEvent(eventData: any): void {
-    console.log('\n' + '='.repeat(80));
+    console.log(`\n${'='.repeat(80)}`);
     console.log('🎯 DECODED EscrowCreated EVENT');
     console.log('='.repeat(80));
 
@@ -160,12 +145,12 @@ class EventDataVerifier {
         data.amount
           ? this.formatUsdcAmount(data.amount.toNumber ? data.amount.toNumber() : data.amount)
           : 'N/A'
-      }`
+      }`,
     );
     console.log(
       `💸 Fee: ${
         data.fee ? this.formatUsdcAmount(data.fee.toNumber ? data.fee.toNumber() : data.fee) : 'N/A'
-      }`
+      }`,
     );
     console.log(
       `⏳ Deposit Deadline: ${
@@ -173,27 +158,27 @@ class EventDataVerifier {
           ? this.formatTimestamp(
               data.deposit_deadline.toNumber
                 ? data.deposit_deadline.toNumber()
-                : data.deposit_deadline
+                : data.deposit_deadline,
             )
           : 'N/A'
-      }`
+      }`,
     );
     console.log(
-      `🔄 Sequential: ${data.sequential !== undefined ? (data.sequential ? 'Yes' : 'No') : 'N/A'}`
+      `🔄 Sequential: ${data.sequential === undefined ? 'N/A' : data.sequential ? 'Yes' : 'No'}`,
     );
     console.log(
       `🔗 Sequential Address: ${
         data.sequential_escrow_address?.toBase58() || data.sequential_escrow_address || 'N/A'
-      }`
+      }`,
     );
     console.log(
       `⏰ Timestamp: ${
         data.timestamp
           ? this.formatTimestamp(
-              data.timestamp.toNumber ? data.timestamp.toNumber() : data.timestamp
+              data.timestamp.toNumber ? data.timestamp.toNumber() : data.timestamp,
             )
           : 'N/A'
-      }`
+      }`,
     );
 
     console.log('='.repeat(80));
@@ -211,29 +196,6 @@ class EventDataVerifier {
       console.log(`⚠️  BorshCoder decoding failed: ${error}`);
       throw error;
     }
-  }
-
-  /**
-   * Display EscrowCreated event data (same format as event-listener.ts)
-   */
-  private displayEscrowCreatedEvent(data: any): void {
-    // Handle different event data structures - some have nested 'data' property
-    const eventData = data.data || data;
-
-    console.log(`🆔 Escrow ID: ${eventData.escrow_id.toString()}`);
-    console.log(`🔄 Trade ID: ${eventData.trade_id.toString()}`);
-    console.log(`👤 Seller: ${eventData.seller.toBase58()}`);
-    console.log(`👤 Buyer: ${eventData.buyer.toBase58()}`);
-    console.log(`⚖️  Arbitrator: ${eventData.arbitrator.toBase58()}`);
-    console.log(`💰 Amount: ${this.formatUsdcAmount(Number(eventData.amount))}`);
-    console.log(`💸 Fee: ${this.formatUsdcAmount(Number(eventData.fee))}`);
-    console.log(`⏳ Deposit Deadline: ${this.formatTimestamp(Number(eventData.deposit_deadline))}`);
-    console.log(`⏳ Fiat Deadline: ${this.formatTimestamp(Number(eventData.fiat_deadline))}`);
-    console.log(`🔄 Sequential: ${eventData.sequential ? 'Yes' : 'No'}`);
-    if (eventData.sequential_escrow_address) {
-      console.log(`🔗 Sequential Address: ${eventData.sequential_escrow_address.toBase58()}`);
-    }
-    console.log(`⏰ Timestamp: ${this.formatTimestamp(Number(eventData.timestamp))}`);
   }
 
   /**
@@ -266,7 +228,7 @@ async function main() {
 
 // Run the script
 if (require.main === module) {
-  main().catch(error => {
+  main().catch((error) => {
     console.error('Script failed:', error);
     process.exit(1);
   });

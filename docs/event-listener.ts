@@ -18,9 +18,9 @@
  *   npm run event-listener      # Default: scan last 1 hour of blocks
  */
 
-import { Connection, PublicKey, ParsedTransactionWithMeta } from '@solana/web3.js';
-import * as dotenv from 'dotenv';
 import { BorshCoder, EventParser } from '@coral-xyz/anchor';
+import { Connection, type ParsedTransactionWithMeta, PublicKey } from '@solana/web3.js';
+import * as dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -55,15 +55,15 @@ function hoursToBlocks(hours: number): number {
 }
 
 class EventListener {
-  private connection: Connection;
-  private eventParser: EventParser;
-  private borshCoder: BorshCoder;
-  private isListening: boolean = false;
+  private readonly connection: Connection;
+  private readonly eventParser: EventParser;
+  private readonly borshCoder: BorshCoder;
+  private isListening = false;
   private subscriptionId: number | null = null;
-  private processedEvents: Set<string> = new Set();
-  private scanHours: number;
+  private readonly processedEvents: Set<string> = new Set();
+  private readonly scanHours: number;
 
-  constructor(scanHours: number = 1) {
+  constructor(scanHours = 1) {
     this.connection = new Connection(RPC_ENDPOINT, 'confirmed');
     this.scanHours = scanHours;
 
@@ -77,7 +77,7 @@ class EventListener {
    * Format USDC amounts for display
    */
   private formatUsdcAmount(amount: number): string {
-    return (amount / 1_000_000).toFixed(2) + ' USDC';
+    return `${(amount / 1_000_000).toFixed(2)} USDC`;
   }
 
   /**
@@ -91,12 +91,16 @@ class EventListener {
    * Convert value to number (handles both decimal strings and hex strings)
    */
   private hexToNumber(value: string | number): number {
-    if (!value) return 0;
-    if (typeof value === 'number') return value;
+    if (!value) {
+      return 0;
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
 
     // If it's already a decimal number as string, parse it directly
     if (/^\d+$/.test(value)) {
-      return parseInt(value, 10);
+      return Number.parseInt(value, 10);
     }
 
     // If it's a hex string, convert it
@@ -104,7 +108,7 @@ class EventListener {
       // Convert hex to buffer, reverse for little-endian, then parse
       const buffer = Buffer.from(value, 'hex');
       const reversed = Buffer.from(buffer.reverse());
-      return parseInt(reversed.toString('hex'), 16);
+      return Number.parseInt(reversed.toString('hex'), 16);
     }
 
     return 0;
@@ -114,7 +118,7 @@ class EventListener {
    * Parse and display an event
    */
   private displayEvent(eventName: string, eventData: any, signature: string, slot: number) {
-    console.log('\n' + '='.repeat(80));
+    console.log(`\n${'='.repeat(80)}`);
     console.log(`🎯 EVENT: ${eventName}`);
     console.log(`📝 Signature: ${signature}`);
     console.log(`🎰 Slot: ${slot}`);
@@ -153,7 +157,7 @@ class EventListener {
       case 'FiatMarkedPaid':
         console.log(`🆔 Escrow ID: ${eventData.escrowId.toString()}`);
         console.log(`🔄 Trade ID: ${eventData.tradeId.toString()}`);
-        console.log(`✅ Fiat payment marked as completed`);
+        console.log('✅ Fiat payment marked as completed');
         break;
 
       case 'EscrowReleased':
@@ -257,20 +261,20 @@ class EventListener {
             maxSupportedTransactionVersion: 0,
           });
 
-          if (block && block.transactions) {
+          if (block?.transactions) {
             console.log(`📋 Block ${slot} has ${block.transactions.length} transactions`);
 
             for (const tx of block.transactions) {
-              if (tx.transaction && tx.meta && tx.meta.logMessages) {
+              if (tx.transaction && tx.meta?.logMessages) {
                 // Check if this transaction involves our program
-                const hasOurProgram = tx.meta.logMessages.some(log =>
-                  log.includes('4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x')
+                const hasOurProgram = tx.meta.logMessages.some((log) =>
+                  log.includes('4PonUp1nPEzDPnRMPjTqufLT3f37QuBJGk1CVnsTXx7x'),
                 );
 
                 if (hasOurProgram) {
                   const signature = tx.transaction.signatures[0];
                   console.log(
-                    `🎯 Found transaction with our program: ${signature.substring(0, 16)}...`
+                    `🎯 Found transaction with our program: ${signature.substring(0, 16)}...`,
                   );
                   this.parseTransactionLogs(tx as any, signature);
                 }
@@ -280,7 +284,7 @@ class EventListener {
 
           // Add delay to avoid rate limits
           if (i < blockCount - 1) {
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise((resolve) => setTimeout(resolve, 300));
           }
         } catch (error) {
           console.log(`⚠️  Error fetching block ${slot}:`, error);
@@ -295,7 +299,9 @@ class EventListener {
    * Parse transaction logs for events
    */
   private parseTransactionLogs(tx: ParsedTransactionWithMeta, signature: string) {
-    if (!tx.meta || !tx.meta.logMessages) return;
+    if (!tx.meta?.logMessages) {
+      return;
+    }
 
     const logs = tx.meta.logMessages;
     const slot = tx.slot;
@@ -305,7 +311,7 @@ class EventListener {
     // Create unique key for this transaction to prevent duplicate processing
     const eventKey = `${signature}-${slot}`;
     if (this.processedEvents.has(eventKey)) {
-      console.log(`⚠️  Transaction already processed, skipping`);
+      console.log('⚠️  Transaction already processed, skipping');
       return;
     }
 
@@ -349,13 +355,15 @@ class EventListener {
   private tryBorshEventParsing(log: string, signature: string, slot: number): boolean {
     try {
       const base64Data = log.split('Program data: ')[1];
-      if (!base64Data) return false;
+      if (!base64Data) {
+        return false;
+      }
 
       const eventData = Buffer.from(base64Data, 'base64');
       console.log(
         `🔍 Borsh parsing event data (${eventData.length} bytes): ${eventData
           .toString('hex')
-          .substring(0, 32)}...`
+          .substring(0, 32)}...`,
       );
 
       // Check for EscrowCreated discriminator
@@ -364,7 +372,7 @@ class EventListener {
         const escrowCreatedDiscriminator = EVENT_DISCRIMINATORS.EscrowCreated;
 
         if (discriminator.equals(escrowCreatedDiscriminator)) {
-          console.log(`✅ Found EscrowCreated event via Borsh parsing`);
+          console.log('✅ Found EscrowCreated event via Borsh parsing');
 
           try {
             // Parse the event data using Borsh
@@ -379,7 +387,7 @@ class EventListener {
               signature,
               slot,
               eventData.length,
-              discriminator
+              discriminator,
             );
             return true;
           }
@@ -414,15 +422,15 @@ class EventListener {
     signature: string,
     slot: number,
     dataLength: number,
-    discriminator: Buffer
+    discriminator: Buffer,
   ) {
-    console.log('\n' + '='.repeat(80));
+    console.log(`\n${'='.repeat(80)}`);
     console.log(`🎯 EVENT: ${eventName} (Simple Parse)`);
     console.log(`📝 Signature: ${signature}`);
     console.log(`🎰 Slot: ${slot}`);
     console.log(`⏰ Time: ${new Date().toISOString()}`);
     console.log('-'.repeat(80));
-    console.log(`🔍 Event detected but full parsing failed`);
+    console.log('🔍 Event detected but full parsing failed');
     console.log(`📊 Raw data length: ${dataLength} bytes`);
     console.log(`🔐 Discriminator: ${discriminator.toString('hex')}`);
     console.log('='.repeat(80));
@@ -446,10 +454,10 @@ class EventListener {
         (logs, context) => {
           this.parseTransactionLogs(
             { slot: context.slot, meta: { logMessages: logs.logs } } as any,
-            logs.signature
+            logs.signature,
           );
         },
-        'confirmed'
+        'confirmed',
       );
 
       console.log('✅ Event listener started successfully');
@@ -491,10 +499,10 @@ class EventListener {
 async function main() {
   // Parse command line arguments
   const args = process.argv.slice(2);
-  const scanHours = args.length > 0 ? parseFloat(args[0]) : 1;
+  const scanHours = args.length > 0 ? Number.parseFloat(args[0]) : 1;
 
   // Validate input
-  if (isNaN(scanHours) || scanHours <= 0) {
+  if (Number.isNaN(scanHours) || scanHours <= 0) {
     console.error('❌ Error: Hours must be a positive number');
     console.log('Usage: npm run event-listener [hours]');
     console.log('Example: npm run event-listener 24  # Scan last 24 hours');
@@ -540,7 +548,7 @@ async function main() {
 
 // Run the script
 if (require.main === module) {
-  main().catch(error => {
+  main().catch((error) => {
     console.error('Script failed:', error);
     process.exit(1);
   });

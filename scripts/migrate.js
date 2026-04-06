@@ -17,10 +17,10 @@
  * Usage: node scripts/migrate.js [--only=filename.sql]
  */
 
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
-const { promisify } = require('util');
+const fs = require('node:fs');
+const path = require('node:path');
+const { exec } = require('node:child_process');
+const { promisify } = require('node:util');
 const { Client } = require('pg');
 require('dotenv').config();
 
@@ -30,7 +30,7 @@ const execPromise = promisify(exec);
 const args = process.argv.slice(2);
 let onlyFile = null;
 
-args.forEach(arg => {
+args.forEach((arg) => {
   if (arg.startsWith('--only=')) {
     onlyFile = arg.split('=')[1];
   }
@@ -75,12 +75,12 @@ async function migrate() {
     // Get list of all migration files
     let migrationFiles = fs
       .readdirSync(migrationsDir)
-      .filter(file => file.endsWith('.sql'))
+      .filter((file) => file.endsWith('.sql'))
       .sort(); // Sort to ensure migrations are applied in order
 
     // If --only flag is provided, filter to only that file
     if (onlyFile) {
-      migrationFiles = migrationFiles.filter(file => file === onlyFile);
+      migrationFiles = migrationFiles.filter((file) => file === onlyFile);
       if (migrationFiles.length === 0) {
         console.error(`Error: Migration file ${onlyFile} not found in ${migrationsDir}`);
         process.exit(1);
@@ -91,7 +91,7 @@ async function migrate() {
     }
 
     // Determine which migrations need to be applied
-    const pendingMigrations = migrationFiles.filter(file => {
+    const pendingMigrations = migrationFiles.filter((file) => {
       const version = getMigrationVersion(file);
       return !appliedMigrations.includes(version);
     });
@@ -171,7 +171,7 @@ async function ensureMigrationsTable() {
 async function getAppliedMigrations() {
   try {
     const result = await client.query('SELECT version FROM schema_migrations ORDER BY version');
-    return result.rows.map(row => row.version);
+    return result.rows.map((row) => row.version);
   } catch (error) {
     if (error.code === '42P01') {
       // Table does not exist
@@ -201,7 +201,7 @@ async function applyMigration(migrationPath) {
 async function markMigrationStarted(version, description) {
   await client.query(
     'INSERT INTO schema_migrations (version, description, dirty) VALUES ($1, $2, TRUE)',
-    [version, description]
+    [version, description],
   );
 }
 
@@ -226,7 +226,7 @@ function getDescriptionFromFilename(filename) {
 }
 
 // Run the migration
-migrate().catch(error => {
+migrate().catch((error) => {
   console.error('Unhandled error:', error);
   process.exit(1);
 });

@@ -1,6 +1,6 @@
 {
   "name": "yapbay-api",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "main": "dist/server.js",
   "directories": {
     "doc": "docs"
@@ -33,7 +33,17 @@
     "stop-pod": "podman pod stop yapbay-api",
     "restart": "systemctl --user restart yapbay-api-pod.service && systemctl --user restart yapbay-api.service",
     "status": "systemctl --user status yapbay-api-pod.service yapbay-api.service --no-pager",
-    "clean": "podman pod stop yapbay-api && podman pod rm -f yapbay-api"
+    "clean": "podman pod stop yapbay-api && podman pod rm -f yapbay-api",
+    "migrate": "node scripts/migrate.js",
+    "migrate:status": "node scripts/migrate.js --status",
+    "migrate:backup": "node scripts/migrate.js --backup-only",
+    "migrate:dry-run": "node scripts/migrate.js --dry-run",
+    "migrate:verify": "node scripts/migrate.js --verify-only",
+    "migrate:rollback": "node scripts/migrate.js --rollback",
+    "migrate:health": "node scripts/db/migration-health-check.js",
+    "db:health": "node scripts/db/db-health-check.js",
+    "db:health:verbose": "node scripts/db/db-health-check.js --verbose",
+    "deploy:check": "node scripts/db/deployment-gate.js"
   },
   "author": "",
   "license": "MIT",

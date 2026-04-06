@@ -5,6 +5,7 @@ declare global {
     interface Request {
       network?: NetworkConfig;
       networkId?: number;
+      requestId?: string;
     }
   }
 }

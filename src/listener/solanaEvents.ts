@@ -6,12 +6,16 @@ import { EventParser, BorshCoder } from '@coral-xyz/anchor';
 import fs from 'fs';
 import path from 'path';
 
-const logFilePath = path.join(process.cwd(), 'events.log');
+const logFilePath = path.join(process.cwd(), 'solana-events.log');
 const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
 
 function fileLog(message: string) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   logStream.write(line);
+}
+
+export function closeSolanaLogStream() {
+  logStream.end();
 }
 
 // Type definitions for Solana event data

@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../../middleware/auth';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { query } from '../../db';
+import { VALID_LEG_TRANSITIONS, VALID_OVERALL_TRANSITIONS } from '../../utils/stateTransitions';
 
 export const validateTradeCreation = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   const {
@@ -109,16 +110,17 @@ export const validateTradeCreation = async (req: AuthenticatedRequest, res: Resp
   }
 };
 
-export const validateTradeUpdate = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+export const validateTradeUpdate = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   const { leg1_state, overall_status, fiat_paid } = req.body;
+  const { id } = req.params;
 
   // Validate leg1_state if provided
   if (leg1_state !== undefined) {
-    const validStates = ['CREATED', 'FUNDED', 'FIAT_PAID', 'COMPLETED', 'CANCELLED', 'DISPUTED'];
+    const validStates = Object.keys(VALID_LEG_TRANSITIONS);
     if (!validStates.includes(leg1_state)) {
-      res.status(400).json({ 
-        error: 'Invalid leg1_state', 
-        validStates 
+      res.status(400).json({
+        error: 'Invalid leg1_state',
+        validStates
       });
       return;
     }
@@ -126,11 +128,11 @@ export const validateTradeUpdate = (req: AuthenticatedRequest, res: Response, ne
 
   // Validate overall_status if provided
   if (overall_status !== undefined) {
-    const validStatuses = ['IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'DISPUTED'];
+    const validStatuses = Object.keys(VALID_OVERALL_TRANSITIONS);
     if (!validStatuses.includes(overall_status)) {
-      res.status(400).json({ 
-        error: 'Invalid overall_status', 
-        validStatuses 
+      res.status(400).json({
+        error: 'Invalid overall_status',
+        validStatuses
       });
       return;
     }
@@ -140,6 +142,46 @@ export const validateTradeUpdate = (req: AuthenticatedRequest, res: Response, ne
   if (fiat_paid !== undefined && typeof fiat_paid !== 'boolean') {
     res.status(400).json({ error: 'fiat_paid must be a boolean' });
     return;
+  }
+
+  // Enforce state machine transitions by checking current state
+  if (leg1_state !== undefined || overall_status !== undefined) {
+    try {
+      const tradeResult = await query('SELECT leg1_state, overall_status FROM trades WHERE id = $1', [id]);
+      if (tradeResult.length === 0) {
+        res.status(404).json({ error: 'Trade not found' });
+        return;
+      }
+
+      const currentTrade = tradeResult[0];
+
+      if (leg1_state !== undefined) {
+        const currentLegState = currentTrade.leg1_state;
+        const allowed = VALID_LEG_TRANSITIONS[currentLegState] || [];
+        if (!allowed.includes(leg1_state)) {
+          res.status(400).json({
+            error: `Invalid state transition: ${currentLegState} -> ${leg1_state}`,
+            allowedTransitions: allowed,
+          });
+          return;
+        }
+      }
+
+      if (overall_status !== undefined) {
+        const currentOverall = currentTrade.overall_status;
+        const allowed = VALID_OVERALL_TRANSITIONS[currentOverall] || [];
+        if (!allowed.includes(overall_status)) {
+          res.status(400).json({
+            error: `Invalid status transition: ${currentOverall} -> ${overall_status}`,
+            allowedTransitions: allowed,
+          });
+          return;
+        }
+      }
+    } catch {
+      res.status(500).json({ error: 'Error validating trade state transition' });
+      return;
+    }
   }
 
   next();

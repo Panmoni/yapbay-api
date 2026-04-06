@@ -50,11 +50,23 @@ export const requireJWT = (req: AuthenticatedRequest, res: Response, next: NextF
     return;
   }
   const alg = decodedHeader.header.alg;
+  const jwtSecret = process.env.JWT_SECRET;
+  if (alg === 'HS256' && !jwtSecret) {
+    res.status(500).json({ error: 'Server configuration error' });
+    return;
+  }
+
+  const jwtAudience = process.env.JWT_AUDIENCE;
+  const verifyOptions: jwt.VerifyOptions = {
+    algorithms: [alg === 'HS256' ? 'HS256' : 'RS256'],
+    ...(jwtAudience ? { audience: jwtAudience } : {}),
+  };
+
   const verifier =
     alg === 'HS256'
       ? (cb: jwt.VerifyCallback) =>
-          jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['HS256'] }, cb)
-      : (cb: jwt.VerifyCallback) => jwt.verify(token, getKey, { algorithms: ['RS256'] }, cb);
+          jwt.verify(token, jwtSecret!, verifyOptions, cb)
+      : (cb: jwt.VerifyCallback) => jwt.verify(token, getKey, verifyOptions, cb);
   verifier((err, decoded) => {
     if (err) {
       res.status(401).json({ error: 'Invalid token' });

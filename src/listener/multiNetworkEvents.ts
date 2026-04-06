@@ -4,7 +4,7 @@ import { NetworkService } from '../services/networkService';
 import { NetworkConfig, NetworkFamily } from '../types/networks';
 import fs from 'fs';
 import path from 'path';
-import { SolanaEventListener } from './solanaEvents';
+import { SolanaEventListener, closeSolanaLogStream } from './solanaEvents';
 
 dotenv.config();
 
@@ -14,6 +14,10 @@ const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
 function fileLog(message: string) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   logStream.write(line);
+}
+
+function closeLogStream() {
+  logStream.end();
 }
 
 class NetworkEventListener {
@@ -159,18 +163,17 @@ export class MultiNetworkEventListener {
 export function startMultiNetworkEventListener(): MultiNetworkEventListener {
   const multiListener = new MultiNetworkEventListener();
 
-  // Handle graceful shutdown
-  process.on('SIGINT', async () => {
-    console.log('Received SIGINT, stopping all listeners...');
+  // Handle graceful shutdown — close log streams and stop listeners
+  const shutdown = async (signal: string) => {
+    console.log(`Received ${signal}, stopping all listeners...`);
     await multiListener.stopAllListeners();
+    closeLogStream();
+    closeSolanaLogStream();
     process.exit(0);
-  });
+  };
 
-  process.on('SIGTERM', async () => {
-    console.log('Received SIGTERM, stopping all listeners...');
-    await multiListener.stopAllListeners();
-    process.exit(0);
-  });
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   return multiListener;
 }

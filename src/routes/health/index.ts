@@ -10,6 +10,7 @@ import { getVersionInfo } from '../../utils/versionUtils';
 import { AuthenticatedRequest } from '../../middleware/auth';
 import { NetworkConfig, NetworkFamily } from '../../types/networks';
 import { Connection } from '@solana/web3.js';
+import { getListenerHealth } from '../../server';
 
 const router = express.Router();
 
@@ -118,12 +119,17 @@ router.get(
     }
 
     const apiVersion = await getVersionInfo();
+    const listenerHealth = getListenerHealth();
 
     res.json({
       status: 'OK',
       timestamp: new Date().toISOString(),
       userWallet: walletAddress || 'Not Found',
       dbStatus: dbOk ? 'Connected' : 'Error',
+      eventListeners: {
+        healthy: listenerHealth.healthy,
+        activeCount: listenerHealth.listenerCount,
+      },
       apiVersion,
       contractVersion: process.env.CONTRACT_VERSION || 'unknown',
       networks: networksStatus,

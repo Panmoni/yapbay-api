@@ -63,7 +63,11 @@ export const getWalletAddressFromJWT = (req: RequestLike): string | undefined =>
  * @returns A signed JWT string.
  */
 export const signJwt = (payload: CustomJwtPayload, options?: SignOptions): string => {
-  return jwt.sign(payload, process.env.JWT_SECRET!, {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set');
+  }
+  return jwt.sign(payload, secret, {
     algorithm: 'HS256',
     expiresIn: '1h',
     ...options,

@@ -1,15 +1,26 @@
 import express, { Response } from 'express';
 import bcrypt from 'bcrypt';
+import rateLimit from 'express-rate-limit';
 import { withErrorHandling } from '../../middleware/errorHandler';
 import { signJwt, CustomJwtPayload } from '../../utils/jwtUtils';
 import { AuthenticatedRequest } from '../../middleware/auth';
 
 const router = express.Router();
 
-// TODO: Migrate admin credentials to a secure admin user table, add MFA, rate-limiting, and proper audit logging instead of env-based auth.
+// Rate limit admin login: 5 attempts per 15 minutes per IP
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many login attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// TODO: Migrate admin credentials to a secure admin user table, add MFA, and proper audit logging instead of env-based auth.
 // /login
 router.post(
   '/login',
+  adminLoginLimiter,
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const { username, password } = req.body;
     if (!username || !password) {

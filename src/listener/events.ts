@@ -20,6 +20,10 @@ function fileLog(message: string) {
   logStream.write(line);
 }
 
+export function closeLegacyLogStream() {
+  logStream.end();
+}
+
 // Typed representation of chain log with necessary fields
 interface ContractLog {
   blockNumber: number;

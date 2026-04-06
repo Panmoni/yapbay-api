@@ -4,13 +4,33 @@ import cors from 'cors';
 import routes from './routes';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { startMultiNetworkEventListener } from './listener/multiNetworkEvents';
+import { startMultiNetworkEventListener, MultiNetworkEventListener } from './listener/multiNetworkEvents';
 import cron from 'node-cron';
 import { expireDeadlines } from './services/deadlineService';
 import { monitorExpiredEscrows } from './services/escrowMonitoringService';
 import { Pool } from 'pg';
 
 dotenv.config();
+
+// Validate required environment variables at startup
+const REQUIRED_ENV_VARS = ['POSTGRES_URL', 'JWT_SECRET'];
+for (const envVar of REQUIRED_ENV_VARS) {
+  if (!process.env[envVar]) {
+    console.error(`❌ Missing required environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
+
+// Global listener reference for health checks
+let globalMultiListener: MultiNetworkEventListener | null = null;
+let listenerHealthy = false;
+
+export function getListenerHealth(): { healthy: boolean; listenerCount: number } {
+  return {
+    healthy: listenerHealthy,
+    listenerCount: globalMultiListener?.getListenerCount() ?? 0,
+  };
+}
 
 // Database connection check
 async function checkDatabaseConnection(): Promise<void> {
@@ -42,13 +62,15 @@ async function startServer(): Promise<void> {
   console.log('📝 Note: Currently focused on Solana Devnet only');
   console.log('📝 Note: Celo networks are preserved but disabled for future re-enablement');
 
-  const multiListener = startMultiNetworkEventListener();
-  multiListener
+  globalMultiListener = startMultiNetworkEventListener();
+  globalMultiListener
     .startAllListeners()
     .then(() => {
+      listenerHealthy = true;
       console.log('✅ Multi-network event listener startup completed');
     })
     .catch(error => {
+      listenerHealthy = false;
       console.error('❌ Event listener startup issues:', error);
       console.log('⚠️  API will continue running without real-time blockchain monitoring');
     });
@@ -88,9 +110,16 @@ async function startServer(): Promise<void> {
 
   const app = express();
 
-  // CORS Configuration
+  // CORS Configuration — environment-aware
+  const isProduction = process.env.NODE_ENV === 'production';
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+    : isProduction
+      ? ['https://app.yapbay.com']
+      : ['https://app.yapbay.com', 'http://localhost:5173', 'http://localhost:5174'];
+
   const corsOptions = {
-    origin: ['https://app.yapbay.com', 'http://localhost:5173', 'http://localhost:5174'],
+    origin: corsOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-network-name'],
     credentials: true,

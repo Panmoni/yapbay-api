@@ -1,17 +1,12 @@
 # YapBay API Notes
 
-- organize into projects and todo lists.
-
-23 lint problems
-0 build
-
-https://nocodb.com/
-
-- biome
-- give migrations sequential numbers
-- helmet and security, no non CF access
+- CI/CD to my podman containers
 - full Zod
 - both Solana and Celo and other networks
+- organize into projects and todo lists.
+- django admin thing
+- bring up other yapbay repos and bring them up to date
+- pinocchio
 
 ## Frontend x Listener
 
@@ -65,8 +60,7 @@ Add TypeScript strict mode compliance - Fix any remaining TypeScript issues and 
 Add JSDoc documentation - Add comprehensive JSDoc comments to all functions for better developer experience
 
 ## New API Ref Doc
-
-comprensive doc, update README, etc
+- comprensive doc, update README, etc
 
 ## Ref
 

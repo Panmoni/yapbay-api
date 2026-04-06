@@ -1,3 +1,4 @@
+import compression from 'compression';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import express from 'express';
@@ -9,9 +10,17 @@ import {
   type MultiNetworkEventListener,
   startMultiNetworkEventListener,
 } from './listener/multiNetworkEvents';
+import { enforceHTTPS } from './middleware/httpsEnforcement';
+import { defaultRateLimit, suspiciousPatternRateLimit } from './middleware/rateLimiting';
+import { requestIdMiddleware } from './middleware/requestId';
+import { serverTimingMiddleware } from './middleware/serverTiming';
+import { getMatchedPattern, isSuspiciousRequest } from './middleware/suspiciousPatternDetection';
 import routes from './routes';
 import { expireDeadlines } from './services/deadlineService';
 import { monitorExpiredEscrows } from './services/escrowMonitoringService';
+import { isBlocked } from './services/security/inMemoryBlocklist';
+import { getClientIp, isTrustedIP } from './utils/clientIp';
+import { sendErrorResponse } from './utils/errorResponse';
 
 dotenv.config();
 
@@ -19,8 +28,19 @@ dotenv.config();
 const REQUIRED_ENV_VARS = ['POSTGRES_URL', 'JWT_SECRET'];
 for (const envVar of REQUIRED_ENV_VARS) {
   if (!process.env[envVar]) {
-    console.error(`❌ Missing required environment variable: ${envVar}`);
+    console.error(`Missing required environment variable: ${envVar}`);
     process.exit(1);
+  }
+}
+
+// Validate Cloudflare env vars if banning is enabled
+if (process.env.CF_BAN_ENABLED === 'true') {
+  const cfVars = ['CF_API_TOKEN', 'CF_ZONE_ID'];
+  for (const envVar of cfVars) {
+    if (!process.env[envVar]) {
+      console.error(`CF_BAN_ENABLED=true but missing required variable: ${envVar}`);
+      process.exit(1);
+    }
   }
 }
 
@@ -111,34 +131,165 @@ async function startServer(): Promise<void> {
     );
   }
 
-  const app = express();
+  // Security maintenance cron — retry failed CF bans + cleanup activity log (daily at 03:00)
+  if (process.env.CF_BAN_ENABLED === 'true') {
+    cron.schedule('0 3 * * *', async () => {
+      try {
+        const { CloudflareIPBanService } = await import(
+          './services/security/cloudflareIPBanService'
+        );
+        await CloudflareIPBanService.retryFailedBans();
+      } catch (e) {
+        console.error('[Scheduler] Failed ban retry error:', e);
+      }
+      try {
+        const { cleanupSuspiciousActivityLog } = await import(
+          './services/security/cloudflareIPBanDatabaseService'
+        );
+        const deleted = await cleanupSuspiciousActivityLog(30);
+        if (deleted > 0) {
+          console.log(`[Scheduler] Cleaned up ${deleted} suspicious activity log entries`);
+        }
+      } catch (e) {
+        console.error('[Scheduler] Activity log cleanup error:', e);
+      }
+    });
+    console.log('[Scheduler] Scheduled security maintenance job: 0 3 * * *');
+  }
 
-  // CORS Configuration — environment-aware
+  const app = express();
   const isProduction = process.env.NODE_ENV === 'production';
+
+  // ── 1. Trust proxy ──────────────────────────────────────────────────────
+  app.set('trust proxy', Number.parseInt(process.env.TRUST_PROXY_HOPS || '1', 10));
+
+  // ── 2. Request timeout ──────────────────────────────────────────────────
+  const requestTimeoutMs = Number.parseInt(process.env.EXPRESS_REQUEST_TIMEOUT_MS || '35000', 10);
+  app.use((req, res, next) => {
+    req.setTimeout(requestTimeoutMs);
+    res.setTimeout(requestTimeoutMs);
+    next();
+  });
+
+  // ── 3. Request ID ──────────────────────────────────────────────────────
+  app.use(requestIdMiddleware);
+
+  // ── 4. Server Timing ───────────────────────────────────────────────────
+  app.use(serverTimingMiddleware);
+
+  // ── 5. Helmet (security headers) ──────────────────────────────────────
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+        },
+      },
+      frameguard: { action: 'deny' },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      hsts: isProduction
+        ? {
+            maxAge: Number.parseInt(process.env.HSTS_MAX_AGE || '31536000', 10),
+            includeSubDomains: process.env.HSTS_INCLUDE_SUBDOMAINS === 'true',
+            preload: process.env.HSTS_PRELOAD === 'true',
+          }
+        : false,
+    }),
+  );
+
+  // ── 6. CORS ────────────────────────────────────────────────────────────
   const corsOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
     : isProduction
       ? ['https://app.yapbay.com']
       : ['https://app.yapbay.com', 'http://localhost:5173', 'http://localhost:5174'];
 
-  const corsOptions = {
-    origin: corsOrigins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-network-name'],
-    credentials: true,
-  };
+  app.use(
+    cors({
+      origin: corsOrigins,
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'x-network-name', 'X-Request-Id'],
+      exposedHeaders: [
+        'X-Rate-Limit-Limit',
+        'X-Rate-Limit-Remaining',
+        'X-Rate-Limit-Reset',
+        'X-Rate-Limit-Retry-After',
+        'X-Request-Id',
+        'Server-Timing',
+      ],
+      credentials: true,
+    }),
+  );
 
-  // Security middleware
-  app.use(helmet());
+  // ── 7. Suspicious pattern detection + in-memory blocklist ─────────────
+  app.use((req, res, next) => {
+    const clientIP = getClientIp(req);
 
-  // Logging middleware
+    // Fast path: check in-memory blocklist
+    if (isBlocked(clientIP)) {
+      sendErrorResponse(req, res, 403, 'ip_blocked', 'Access denied');
+      return;
+    }
+
+    // Check for suspicious patterns (skip for trusted IPs and authenticated users)
+    if (isSuspiciousRequest(req) && !isTrustedIP(clientIP) && !req.headers.authorization) {
+      const matched = getMatchedPattern(req);
+      console.warn(
+        `[Security] Suspicious request from ${clientIP}: ${matched?.type} — ${matched?.pattern} — ${req.method} ${req.originalUrl}`,
+      );
+
+      // Fire-and-forget Cloudflare ban (only if enabled)
+      if (process.env.CF_BAN_ENABLED === 'true' && matched) {
+        import('./services/security/cloudflareIPBanService')
+          .then(({ CloudflareIPBanService }) =>
+            CloudflareIPBanService.processSuspiciousRequest(
+              clientIP,
+              matched.type,
+              matched.pattern,
+              req.originalUrl || req.path,
+              req.method,
+              req.get('User-Agent') || '',
+            ),
+          )
+          .catch((err) => console.error('[Security] Ban processing error:', err));
+      }
+
+      // Apply stricter rate limit for suspicious requests
+      suspiciousPatternRateLimit(req, res, next);
+      return;
+    }
+
+    next();
+  });
+
+  // ── 8. HTTPS enforcement ───────────────────────────────────────────────
+  app.use(enforceHTTPS);
+
+  // ── 9. Logging ─────────────────────────────────────────────────────────
   app.use(morgan('dev'));
 
-  // CORS and JSON parsing
-  app.use(cors(corsOptions));
-  app.use(express.json());
+  // ── 10. Compression ────────────────────────────────────────────────────
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (req.headers['x-no-compression']) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+      level: 6,
+      threshold: 1024,
+    }),
+  );
 
-  // Routes
+  // ── 11. Body parsing ──────────────────────────────────────────────────
+  app.use(express.json({ limit: '100kb' }));
+
+  // ── 12. Global rate limit ──────────────────────────────────────────────
+  app.use(defaultRateLimit);
+
+  // ── 13. Routes ─────────────────────────────────────────────────────────
   app.use('/', routes);
 
   // Health check endpoint
@@ -150,7 +301,7 @@ async function startServer(): Promise<void> {
   app.listen(PORT, () => {
     console.log(`YapBay API running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Solana RPC: ${process.env.SOLANA_RPC_URL_DEVNET}`);
+    console.log(`Solana RPC: ${process.env.SOLANA_RPC_URL_DEVNET ? '[configured]' : '[not set]'}`);
   });
 }
 

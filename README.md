@@ -187,6 +187,27 @@ npm run test:connection
 npm run lint
 ```
 
+### Claude Code Hooks
+
+This repo ships with [Claude Code](https://docs.claude.com/en/docs/claude-code) hooks in [.claude/](.claude/) that add automated guardrails when working with the Claude Code CLI. The hooks are committed to git so anyone cloning the repo and running Claude Code in this directory gets the same safety nets automatically. Configuration lives in [.claude/settings.json](.claude/settings.json) and hook scripts in [.claude/hooks/](.claude/hooks/).
+
+**What the hooks do:**
+
+- **`block-dangerous.sh`** (PreToolUse on Bash) — blocks destructive commands before they run: `rm -rf`, `git reset --hard`, `git push --force`, `git clean -f`, `DROP TABLE/DATABASE`, unqualified `DELETE` / `TRUNCATE` on escrow/trade/account/transaction tables, `curl|sh`, `podman pod rm`, `podman prune`, `systemctl stop/disable/mask yapbay*`, `dd of=/dev/*`, `mkfs`, `chmod -R 777`. Exits with code 2 and sends Claude an explanation so it can propose a safer alternative.
+- **`protect-files.sh`** (PreToolUse on Edit|Write) — blocks edits to `.env*`, `jwt.txt`, `jwt2.txt`, `*.pem`, `*.key`, `package-lock.json`, `yarn.lock`, `.npmrc`, `systemd/*.{service,socket,timer}`, `schema.sql`, `.git/*`, `secrets/*`. Migrations under [migrations/](migrations/) are treated as append-only: **new** migration files can be written, but **existing** ones cannot be edited in place.
+- **`log-commands.sh`** (PreToolUse on Bash) — appends every Bash command Claude runs to `.claude/command-log.txt` with an ISO-8601 timestamp. The log is gitignored. Useful for post-hoc auditing if something unexpected happens during a session.
+- **`post-edit-checks.sh`** (PostToolUse on Edit|Write) — after Claude edits any `.ts` / `.tsx` file, runs `eslint --fix` on the touched file and `tsc --noEmit` project-wide, tailing output to 20 lines each. Always exits 0 so diagnostics flow back to Claude as feedback rather than blocking the edit. This gives Claude a tight feedback loop: it sees lint/type errors immediately and fixes them before handing work back.
+
+**What the hooks deliberately do *not* do:**
+
+- No auto-running of `npm test` or `npm run test:blockchain` — those tests require a live Postgres connection and hit Celo Alfajores RPC, making them too slow and flaky for per-edit execution. Run them manually before committing.
+- No auto-commit on Stop. Commits are only created when explicitly requested.
+- No Prettier invocation — the ESLint config already handles formatting fixes.
+
+**Disabling or bypassing:** to run a command the hook would block (e.g. an intentional destructive operation), run it yourself in a normal shell outside of Claude. To disable the hooks entirely for a session, rename `.claude/settings.json` temporarily. To tweak the blocked patterns, edit the pattern arrays at the top of each script.
+
+**Requirements:** the hooks rely on `jq` being on `PATH`. The post-edit checks call `npx --no-install`, so `eslint` and `typescript` must already be installed via `npm install`.
+
 ## Security Considerations
 
 - JWT-based authentication and authorization

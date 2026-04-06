@@ -8,3 +8,4 @@ jwt.txt
 jwt2.txt
 api.log
 events.log
+.claude/command-log.txt

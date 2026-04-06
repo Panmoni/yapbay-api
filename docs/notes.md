@@ -1,7 +1,17 @@
 # YapBay API Notes
 
+- organize into projects and todo lists.
+
 23 lint problems
 0 build
+
+https://nocodb.com/
+
+- biome
+- give migrations sequential numbers
+- helmet and security, no non CF access
+- full Zod
+- both Solana and Celo and other networks
 
 ## Frontend x Listener
 

@@ -105,6 +105,9 @@
       "serialize-javascript": "7.0.5"
     }
   },
+  "resolutions": {
+    "serialize-javascript": "7.0.5"
+  },
   "lint-staged": {
     "*.{js,ts,tsx,jsx}": [
       "biome format --write",

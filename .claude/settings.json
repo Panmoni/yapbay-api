@@ -25,7 +25,17 @@
       "Bash(sudo apt:*)",
       "Bash(sudo pg_upgradecluster 17 main)",
       "Bash(sudo pg_dropcluster 17 main --stop)",
-      "Bash(PGPASSWORD=REDACTED_PGPASSWORD psql -h 127.0.0.1 -p 15433 -U yapbay -d yapbay -c \"UPDATE migrations SET checksum = 'c2182235ac5b2f259dd4fb18fb08a28be08f336e28ae9f083d0f0a19fd1fdd3b' WHERE filename = '0033-2026-04-06-create-migrations-tracking-table.sql';\")"
+      "Bash(PGPASSWORD=REDACTED_PGPASSWORD psql -h 127.0.0.1 -p 15433 -U yapbay -d yapbay -c \"UPDATE migrations SET checksum = 'c2182235ac5b2f259dd4fb18fb08a28be08f336e28ae9f083d0f0a19fd1fdd3b' WHERE filename = '0033-2026-04-06-create-migrations-tracking-table.sql';\")",
+      "Read(//home/george9874/.claude/projects/**)",
+      "Read(//home/george9874/repos/**)",
+      "Bash(command -v shellcheck)",
+      "Bash(shellcheck --version)",
+      "Bash(command -v podman)",
+      "Bash(command -v docker)",
+      "Bash(ssh-keyscan -t ed25519,rsa -p 2222 192.99.247.151)",
+      "Bash(ssh-keygen -lf /tmp/tucker-keys.txt)",
+      "Bash(command -v actionlint)",
+      "Bash(actionlint .github/workflows/deploy.yml)"
     ],
     "additionalDirectories": [
       "/home/george9874/repos/yapbay",

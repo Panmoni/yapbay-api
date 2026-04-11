@@ -27,6 +27,7 @@
     "build-image": "podman build -f Containerfile -t localhost/yapbay-api:latest .",
     "build-image:yarn": "podman build -f Containerfile.yarn -t localhost/yapbay-api:latest .",
     "deploy": "npm run build && npm run build-image && systemctl --user restart yapbay-api-pod.service && systemctl --user restart yapbay-api.service",
+    "deploy:remote": "bash scripts/deploy-remote.sh",
     "logs": "journalctl --user -u yapbay-api.service -f",
     "start:service": "systemctl --user start yapbay-api-pod.service yapbay-api.service",
     "stop": "systemctl --user stop yapbay-api-pod.service yapbay-api.service",

@@ -1,0 +1,37 @@
+name: Deploy to Tucker
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Drop all GITHUB_TOKEN permissions — this workflow only SSHes out, no API access.
+permissions: {}
+
+concurrency:
+  group: deploy-tucker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Deploy via SSH
+        # Pinned by commit SHA (appleboy/ssh-action v1.2.0) so a hijacked tag
+        # can't swap the action out from under us. Bump by updating both the
+        # SHA and the trailing comment together.
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17  # v1.2.0
+        with:
+          host: ${{ vars.TUCKER_HOST || '192.99.247.151' }}
+          port: ${{ vars.TUCKER_PORT || '2222' }}
+          username: ${{ vars.TUCKER_USER || 'george9874' }}
+          key: ${{ secrets.TUCKER_SSH_PRIVATE_KEY }}
+          # SSH host key fingerprint of tucker — prevents MITM on the path from
+          # the GitHub runner. Get with:
+          #   ssh-keyscan -t ed25519 -p 2222 <host> | ssh-keygen -lf -
+          fingerprint: SHA256:YIsAt3/p1QNnz6F8/0syDvNEMTAzsnQaHrA4vP27MP8
+          command_timeout: 12m
+          script: |
+            cd ~/repos/yapbay-api
+            bash scripts/deploy-remote.sh

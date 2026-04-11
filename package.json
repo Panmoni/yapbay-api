@@ -18,6 +18,8 @@
     "serve": "node dist/server.js",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "lint:shell": "bash scripts/lint-shell.sh",
+    "hooks:install": "install -m 0755 scripts/git-hooks/pre-push .git/hooks/pre-push && echo 'Installed .git/hooks/pre-push -> scripts/git-hooks/pre-push'",
     "format": "biome format .",
     "format:write": "biome format --write .",
     "check": "ultracite check",

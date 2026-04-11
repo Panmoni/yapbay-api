@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Pre-push hook: run shellcheck against all shell scripts to catch issues
+# before they reach CI / the deploy pipeline.
+#
+# Install with:  npm run hooks:install
+# Bypass with:   git push --no-verify   (use sparingly)
+
+set -euo pipefail
+
+echo "pre-push: running shellcheck..."
+exec npm run -s lint:shell

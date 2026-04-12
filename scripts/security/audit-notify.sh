@@ -24,50 +24,49 @@ cd "$(dirname "$0")/../.." || exit 1
 # capture the actual audit exit code, so we use a pattern that sets a
 # variable only on failure. `set -e` is off (we use `set -uo pipefail`),
 # so the `||` short-circuit works as intended here.
-yarn_exit=0
-yarn_out=$(yarn audit --level moderate 2>&1) || yarn_exit=$?
+pnpm_exit=0
+pnpm_out=$(pnpm audit --audit-level moderate 2>&1) || pnpm_exit=$?
 
-# Only run npm audit if a package-lock.json exists. Since we consolidated
-# on yarn, package-lock.json is normally absent — running npm audit without
-# it fails with ENOLOCK which would produce false-positive issues.
-npm_exit=0
-npm_out="(skipped — no package-lock.json; yarn is the canonical lockfile)"
-if [ -f package-lock.json ]; then
-  npm_out=$(npm audit --audit-level=moderate 2>&1) || npm_exit=$?
-fi
-
-if [ "$yarn_exit" -eq 0 ] && [ "$npm_exit" -eq 0 ]; then
+if [ "$pnpm_exit" -eq 0 ]; then
   echo "audit-notify: clean, no action needed."
   exit 0
 fi
 
-echo "audit-notify: vulnerabilities detected (yarn=$yarn_exit, npm=$npm_exit)."
+# Distinguish "vulnerabilities found" (the thing we want to alert on) from
+# "network error / registry unreachable / pnpm crashed" (transient, should
+# not spam the issue tracker). A real vulnerability report always contains
+# the word "vulnerabilities" in pnpm audit's output; a network failure
+# typically surfaces as ECONNREFUSED / ETIMEDOUT / ENOTFOUND / 5xx.
+if ! printf '%s' "$pnpm_out" | grep -qi 'vulnerabilities'; then
+  echo "audit-notify: pnpm audit failed without a vulnerability report (exit=$pnpm_exit)."
+  echo "--- output ---"
+  printf '%s\n' "$pnpm_out"
+  echo "--- end ---"
+  echo "audit-notify: treating as transient failure, not opening an issue."
+  exit 2
+fi
+
+echo "audit-notify: vulnerabilities detected (pnpm_exit=$pnpm_exit)."
 
 ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 host=$(hostname)
 
 # Neutralize any triple-backticks in audit output so they don't escape
-# the markdown code fence in the GitHub issue body. Replace ``` with '``''`.
-yarn_safe=$(printf '%s' "$yarn_out" | sed 's/```/`` `/g')
-npm_safe=$(printf '%s' "$npm_out" | sed 's/```/`` `/g')
+# the markdown code fence in the GitHub issue body.
+pnpm_safe=$(printf '%s' "$pnpm_out" | sed 's/```/`` `/g')
 
 body=$(cat <<EOF
 Scheduled audit on \`${host}\` at \`${ts}\` found moderate+ severity vulnerabilities.
 
-### yarn audit
+### pnpm audit
 \`\`\`
-${yarn_safe}
-\`\`\`
-
-### npm audit
-\`\`\`
-${npm_safe}
+${pnpm_safe}
 \`\`\`
 
 Fix by upgrading the parent package or pinning a patched transitive via
-\`resolutions\` (yarn) and \`overrides\` (npm) in \`package.json\`.
+\`pnpm.overrides\` in \`package.json\`.
 
-Close when \`yarn audit --level moderate\` and \`npm audit --audit-level=moderate\` are clean.
+Close when \`pnpm audit --audit-level moderate\` is clean.
 EOF
 )
 

@@ -27,31 +27,23 @@ jobs:
     env:
       HAS_SMTP: ${{ secrets.SMTP_HOST != '' && 'true' || 'false' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: '20'
-          cache: 'yarn'
+          cache: pnpm
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
-      - name: yarn audit (moderate+)
-        id: yarn_audit
+      - name: pnpm audit (moderate+)
+        id: pnpm_audit
         run: |
           set -o pipefail
-          yarn audit --level moderate | tee yarn-audit.txt
-
-      # npm audit requires a package-lock.json. We consolidated on yarn so
-      # package-lock.json is normally absent. Only run npm audit if one
-      # happens to be present (e.g. someone ran `npm install` locally).
-      - name: npm audit (moderate+)
-        id: npm_audit
-        if: always() && hashFiles('package-lock.json') != ''
-        run: |
-          set -o pipefail
-          npm audit --audit-level=moderate 2>&1 | tee npm-audit.txt
+          pnpm audit --audit-level moderate | tee pnpm-audit.txt
 
       # On failure, open a GitHub issue tagged [security]. GitHub's
       # notification system emails me@georgedonnelly.com when the configured
@@ -79,12 +71,9 @@ jobs:
             // Neutralize any triple-backticks in audit output so they don't
             // escape the markdown code fence in the issue body.
             const sanitize = (s) => s.replace(/```/g, '`` `');
-            const yarn = fs.existsSync('yarn-audit.txt')
-              ? sanitize(fs.readFileSync('yarn-audit.txt', 'utf8').slice(-4000))
-              : '(no yarn audit output)';
-            const npm = fs.existsSync('npm-audit.txt')
-              ? sanitize(fs.readFileSync('npm-audit.txt', 'utf8').slice(-4000))
-              : '(no npm audit output)';
+            const pnpmOut = fs.existsSync('pnpm-audit.txt')
+              ? sanitize(fs.readFileSync('pnpm-audit.txt', 'utf8').slice(-4000))
+              : '(no pnpm audit output)';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
             const title = `[security] Dependency audit failed on ${context.ref}`;
@@ -96,21 +85,16 @@ jobs:
               `- **Ref**: ${context.ref}`,
               `- **SHA**: ${context.sha}`,
               ``,
-              `### yarn audit (tail)`,
+              `### pnpm audit (tail)`,
               '```',
-              yarn,
-              '```',
-              ``,
-              `### npm audit (tail)`,
-              '```',
-              npm,
+              pnpmOut,
               '```',
               ``,
               `Fix by either:`,
               `- upgrading the parent package, or`,
-              `- pinning a patched transitive via \`resolutions\` (yarn) and \`overrides\` (npm) in \`package.json\`.`,
+              `- pinning a patched transitive via \`pnpm.overrides\` in \`package.json\`.`,
               ``,
-              `Close this issue once \`yarn audit --level moderate\` and \`npm audit --audit-level=moderate\` are clean.`,
+              `Close this issue once \`pnpm audit --audit-level moderate\` is clean.`,
             ].join('\n');
 
             // Avoid duplicate issues: search for an open one with the same title.
@@ -164,5 +148,5 @@ jobs:
             Ref: ${{ github.ref }}
             SHA: ${{ github.sha }}
 
-            See the run for yarn audit and npm audit details. A GitHub issue
-            tagged [security] has also been opened / commented on.
+            See the run for pnpm audit details. A GitHub issue tagged
+            [security] has also been opened / commented on.

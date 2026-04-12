@@ -6,7 +6,7 @@
 # migrations, container build, service restart, and health check.
 #
 # Invoked automatically by GitHub Actions on push to main, or manually via
-# `npm run deploy:remote` on tucker.
+# `pnpm deploy:remote` on tucker.
 
 set -euo pipefail
 
@@ -50,7 +50,7 @@ echo "Log:      $LOG_FILE"
 
 # ── Step 1: Log current commit for manual rollback reference ──────────────
 # This is logged (not auto-rolled-back on failure) so an operator can pick
-# it out of the deploy log and run `git reset --hard <sha> && npm run
+# it out of the deploy log and run `git reset --hard <sha> && pnpm
 # deploy:remote` by hand. Auto-rollback on a financial system needs more
 # thought than a one-liner — prefer loud failures the operator has to ack.
 PREV_COMMIT=$(git rev-parse HEAD)
@@ -68,10 +68,10 @@ if [ "$PREV_COMMIT" = "$CURRENT_COMMIT" ]; then
 fi
 
 # ── Step 3: Install host-level dependencies for migration scripts ──────────
-# The container build has its own dependency install via yarn; this host
+# The container build has its own dependency install via pnpm; this host
 # install is only needed to run scripts/migrate.js and deployment-gate.js.
 echo "--- Installing host dependencies ---"
-yarn install --frozen-lockfile --ignore-scripts
+pnpm install --frozen-lockfile --ignore-scripts
 
 # ── Step 4: Pre-deploy gate ─────────────────────────────────────────────────
 echo "--- Running deployment gate ---"

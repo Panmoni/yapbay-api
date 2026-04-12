@@ -56,7 +56,15 @@
       "Bash(YAPBAY_TEST_DB_OVERRIDE=1 npx mocha -r ts-node/register --require src/tests/setup.ts src/tests/schemas/primitives.test.ts)",
       "Bash(corepack --version)",
       "Bash(pnpm --version)",
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm audit:*)",
+      "Bash(pnpm check:coercion)",
+      "Bash(pnpm hooks:install)",
+      "Bash(rsync -e 'ssh -p 2222' -az /home/george9874/repos/yapbay-api/Containerfile /home/george9874/repos/yapbay-api/package.json /home/george9874/repos/yapbay-api/pnpm-lock.yaml /home/george9874/repos/yapbay-api/.npmrc george9874@192.99.247.151:/tmp/yapbay-containerfile-test/)",
+      "Bash(rsync -e 'ssh -p 2222' -az --exclude node_modules --exclude dist --exclude .git --exclude logs --exclude backups . george9874@192.99.247.151:/tmp/yapbay-containerfile-test/)",
+      "Bash(pnpm lint:shell)"
     ],
     "additionalDirectories": [
       "/home/george9874/repos/yapbay",

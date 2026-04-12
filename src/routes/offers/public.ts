@@ -1,8 +1,17 @@
 import express, { type Request, type Response } from 'express';
+import { z } from 'zod';
 import { query } from '../../db';
 import { logError } from '../../logger';
 import { withErrorHandling } from '../../middleware/errorHandler';
 import { requireNetwork } from '../../middleware/networkMiddleware';
+import { validate } from '../../middleware/validate';
+import { validateResponse } from '../../middleware/validateResponse';
+import {
+  getOfferResponseSchema,
+  listOffersQuerySchema,
+  listOffersResponseSchema,
+  offerIdParamsSchema,
+} from '../../schemas/offers';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { sendNetworkResponse } from '../../utils/routeHelpers';
 
@@ -20,6 +29,8 @@ const router = express.Router();
 router.get(
   '/:id',
   requireNetwork,
+  validate({ params: offerIdParamsSchema, query: z.strictObject({}) }),
+  validateResponse(getOfferResponseSchema),
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const networkId = req.networkId!;
@@ -43,6 +54,8 @@ router.get(
 router.get(
   '/',
   requireNetwork,
+  validate({ query: listOffersQuerySchema }),
+  validateResponse(listOffersResponseSchema),
   withErrorHandling(async (req: Request, res: Response): Promise<void> => {
     const { type, token, owner } = req.query;
     const networkId = req.networkId!;
@@ -64,10 +77,7 @@ router.get(
         ? getWalletAddressFromJWT(req as AuthenticatedRequest)
         : undefined;
       if (owner === 'me' && walletAddress) {
-        sql +=
-          ' AND creator_account_id IN (SELECT id FROM accounts WHERE LOWER(wallet_address) = LOWER($' +
-          (params.length + 1) +
-          '))';
+        sql += ` AND creator_account_id IN (SELECT id FROM accounts WHERE LOWER(wallet_address) = LOWER($${params.length + 1}))`;
         params.push(walletAddress);
       } else if (owner === 'me' && !walletAddress) {
         console.warn(

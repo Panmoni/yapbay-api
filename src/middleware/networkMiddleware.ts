@@ -9,12 +9,13 @@ import {
   NetworkType,
 } from '../types/networks';
 
-// Extend Request interface to include network context
+// Extend Request interface to include network context and request ID
 declare global {
   namespace Express {
     interface Request extends NetworkRequest {
       network?: NetworkConfig;
       networkId?: number;
+      requestId?: string;
     }
   }
 }

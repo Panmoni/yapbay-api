@@ -10,6 +10,7 @@ import {
   type MultiNetworkEventListener,
   startMultiNetworkEventListener,
 } from './listener/multiNetworkEvents';
+import { globalErrorHandler } from './middleware/errorHandler';
 import { enforceHTTPS } from './middleware/httpsEnforcement';
 import { defaultRateLimit, suspiciousPatternRateLimit } from './middleware/rateLimiting';
 import { requestIdMiddleware } from './middleware/requestId';
@@ -296,6 +297,11 @@ async function startServer(): Promise<void> {
   app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
   });
+
+  // ── 14. Global error handler ───────────────────────────────────────────
+  // MUST be the last middleware. Catches stray ZodError + uncaught route
+  // errors and emits the standardized error response shape.
+  app.use(globalErrorHandler);
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {

@@ -1,18 +1,24 @@
 import express, { type Response } from 'express';
 import { query, recordTransaction, withTransaction } from '../../db';
 import { logError } from '../../logger';
-// import { ethers } from 'ethers'; // CELO - DISABLED
-// import YapBayEscrowABI from '../../contract/YapBayEscrow.json'; // CELO - DISABLED
 import type { AuthenticatedRequest } from '../../middleware/auth';
 import { withErrorHandling } from '../../middleware/errorHandler';
 import { requireNetwork } from '../../middleware/networkMiddleware';
+import { handler } from '../../middleware/typedHandler';
+import { validate } from '../../middleware/validate';
+import { validateResponse } from '../../middleware/validateResponse';
+import {
+  escrowRecordResponseSchema,
+  escrowRecordSchemaFor,
+  listMyEscrowsQuerySchema,
+  listMyEscrowsResponseSchema,
+} from '../../schemas/escrows';
 import { BlockchainServiceFactory } from '../../services/blockchainService';
-// import { CeloService } from '../../celo'; // CELO - DISABLED
 import { NetworkService } from '../../services/networkService';
 import { NetworkFamily } from '../../types/networks';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
+import { validateEscrowRecordBusiness } from './businessValidation';
 import { requireEscrowList } from './middleware';
-import { validateEscrowRecord } from './validation';
 
 const router = express.Router();
 
@@ -20,24 +26,21 @@ const router = express.Router();
 router.post(
   '/record',
   requireNetwork,
-  validateEscrowRecord,
+  validate((req) => ({ body: escrowRecordSchemaFor(req.network!.networkFamily) })),
+  validateEscrowRecordBusiness,
+  validateResponse(escrowRecordResponseSchema),
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    const {
-      trade_id,
-      transaction_hash, // EVM
-      signature, // Solana
-      escrow_id,
-      seller,
-      buyer,
-      amount,
-      sequential,
-      sequential_escrow_address,
-      // Solana-specific fields
-      program_id,
-      escrow_pda,
-      escrow_token_account,
-      trade_onchain_id,
-    } = req.body;
+    const { trade_id, escrow_id, seller, buyer, amount, sequential, sequential_escrow_address } =
+      req.body;
+
+    // Network-family-specific fields
+    const transaction_hash = 'transaction_hash' in req.body ? req.body.transaction_hash : null;
+    const signature = 'signature' in req.body ? req.body.signature : null;
+    const program_id = 'program_id' in req.body ? req.body.program_id : null;
+    const escrow_pda = 'escrow_pda' in req.body ? req.body.escrow_pda : null;
+    const escrow_token_account =
+      'escrow_token_account' in req.body ? req.body.escrow_token_account : null;
+    const trade_onchain_id = 'trade_onchain_id' in req.body ? req.body.trade_onchain_id : null;
 
     const networkId = req.networkId!;
 
@@ -48,19 +51,15 @@ router.post(
     }
 
     const blockchainService = BlockchainServiceFactory.create(network);
-
-    // Determine transaction identifier based on network family
     const transactionIdentifier =
       network.networkFamily === NetworkFamily.EVM ? transaction_hash : signature;
 
-    // Validate transaction identifier
     if (!blockchainService.validateTransactionHash(transactionIdentifier)) {
       res.status(400).json({ error: 'Invalid transaction identifier for network' });
       return;
     }
 
     try {
-      // Verify the trade exists and get deadline information
       const tradeCheck = await query('SELECT * FROM trades WHERE id = $1 AND network_id = $2', [
         trade_id,
         networkId,
@@ -74,14 +73,6 @@ router.post(
       const depositDeadline = trade.leg1_escrow_deposit_deadline;
       const fiatDeadline = trade.leg1_fiat_payment_deadline;
 
-      // Validate amount
-      const parsedAmount = Number(amount);
-      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-        res.status(400).json({ error: 'Invalid escrow amount' });
-        return;
-      }
-
-      // Record escrow with network-specific fields
       const escrowData = {
         trade_id,
         escrow_address:
@@ -91,7 +82,7 @@ router.post(
         buyer_address: buyer,
         arbitrator_address: network.arbitratorAddress,
         token_type: 'USDC',
-        amount: parsedAmount,
+        amount,
         state: 'CREATED',
         sequential,
         sequential_escrow_address,
@@ -105,9 +96,7 @@ router.post(
         trade_onchain_id: network.networkFamily === NetworkFamily.SOLANA ? trade_onchain_id : null,
       };
 
-      // Wrap escrow insert + transaction record in a single DB transaction
       const { escrowDbId } = await withTransaction(async (client) => {
-        // Check if an escrow with this onchain_escrow_id already exists
         const { rows: existingEscrow } = await client.query(
           'SELECT id FROM escrows WHERE onchain_escrow_id = $1 AND network_id = $2',
           [escrow_id, networkId],
@@ -163,7 +152,6 @@ router.post(
         return { escrowDbId: dbId };
       });
 
-      // Record transaction (outside main transaction — ON CONFLICT handles dedup)
       await recordTransaction({
         transaction_hash: network.networkFamily === NetworkFamily.EVM ? transaction_hash : null,
         signature: network.networkFamily === NetworkFamily.SOLANA ? signature : null,
@@ -180,14 +168,16 @@ router.post(
 
       res.json({
         success: true,
-        escrowId: escrow_id,
+        escrowId: String(escrow_id),
         escrowDbId,
-        txHash: network.networkFamily === NetworkFamily.EVM ? transaction_hash : signature,
+        txHash:
+          network.networkFamily === NetworkFamily.EVM
+            ? (transaction_hash as string)
+            : (signature as string),
         networkFamily: network.networkFamily,
         blockExplorerUrl: blockchainService.getBlockExplorerUrl(transactionIdentifier),
       });
     } catch (error) {
-      // Record failed transaction
       try {
         await recordTransaction({
           transaction_hash: network.networkFamily === NetworkFamily.EVM ? transaction_hash : null,
@@ -214,28 +204,33 @@ router.post(
   }),
 );
 
+const mySchemas = { query: listMyEscrowsQuerySchema } as const;
+
 // List escrows for authenticated user
 router.get(
   '/my',
   requireNetwork,
+  validate({ query: listMyEscrowsQuerySchema }),
   requireEscrowList,
-  withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    const jwtWalletAddress = getWalletAddressFromJWT(req);
-    const networkId = req.networkId!;
-    const limit = Math.min(Math.max(1, Number(req.query.limit) || 50), 100);
-    const offset = Math.max(0, Number(req.query.offset) || 0);
+  validateResponse(listMyEscrowsResponseSchema),
+  withErrorHandling(
+    handler(mySchemas, async (req, res: Response): Promise<void> => {
+      const jwtWalletAddress = getWalletAddressFromJWT(req);
+      const networkId = req.networkId!;
+      const { limit, offset } = req.query;
 
-    const result = await query(
-      `SELECT e.*, n.name as network FROM escrows e
+      const result = await query(
+        `SELECT e.*, n.name as network FROM escrows e
        LEFT JOIN networks n ON e.network_id = n.id
        WHERE e.network_id = $1
        AND (LOWER(e.seller_address) = LOWER($2) OR LOWER(e.buyer_address) = LOWER($2))
        ORDER BY e.created_at DESC
        LIMIT $3 OFFSET $4`,
-      [networkId, jwtWalletAddress, limit, offset],
-    );
-    res.json(result);
-  }),
+        [networkId, jwtWalletAddress, limit, offset],
+      );
+      res.json(result);
+    }),
+  ),
 );
 
 export default router;

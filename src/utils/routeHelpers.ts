@@ -1,4 +1,4 @@
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from '../middleware/auth';
 
 export interface ApiResponse<T = unknown> {
@@ -74,7 +74,7 @@ export const sendPaginatedResponse = <T>(
 };
 
 export const handleConditionalRequest = (
-  req: AuthenticatedRequest,
+  req: Pick<Request, 'headers'>,
   res: Response,
   lastModified: Date,
   data: unknown,

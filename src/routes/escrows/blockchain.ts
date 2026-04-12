@@ -4,6 +4,16 @@ import { CeloService } from '../../celo';
 import type { AuthenticatedRequest } from '../../middleware/auth';
 import { withErrorHandling } from '../../middleware/errorHandler';
 import { requireNetwork } from '../../middleware/networkMiddleware';
+import { validate } from '../../middleware/validate';
+import { validateResponse } from '../../middleware/validateResponse';
+import {
+  escrowAutoCancelResponseSchema,
+  escrowBalanceResponseSchema,
+  escrowCalculatedBalanceResponseSchema,
+  escrowSequentialInfoResponseSchema,
+  escrowStoredBalanceResponseSchema,
+  onchainEscrowIdParamsSchema,
+} from '../../schemas/escrows';
 import { requireEscrowParticipant } from './middleware';
 
 const router = express.Router();
@@ -12,7 +22,9 @@ const router = express.Router();
 router.get(
   '/:onchainEscrowId/balance',
   requireNetwork,
+  validate({ params: onchainEscrowIdParamsSchema }),
   requireEscrowParticipant,
+  validateResponse(escrowBalanceResponseSchema),
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
     const networkId = req.networkId!;
@@ -38,7 +50,9 @@ router.get(
 router.get(
   '/:onchainEscrowId/stored-balance',
   requireNetwork,
+  validate({ params: onchainEscrowIdParamsSchema }),
   requireEscrowParticipant,
+  validateResponse(escrowStoredBalanceResponseSchema),
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
     const networkId = req.networkId!;
@@ -62,7 +76,9 @@ router.get(
 router.get(
   '/:onchainEscrowId/calculated-balance',
   requireNetwork,
+  validate({ params: onchainEscrowIdParamsSchema }),
   requireEscrowParticipant,
+  validateResponse(escrowCalculatedBalanceResponseSchema),
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
     const networkId = req.networkId!;
@@ -86,7 +102,9 @@ router.get(
 router.get(
   '/:onchainEscrowId/sequential-info',
   requireNetwork,
+  validate({ params: onchainEscrowIdParamsSchema }),
   requireEscrowParticipant,
+  validateResponse(escrowSequentialInfoResponseSchema),
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
     const networkId = req.networkId!;
@@ -113,7 +131,9 @@ router.get(
 router.get(
   '/:onchainEscrowId/auto-cancel-eligible',
   requireNetwork,
+  validate({ params: onchainEscrowIdParamsSchema }),
   requireEscrowParticipant,
+  validateResponse(escrowAutoCancelResponseSchema),
   withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const { onchainEscrowId } = req.params;
     const networkId = req.networkId!;

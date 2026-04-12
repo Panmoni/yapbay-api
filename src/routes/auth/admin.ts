@@ -1,8 +1,11 @@
 import bcrypt from 'bcrypt';
 import express, { type Response } from 'express';
 import rateLimit from 'express-rate-limit';
-import type { AuthenticatedRequest } from '../../middleware/auth';
 import { withErrorHandling } from '../../middleware/errorHandler';
+import { handler } from '../../middleware/typedHandler';
+import { validate } from '../../middleware/validate';
+import { validateResponse } from '../../middleware/validateResponse';
+import { adminLoginRequestSchema, adminLoginResponseSchema } from '../../schemas/admin';
 import { type CustomJwtPayload, signJwt } from '../../utils/jwtUtils';
 
 const router = express.Router();
@@ -16,29 +19,30 @@ const adminLoginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// TODO: Migrate admin credentials to a secure admin user table, add MFA, and proper audit logging instead of env-based auth.
+const loginSchemas = { body: adminLoginRequestSchema } as const;
+
 // /login
 router.post(
   '/login',
   adminLoginLimiter,
-  withErrorHandling(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    const { username, password } = req.body;
-    if (!(username && password)) {
-      res.status(400).json({ error: 'Missing username or password' });
-      return;
-    }
-    if (username !== process.env.ADMIN_USERNAME) {
-      res.status(401).json({ error: 'Invalid credentials' });
-      return;
-    }
-    const passwordMatch = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH!);
-    if (!passwordMatch) {
-      res.status(401).json({ error: 'Invalid credentials' });
-      return;
-    }
-    const token = signJwt({ sub: username, role: 'admin' } as CustomJwtPayload);
-    res.json({ token });
-  }),
+  validate({ body: adminLoginRequestSchema }),
+  validateResponse(adminLoginResponseSchema),
+  withErrorHandling(
+    handler(loginSchemas, async (req, res: Response): Promise<void> => {
+      const { username, password } = req.body;
+      if (username !== process.env.ADMIN_USERNAME) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+      const passwordMatch = await bcrypt.compare(password, process.env.ADMIN_PASSWORD_HASH!);
+      if (!passwordMatch) {
+        res.status(401).json({ error: 'Invalid credentials' });
+        return;
+      }
+      const token = signJwt({ sub: username, role: 'admin' } as CustomJwtPayload);
+      res.json({ token });
+    }),
+  ),
 );
 
 export default router;

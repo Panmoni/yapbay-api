@@ -71,7 +71,7 @@ fi
 # The container build has its own dependency install via yarn; this host
 # install is only needed to run scripts/migrate.js and deployment-gate.js.
 echo "--- Installing host dependencies ---"
-npm ci --no-audit --no-fund
+yarn install --frozen-lockfile --ignore-scripts
 
 # ── Step 4: Pre-deploy gate ─────────────────────────────────────────────────
 echo "--- Running deployment gate ---"

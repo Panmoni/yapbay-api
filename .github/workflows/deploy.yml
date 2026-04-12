@@ -13,7 +13,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Lint + typecheck gate. Deploy only proceeds if this passes.
+  # Tests are NOT in this gate yet — see .github/workflows/ci.yml for the
+  # advisory-only test job and the plan for the phased rollout.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Biome check
+        run: npm run lint
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

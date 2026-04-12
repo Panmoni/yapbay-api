@@ -17,6 +17,7 @@ import {
   recordTransactionResponseSchema,
 } from '../../schemas/transactions';
 import { isDevMode } from '../../utils/envConfig';
+import { safeJsonParse } from '../../utils/safeJson';
 import { VALID_LEG_TRANSITIONS } from '../../utils/stateTransitions';
 
 const router = express.Router();
@@ -55,41 +56,33 @@ router.post(
         // Defensive: If transaction_type is 'OTHER', check metadata for a more specific type
         let finalTransactionType = transaction_type as string;
         if (transaction_type === 'OTHER' && metadata) {
-          try {
-            const metaObj = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
+          const metaObj = safeJsonParse<Record<string, unknown>>(metadata, {
+            onError: (err) =>
+              logError(
+                'Failed to parse metadata when inferring transaction type in /transactions/record',
+                err,
+              ),
+          });
+          if (metaObj) {
             const actionTypeMap: Record<string, string> = {
               MARK_FIAT_PAID: 'MARK_FIAT_PAID',
               mark_fiat_paid: 'MARK_FIAT_PAID',
             };
-            const action =
-              (metaObj as Record<string, unknown>).action ||
-              (metaObj as Record<string, unknown>).type ||
-              (metaObj as Record<string, unknown>).event;
+            const action = metaObj.action || metaObj.type || metaObj.event;
             if (action && typeof action === 'string' && actionTypeMap[action]) {
               finalTransactionType = actionTypeMap[action];
             }
-          } catch (e) {
-            logError(
-              'Failed to parse metadata when inferring transaction type in /transactions/record',
-              e as Error,
-            );
           }
         }
 
         let finalFromAddress = from_address;
         let finalToAddress = to_address;
 
-        let metaObj: Record<string, unknown> | null = null;
-        if (metadata) {
-          try {
-            metaObj =
-              typeof metadata === 'string'
-                ? JSON.parse(metadata)
-                : (metadata as Record<string, unknown>);
-          } catch {
-            // Invalid metadata JSON - continue without it
-          }
-        }
+        const metaObj = metadata
+          ? safeJsonParse<Record<string, unknown>>(metadata, {
+              onError: (err) => logError('Failed to parse metadata for address extraction', err),
+            })
+          : null;
 
         if ((!finalFromAddress || finalFromAddress === '') && metaObj) {
           finalFromAddress = (metaObj.seller ||

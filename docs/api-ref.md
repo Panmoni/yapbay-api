@@ -6,6 +6,32 @@ All endpoints except those marked as public require a valid JWT token in the Aut
 Authorization: Bearer <jwt_token>
 ```
 
+## Idempotency
+
+Mutating endpoints under `/transactions`, `/escrows`, and `/trades` accept an
+optional `Idempotency-Key` header. Send it on any `POST`/`PUT`/`PATCH`/`DELETE`
+whose re-execution would be unsafe (escrow creation, trade state change,
+transaction recording).
+
+Contract:
+- **Format**: a UUID v4, lowercased. Example: `Idempotency-Key: 9d6b9e4c-3a2f-4f1a-8b8d-2b5a6e0f5b21`.
+- **Scope**: the key is keyed by `(key, user_sub)`. Two users may send the same
+  key value without collision; a user may not reuse a key across different
+  requests.
+- **First call**: runs normally. The response body + status are cached for 24h.
+- **Retry with same body**: server returns the cached response and sets
+  `Idempotent-Replayed: true` on the response.
+- **Retry with a different body**: server returns `409 idempotency_key_conflict`.
+  The original is preserved — rotate the key to make a different request.
+- **4xx/5xx responses are not cached.** If your first call fails validation
+  (400), retrying with a corrected body executes normally.
+- **Concurrency**: concurrent requests with the same key serialize on a
+  server-side advisory lock — the second request blocks until the first
+  commits, then replays the cached response rather than re-executing.
+
+Clients SHOULD generate a fresh UUID v4 per logical operation and reuse it
+across all network-retry attempts of that operation.
+
 ## Public Endpoints
 
 ### Health Check
@@ -39,6 +65,21 @@ Response shape:
 }
 ```
 Error details are intentionally generic (`'database unreachable'`, `'rpc unreachable'`) — raw driver messages are logged server-side only.
+
+### Metrics
+```http
+GET /metrics
+```
+Prometheus-format scrape endpoint. Returns default Node process metrics plus
+application metrics (`yapbay_http_request_duration_seconds`,
+`yapbay_blockchain_rpc_duration_seconds`, `yapbay_idempotency_cache_hits_total`,
+`yapbay_escrow_state_total`, `yapbay_db_pool_connections`,
+`yapbay_circuit_breaker_state`).
+
+In production this endpoint is guarded: `METRICS_AUTH_TOKEN` must be set in
+the environment, and the caller must send `Authorization: Bearer <token>`.
+If the env var is unset in production, the endpoint returns `503` (fail
+closed) rather than exposing metrics publicly.
 
 ### Prices
 ```http

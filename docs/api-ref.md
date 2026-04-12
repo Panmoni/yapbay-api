@@ -12,7 +12,33 @@ Authorization: Bearer <jwt_token>
 ```http
 GET /health
 ```
-Returns the health status of the API, including database connectivity and network status.
+Full health report: database connectivity, table counts, active networks, RPC status, and API version. Use for humans/dashboards — expensive to call.
+
+```http
+GET /health/live
+```
+Liveness probe. Returns `200 { status: 'ok' }` as long as the process is up; no dependency checks. Use for systemd/Podman liveness.
+
+```http
+GET /health/ready
+```
+Readiness probe. Checks DB (uncached), event listener (5 s cache), and Solana RPC (30 s cache). Returns:
+- `200` with `status: 'ok' | 'degraded'` — service can accept traffic
+- `503` with `status: 'down'` — drain this instance
+
+Response shape:
+```json
+{
+  "status": "ok",
+  "checks": {
+    "db":       { "status": "ok", "latencyMs": 3 },
+    "listener": { "status": "ok", "detail": "listenerCount=1" },
+    "rpc":      { "status": "ok", "latencyMs": 87 }
+  },
+  "timestamp": "2026-04-12T00:00:00.000Z"
+}
+```
+Error details are intentionally generic (`'database unreachable'`, `'rpc unreachable'`) — raw driver messages are logged server-side only.
 
 ### Prices
 ```http

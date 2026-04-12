@@ -1,11 +1,13 @@
+// Load + validate env before any other import that reads process.env.
+import './config/env';
+
 import compression from 'compression';
 import cors from 'cors';
-import * as dotenv from 'dotenv';
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cron from 'node-cron';
-import { Pool } from 'pg';
+import { warmPool } from './db';
 import {
   type MultiNetworkEventListener,
   startMultiNetworkEventListener,
@@ -23,28 +25,6 @@ import { isBlocked } from './services/security/inMemoryBlocklist';
 import { getClientIp, isTrustedIP } from './utils/clientIp';
 import { sendErrorResponse } from './utils/errorResponse';
 
-dotenv.config();
-
-// Validate required environment variables at startup
-const REQUIRED_ENV_VARS = ['POSTGRES_URL', 'JWT_SECRET'];
-for (const envVar of REQUIRED_ENV_VARS) {
-  if (!process.env[envVar]) {
-    console.error(`Missing required environment variable: ${envVar}`);
-    process.exit(1);
-  }
-}
-
-// Validate Cloudflare env vars if banning is enabled
-if (process.env.CF_BAN_ENABLED === 'true') {
-  const cfVars = ['CF_API_TOKEN', 'CF_ZONE_ID'];
-  for (const envVar of cfVars) {
-    if (!process.env[envVar]) {
-      console.error(`CF_BAN_ENABLED=true but missing required variable: ${envVar}`);
-      process.exit(1);
-    }
-  }
-}
-
 // Global listener reference for health checks
 let globalMultiListener: MultiNetworkEventListener | null = null;
 let listenerHealthy = false;
@@ -56,29 +36,16 @@ export function getListenerHealth(): { healthy: boolean; listenerCount: number }
   };
 }
 
-// Database connection check
-async function checkDatabaseConnection(): Promise<void> {
-  const pool = new Pool({
-    connectionString: process.env.POSTGRES_URL,
-  });
-
+// Startup sequence
+async function startServer(): Promise<void> {
+  // Verify DB connectivity and pre-warm the pool in one step.
   try {
-    const client = await pool.connect();
-    await client.query('SELECT 1');
-    client.release();
-    console.log('✅ Database connection successful');
+    await warmPool();
+    console.log('✅ Database connection successful (pool pre-warmed)');
   } catch (error) {
     console.error('❌ Database connection failed:', error);
     process.exit(1);
-  } finally {
-    await pool.end();
   }
-}
-
-// Startup sequence
-async function startServer(): Promise<void> {
-  // Check database connection first
-  await checkDatabaseConnection();
 
   // Start multi-network event listener for both development and production
   // Note: Currently focused on Solana Devnet only, Celo networks preserved for future re-enablement

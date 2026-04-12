@@ -160,19 +160,14 @@ export class MultiNetworkEventListener {
 }
 
 export function startMultiNetworkEventListener(): MultiNetworkEventListener {
-  const multiListener = new MultiNetworkEventListener();
+  // Signal handlers live in server.ts so shutdown is coordinated across the
+  // HTTP server, DB pool, and listeners. Callers use `stopAllListeners()` and
+  // `closeListenerLogStreams()` to tear down in the right order.
+  return new MultiNetworkEventListener();
+}
 
-  // Handle graceful shutdown — close log streams and stop listeners
-  const shutdown = async (signal: string) => {
-    console.log(`Received ${signal}, stopping all listeners...`);
-    await multiListener.stopAllListeners();
-    closeLogStream();
-    closeSolanaLogStream();
-    process.exit(0);
-  };
-
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-
-  return multiListener;
+/** Close log file handles opened by the listener subsystem. */
+export function closeListenerLogStreams(): void {
+  closeLogStream();
+  closeSolanaLogStream();
 }

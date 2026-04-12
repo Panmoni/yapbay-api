@@ -1,0 +1,14 @@
+[Unit]
+Description=yapbay-api weekly dependency audit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/repos/yapbay-api
+# PATH must include corepack-installed yarn and gh CLI.
+# We deliberately do NOT use `bash -l` — a login shell would source
+# ~/.profile / ~/.bashrc and pull in uncontrolled environment.
+Environment="PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/bin/bash scripts/security/audit-notify.sh
+Restart=no

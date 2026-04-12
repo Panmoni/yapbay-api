@@ -1,0 +1,12 @@
+[Unit]
+Description=Run yapbay-api weekly dependency audit
+
+[Timer]
+# Monday 07:00 local time. Picks up CVEs disclosed over the weekend.
+OnCalendar=Mon *-*-* 07:00:00
+# If the machine was off at the scheduled time, run on next boot.
+Persistent=true
+Unit=yapbay-api-audit.service
+
+[Install]
+WantedBy=timers.target

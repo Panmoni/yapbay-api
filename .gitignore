@@ -10,4 +10,6 @@ api.log
 events.log
 .claude/command-log.txt
 logs/
-backups/solana-events.log
+backups/
+*.sql.bak
+solana-events.log

@@ -1,11 +1,50 @@
-import * as dotenv from 'dotenv';
 import { Pool, type PoolClient } from 'pg';
-
-dotenv.config();
+import { env } from './config/env';
 
 const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL,
+  connectionString: env.POSTGRES_URL,
+  max: env.DB_POOL_MAX,
+  min: env.DB_POOL_MIN,
+  idleTimeoutMillis: env.DB_POOL_IDLE_TIMEOUT_MS,
+  connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS,
+  query_timeout: env.DB_QUERY_TIMEOUT_MS,
+  statement_timeout: env.DB_STATEMENT_TIMEOUT_MS,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
 });
+
+pool.on('error', (err) => {
+  // Silent pool errors otherwise end up as unhandled 'error' events on the
+  // Pool, which Node will re-emit as process 'uncaughtException'. Logging
+  // here keeps them visible without crashing the process.
+  console.error('[DB] Idle client error:', err);
+});
+
+/**
+ * Pre-warm the pool by opening `min` connections in parallel and releasing
+ * them, so first-request latency doesn't include connection setup. Called
+ * from server.ts startup after the initial connection check.
+ */
+export async function warmPool(): Promise<void> {
+  const targetConnections = Math.max(env.DB_POOL_MIN, 1);
+  const results = await Promise.allSettled(
+    Array.from({ length: targetConnections }, () => pool.connect()),
+  );
+  const failures: unknown[] = [];
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      result.value.release();
+    } else {
+      failures.push(result.reason);
+    }
+  }
+  if (failures.length > 0) {
+    const first = failures[0];
+    throw first instanceof Error
+      ? first
+      : new Error(`warmPool: ${failures.length} connection(s) failed`);
+  }
+}
 
 /**
  * Execute a callback within a database transaction.

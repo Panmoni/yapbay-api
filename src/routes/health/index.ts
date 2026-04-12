@@ -10,12 +10,28 @@ import { validateResponse } from '../../middleware/validateResponse';
 import { healthRequestSchemas, healthResponseSchema } from '../../schemas/health';
 import { getListenerHealth } from '../../server';
 import { BlockchainServiceFactory } from '../../services/blockchainService';
+import { getReadiness } from '../../services/healthCheckService';
 import { NetworkService } from '../../services/networkService';
 import { type NetworkConfig, NetworkFamily } from '../../types/networks';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
 import { getVersionInfo } from '../../utils/versionUtils';
 
 const router = express.Router();
+
+// Liveness: returns 200 as long as the process is up. No dependency checks.
+// Intended for systemd/Podman liveness probes.
+router.get('/live', (_req, res: Response) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Readiness: DB + listener + RPC, each sub-check cached ~30s to avoid
+// hammering downstream. 200 when "ok", 503 when "down", 200 when "degraded"
+// (service still usable — e.g. RPC flaky but API can serve cached reads).
+router.get('/ready', async (_req, res: Response) => {
+  const report = await getReadiness();
+  const statusCode = report.status === 'down' ? 503 : 200;
+  res.status(statusCode).json(report);
+});
 
 // Health Check Endpoint (Public)
 router.get(

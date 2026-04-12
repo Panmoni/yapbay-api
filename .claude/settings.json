@@ -35,7 +35,17 @@
       "Bash(ssh-keyscan -t ed25519,rsa -p 2222 192.99.247.151)",
       "Bash(ssh-keygen -lf /tmp/tucker-keys.txt)",
       "Bash(command -v actionlint)",
-      "Bash(actionlint .github/workflows/deploy.yml)"
+      "Bash(actionlint .github/workflows/deploy.yml)",
+      "Bash(yarn add:*)",
+      "Bash(yarn remove:*)",
+      "Read(//home/george9874/.local/bin/**)",
+      "Bash(export PATH=\"$HOME/.local/bin:$PATH\")",
+      "Bash(yarn build:*)",
+      "Bash(yarn test:*)",
+      "Bash(yarn lint:*)",
+      "Bash(yarn lint:fix)",
+      "Bash(yarn check:coercion)",
+      "Bash(yarn format:write)"
     ],
     "additionalDirectories": [
       "/home/george9874/repos/yapbay",

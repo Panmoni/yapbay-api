@@ -7,17 +7,17 @@ Four layers of defense against vulnerable dependencies, cheapest feedback first.
 [scripts/git-hooks/pre-push](../scripts/git-hooks/pre-push) runs three gates
 before every `git push`:
 
-1. Shellcheck on all shell scripts (`yarn lint:shell`)
+1. Shellcheck on all shell scripts (`pnpm lint:shell`)
 2. Amount coercion check (`scripts/check-amount-coercion.sh`) — blocks
    `Number() / parseFloat() / parseInt()` applied to financial amount fields
    in `src/routes`, `src/schemas`, `src/middleware`
-3. `yarn audit --level moderate` — blocks the push if the dep tree has any
+3. `pnpm audit --audit-level moderate` — blocks the push if the dep tree has any
    moderate+ severity vulnerabilities
 
 Install once per clone:
 
 ```bash
-yarn hooks:install
+pnpm hooks:install
 ```
 
 Bypass (sparingly): `git push --no-verify`
@@ -25,7 +25,7 @@ Bypass (sparingly): `git push --no-verify`
 ## 2. GitHub Actions CI (per-push / per-PR / daily)
 
 [.github/workflows/audit.yml](../.github/workflows/audit.yml) runs
-`yarn audit` and (conditionally) `npm audit` on:
+`pnpm audit --audit-level moderate` on:
 
 - every push to `main`
 - every pull request
@@ -51,10 +51,6 @@ and the workflow will also send a direct email to `me@georgedonnelly.com`:
 
 The SMTP step skips silently when `SMTP_HOST` is unset (via job-level
 `HAS_SMTP` env guard).
-
-**npm audit caveat:** the workflow skips `npm audit` when `package-lock.json`
-is absent (we consolidated on yarn, so it usually is). A stray
-`package-lock.json` will re-enable the npm check.
 
 ## 3. Scheduled local audit (tucker, weekly)
 
@@ -96,22 +92,23 @@ bash scripts/security/audit-deps.sh
 Or raw:
 
 ```bash
-yarn audit --level moderate
-npm audit --audit-level=moderate  # only works if package-lock.json exists
+pnpm audit --audit-level moderate
 ```
 
-## Why both yarn and npm?
+## Package manager: pnpm
 
-The project has `yarn.lock` as the canonical lockfile (deleted
-`package-lock.json` to consolidate). Both package managers have their own
-audit databases and lockfile formats; historically they found different
-vulnerabilities in the same tree.
+The project is on **pnpm** (pinned in `package.json` via the
+`packageManager` field). Corepack ships with Node 16+ and auto-selects the
+right pnpm version for every contributor — run `corepack enable` once per
+machine and every `pnpm` command uses the pinned version.
 
-Pinned patches live in two places:
+Pinned patches live in one place:
 
-- `resolutions` in `package.json` — honored by yarn (primary)
-- `overrides` in `package.json` — honored by npm (safety net for anyone who
-  accidentally runs `npm install`)
+- `pnpm.overrides` in `package.json`
+
+An accidental `npm install` or `yarn install` is blocked by the
+`preinstall` script (`npx only-allow pnpm`). `yarn.lock` and
+`package-lock.json` are gitignored to prevent accidental regeneration.
 
 ## Responding to an audit failure
 
@@ -119,16 +116,16 @@ Pinned patches live in two places:
 2. Check exploitability in this project (is the vulnerable code reachable?
    dev-only? production?).
 3. Choose:
-   - **Upgrade the parent package** (cleanest): `yarn upgrade <pkg>`
-   - **Pin a patched transitive**: add `"<pkg>": "<version>"` to both
-     `resolutions` and `overrides` in `package.json`, then `yarn install`
+   - **Upgrade the parent package** (cleanest): `pnpm up <pkg>`
+   - **Pin a patched transitive**: add `"<pkg>": "<version>"` to
+     `pnpm.overrides` in `package.json`, then `pnpm install`
    - **Accept risk** (rare): document in the issue, close with rationale
 
 4. Verify locally:
    ```bash
-   yarn audit --level moderate
-   yarn build
-   yarn test
+   pnpm audit --audit-level moderate
+   pnpm build
+   pnpm test
    ```
 5. Commit and push. CI re-runs the audit and closes the loop.
 

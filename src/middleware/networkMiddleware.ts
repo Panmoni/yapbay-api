@@ -158,7 +158,7 @@ export async function validateNetworkParam(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const networkId = Number.parseInt(req.params.networkId, 10);
+    const networkId = Number.parseInt(String(req.params.networkId), 10);
 
     if (Number.isNaN(networkId)) {
       res.status(400).json({

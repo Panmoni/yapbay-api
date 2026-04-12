@@ -13,6 +13,7 @@ import {
   transactionUserQuerySchema,
 } from '../../schemas/transactions';
 import { getWalletAddressFromJWT } from '../../utils/jwtUtils';
+import { safeJsonParse } from '../../utils/safeJson';
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ router.get(
           t.related_trade_id = $1
       `;
 
-      const params: (string | number)[] = [id];
+      const params: (string | number)[] = [String(id)];
       let paramIndex = 2;
 
       if (type) {
@@ -78,13 +79,9 @@ router.get(
       const transactions = result.map((tx) => {
         let metadata = null;
         if (tx.error_message && tx.status !== 'FAILED') {
-          try {
-            metadata = JSON.parse(tx.error_message);
+          metadata = safeJsonParse(tx.error_message);
+          if (metadata !== null) {
             tx.error_message = null;
-          } catch (error) {
-            console.debug(
-              `Could not parse metadata from error_message: ${(error as Error).message}`,
-            );
           }
         }
 
@@ -170,13 +167,9 @@ router.get(
       const transactions = result.map((tx) => {
         let metadata = null;
         if (tx.error_message && tx.status !== 'FAILED') {
-          try {
-            metadata = JSON.parse(tx.error_message);
+          metadata = safeJsonParse(tx.error_message);
+          if (metadata !== null) {
             tx.error_message = null;
-          } catch (error) {
-            console.debug(
-              `Could not parse metadata from error_message: ${(error as Error).message}`,
-            );
           }
         }
 

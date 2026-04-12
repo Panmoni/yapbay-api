@@ -32,7 +32,7 @@ router.get(
     try {
       const balance = await CeloService.getEscrowBalance(
         networkId,
-        Number.parseInt(onchainEscrowId, 10),
+        Number.parseInt(String(onchainEscrowId), 10),
       );
       res.json({
         network: req.network!.name,
@@ -59,7 +59,7 @@ router.get(
 
     try {
       const contract = await CeloService.getContractForNetwork(networkId);
-      const stored = await contract.getStoredEscrowBalance(onchainEscrowId);
+      const stored = await contract.getStoredEscrowBalance(String(onchainEscrowId));
 
       res.json({
         escrowId: onchainEscrowId,
@@ -85,7 +85,7 @@ router.get(
 
     try {
       const contract = await CeloService.getContractForNetwork(networkId);
-      const calculated = await contract.getCalculatedEscrowBalance(onchainEscrowId);
+      const calculated = await contract.getCalculatedEscrowBalance(String(onchainEscrowId));
 
       res.json({
         escrowId: onchainEscrowId,
@@ -112,7 +112,7 @@ router.get(
     try {
       const sequentialInfo = await CeloService.getSequentialInfo(
         networkId,
-        Number.parseInt(onchainEscrowId, 10),
+        Number.parseInt(String(onchainEscrowId), 10),
       );
 
       res.json({
@@ -141,7 +141,7 @@ router.get(
     try {
       const isEligible = await CeloService.checkAutoCancelEligible(
         networkId,
-        Number.parseInt(onchainEscrowId, 10),
+        Number.parseInt(String(onchainEscrowId), 10),
       );
 
       res.json({

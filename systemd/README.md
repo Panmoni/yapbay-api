@@ -26,7 +26,7 @@ systemctl --user start yapbay-api.service
 
 Before starting, ensure:
 
-1. The image is built: `npm run build-image`
+1. The image is built: `pnpm build-image`
 2. `.env.production` exists with `POSTGRES_URL` set to `postgres://user:password@127.0.0.1:5432/yapbay`
 3. Update the Volume path in `yapbay-api.container` to match your repository location
 

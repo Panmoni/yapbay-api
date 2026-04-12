@@ -6,9 +6,9 @@
 
 ## Four-Step Protocol
 
-1. **Run migrations** (manual) — `npm run migrate`
-2. **Verify schema** — `npm run migrate:health` and `npm run db:health`
-3. **Deploy code** — `npm run deploy`
+1. **Run migrations** (manual) — `pnpm migrate`
+2. **Verify schema** — `pnpm migrate:health` and `pnpm db:health`
+3. **Deploy code** — `pnpm deploy`
 4. **Monitor logs** — Check application logs for schema-related errors
 
 ## Rationale

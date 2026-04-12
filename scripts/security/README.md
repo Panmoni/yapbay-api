@@ -4,20 +4,20 @@ Three layers of defense against vulnerable dependencies:
 
 ## 1. Pre-push hook (local)
 
-Runs `yarn audit --level moderate` before every `git push`. Blocks pushes if
+Runs `pnpm audit --audit-level moderate` before every `git push`. Blocks pushes if
 moderate or higher vulnerabilities are present.
 
 Install once:
 ```bash
-yarn hooks:install
+pnpm hooks:install
 ```
 
 Bypass (sparingly): `git push --no-verify`
 
 ## 2. GitHub Actions (CI)
 
-[.github/workflows/audit.yml](../../.github/workflows/audit.yml) runs `yarn audit`
-and `npm audit` on:
+[.github/workflows/audit.yml](../../.github/workflows/audit.yml) runs `pnpm audit`
+on:
 - every push to `main`
 - every pull request
 - a daily cron (06:00 UTC)
@@ -53,7 +53,7 @@ journalctl --user -u yapbay-api-audit.service -n 100
 ```
 
 ### Requires
-- `yarn` (corepack-installed into `~/.local/bin`)
+- `pnpm` (corepack-installed into `~/.local/bin`)
 - `gh` CLI authenticated: `gh auth status`
 - `jq` for JSON parsing
 

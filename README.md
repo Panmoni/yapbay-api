@@ -48,11 +48,14 @@ git clone https://github.com/Panmoni/yapbay-api.git
 cd yapbay-api
 ```
 
-2. Install dependencies:
+2. Enable pnpm via corepack (one-time per machine) and install dependencies:
 
 ```bash
-npm install
+corepack enable
+pnpm install
 ```
+
+The exact pnpm version is pinned in `package.json` via the `packageManager` field.
 
 3. Set up environment variables:
    Create a `.env` file in the root directory with the following variables:
@@ -76,13 +79,13 @@ psql -U your_username -d your_database -a -f schema.sql
 5. Test the blockchain connection:
 
 ```bash
-npm run test:connection
+pnpm test:connection
 ```
 
 6. Build the project:
 
 ```bash
-npm run build
+pnpm build
 ```
 
 7. Start the server:
@@ -95,7 +98,7 @@ npm start
 For development:
 
 ```bash
-npm run start:dev
+pnpm start:dev
 ```
 
 ```
@@ -172,19 +175,19 @@ Key contract functions include:
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run blockchain-related tests
-npm run test:blockchain
+pnpm test:blockchain
 
 # Test blockchain connection
-npm run test:connection
+pnpm test:connection
 ````
 
 ### Linting
 
 ```bash
-npm run lint
+pnpm lint
 ```
 
 ### Claude Code Hooks
@@ -200,13 +203,13 @@ This repo ships with [Claude Code](https://docs.claude.com/en/docs/claude-code) 
 
 **What the hooks deliberately do *not* do:**
 
-- No auto-running of `npm test` or `npm run test:blockchain` — those tests require a live Postgres connection and hit Celo Alfajores RPC, making them too slow and flaky for per-edit execution. Run them manually before committing.
+- No auto-running of `pnpm test` or `pnpm test:blockchain` — those tests require a live Postgres connection and hit Celo Alfajores RPC, making them too slow and flaky for per-edit execution. Run them manually before committing.
 - No auto-commit on Stop. Commits are only created when explicitly requested.
 - No Prettier invocation — the ESLint config already handles formatting fixes.
 
 **Disabling or bypassing:** to run a command the hook would block (e.g. an intentional destructive operation), run it yourself in a normal shell outside of Claude. To disable the hooks entirely for a session, rename `.claude/settings.json` temporarily. To tweak the blocked patterns, edit the pattern arrays at the top of each script.
 
-**Requirements:** the hooks rely on `jq` being on `PATH`. The post-edit checks call `npx --no-install`, so `eslint` and `typescript` must already be installed via `npm install`.
+**Requirements:** the hooks rely on `jq` being on `PATH`. The post-edit checks call `npx --no-install`, so `eslint` and `typescript` must already be installed via `pnpm install`.
 
 ## Security Considerations
 

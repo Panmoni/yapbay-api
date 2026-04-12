@@ -48,7 +48,15 @@
       "Bash(yarn format:write)",
       "Bash(yarn audit:*)",
       "Bash(yarn why:*)",
-      "Bash(yarn install:*)"
+      "Bash(yarn install:*)",
+      "Bash(yarn hooks:install)",
+      "Bash(yarn lint:shell)",
+      "Bash(export PATH=\"$HOME/.local/bin:$PATH\" YAPBAY_TEST_DB_OVERRIDE=1)",
+      "Bash(YAPBAY_TEST_DB_OVERRIDE=1 yarn test --grep 'Primitives:|Accounts:|Offers:|Trades:|Escrows:|Transactions:|Admin:')",
+      "Bash(YAPBAY_TEST_DB_OVERRIDE=1 npx mocha -r ts-node/register --require src/tests/setup.ts src/tests/schemas/primitives.test.ts)",
+      "Bash(corepack --version)",
+      "Bash(pnpm --version)",
+      "Bash(pnpm install:*)"
     ],
     "additionalDirectories": [
       "/home/george9874/repos/yapbay",

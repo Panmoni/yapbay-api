@@ -1,3 +1,4 @@
+import { trace } from '@opentelemetry/api';
 import type { NextFunction, Request, Response } from 'express';
 import pino from 'pino';
 import { env } from './config/env';
@@ -25,8 +26,20 @@ const transport = isDev
     }
   : undefined;
 
+// Mixin injects the current trace/span id (if any) into every log line so
+// structured logs correlate with OpenTelemetry traces.
+const traceMixin = () => {
+  const span = trace.getActiveSpan();
+  if (!span) {
+    return {};
+  }
+  const ctx = span.spanContext();
+  return { trace_id: ctx.traceId, span_id: ctx.spanId };
+};
+
 export const logger = pino({
   level: isTest ? 'silent' : env.LOG_LEVEL,
+  mixin: traceMixin,
   redact: {
     paths: [
       'req.headers.authorization',

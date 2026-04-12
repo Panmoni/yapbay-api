@@ -45,7 +45,10 @@
       "Bash(yarn lint:*)",
       "Bash(yarn lint:fix)",
       "Bash(yarn check:coercion)",
-      "Bash(yarn format:write)"
+      "Bash(yarn format:write)",
+      "Bash(yarn audit:*)",
+      "Bash(yarn why:*)",
+      "Bash(yarn install:*)"
     ],
     "additionalDirectories": [
       "/home/george9874/repos/yapbay",

@@ -4,6 +4,20 @@
 
 This document provides comprehensive guidance for testing the YapBay API, with a focus on Solana network integration and multi-network testing capabilities.
 
+## Test-Database Safeguard
+
+All test runs are gated by [src/tests/setup.ts](./setup.ts), registered globally via `.mocharc.json`. Before any test body executes, the guard aborts the run unless **all** of these hold:
+
+- `POSTGRES_URL` is set and parseable.
+- `NODE_ENV` is not `production`.
+- The URL host does not appear in the comma-separated `YAPBAY_PROD_DB_HOSTS` blocklist (use this to explicitly list known-prod hosts and refuse them).
+- The database name ends in `_test` (e.g. `yapbay_test`).
+
+To bypass the `_test` suffix requirement during local experimentation, set `YAPBAY_TEST_DB_OVERRIDE=1`. A loud warning is logged. The production and host-allowlist checks cannot be bypassed.
+
+The guard runs for **every** entrypoint — `npm test`, `npm run test:blockchain`, `npm run test:deadline`, etc. — because Mocha always loads `.mocharc.json`.
+
+
 ## Table of Contents
 
 1. [Test Environment Setup](#test-environment-setup)

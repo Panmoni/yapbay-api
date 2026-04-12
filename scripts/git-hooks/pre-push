@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
-# Pre-push hook: run shellcheck against all shell scripts to catch issues
-# before they reach CI / the deploy pipeline.
+# Pre-push hook: run local checks before code reaches GitHub.
 #
 # Install with:  npm run hooks:install
 # Bypass with:   git push --no-verify   (use sparingly)
 
 set -euo pipefail
 
-echo "pre-push: running shellcheck..."
-exec npm run -s lint:shell
+echo "pre-push: shellcheck..."
+npm run -s lint:shell
+
+echo "pre-push: amount coercion check..."
+bash scripts/check-amount-coercion.sh
+
+echo "pre-push: dependency audit (yarn)..."
+# --level moderate means Low findings (typically dev-only DoS) don't block pushes.
+# To fix blocking Lows, update deps and commit yarn.lock.
+if ! yarn audit --level moderate >/dev/null 2>&1; then
+  echo "FAIL: yarn audit found moderate+ severity vulnerabilities."
+  echo "Run 'yarn audit' to see details, then fix or add a resolution."
+  exit 1
+fi
+
+echo "pre-push: all checks passed."

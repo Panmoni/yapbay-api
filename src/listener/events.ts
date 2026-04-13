@@ -72,6 +72,14 @@ export async function startEventListener() {
 
       let senderAddress = null;
       let receiverAddress = null;
+      // Track whether the first switch produced a recognised event. If not,
+      // the downstream `recordTransaction` call is SKIPPED — writing a
+      // transaction row with NULL sender/receiver for an unknown event
+      // variant creates an unreconcilable ledger gap. The rest of the
+      // function (dispute-specific handling further down) still runs,
+      // since DisputeOpened / DisputeResponse / DisputeResolved /
+      // SequentialAddressUpdated are handled by a later switch.
+      let recognisedFinancialEvent = true;
 
       // Extract sender and receiver addresses based on event type
       switch (parsed.name) {
@@ -99,7 +107,9 @@ export async function startEventListener() {
           senderAddress = defaultNetwork.contractAddress;
           receiverAddress = defaultNetwork.contractAddress;
           break;
-        // Add other cases as needed
+        default:
+          recognisedFinancialEvent = false;
+          break;
       }
 
       // Create metadata object to store in error_message field
@@ -123,21 +133,39 @@ export async function startEventListener() {
         }
       }
 
-      const transactionId = await recordTransaction({
-        transaction_hash: log.transactionHash,
-        status: 'SUCCESS',
-        type: transactionType,
-        block_number: log.blockNumber,
-        sender_address: senderAddress,
-        receiver_or_contract_address: receiverAddress,
-        error_message: Object.keys(metadataObj).length > 0 ? JSON.stringify(metadataObj) : null,
-        related_trade_id: tradeIdValue,
-        network_id: defaultNetwork.id,
-      });
+      // Only write to the `transactions` ledger table when we recognised
+      // the event and have real sender/receiver addresses. Unknown event
+      // variants (Dispute* handled later, or truly new variants) must not
+      // create audit rows with null parties — the reconciliation job keys
+      // on sender/receiver to attribute funds movement.
+      let transactionId: number | null = null;
+      if (recognisedFinancialEvent) {
+        transactionId = await recordTransaction({
+          transaction_hash: log.transactionHash,
+          status: 'SUCCESS',
+          type: transactionType,
+          block_number: log.blockNumber,
+          sender_address: senderAddress,
+          receiver_or_contract_address: receiverAddress,
+          error_message: Object.keys(metadataObj).length > 0 ? JSON.stringify(metadataObj) : null,
+          related_trade_id: tradeIdValue,
+          network_id: defaultNetwork.id,
+        });
+      } else {
+        console.error(
+          `[listener] event ${parsed.name} (tx=${log.transactionHash}, block=${log.blockNumber}) ` +
+            'not in financial-event set; skipping transactions-table insert to avoid null-party ledger row. ' +
+            'Add a case to the first switch in src/listener/events.ts if this is a new financial event.',
+        );
+      }
 
       // Ensure log_index is never null (use 0 as default if missing)
       const logIndex = log.logIndex === undefined ? 0 : log.logIndex;
 
+      // contract_events is a raw event log separate from the transactions
+      // ledger; log every event here even when the transaction insert was
+      // skipped. transactionId is NULL in that case — acceptable because
+      // the table's FK to transactions is nullable.
       const params = [
         parsed.name,
         log.blockNumber,

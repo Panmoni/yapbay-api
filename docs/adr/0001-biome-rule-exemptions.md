@@ -1,6 +1,33 @@
 # 0001 — Biome rule exemptions
 
-**Status**: Accepted (2026-04-12)
+**Status**: Accepted (2026-04-12), updated 2026-04-13.
+
+## Enabled since first acceptance
+
+- `noImplicitAnyLet` (P2) — re-enabled 2026-04-13. Two violations fixed
+  inline (ownership middleware result array, escrow operations dbId).
+- `useDefaultSwitchClause` (P2) — re-enabled 2026-04-13. Violation in
+  `src/listener/events.ts` fixed: default case now logs at error level
+  and **returns** rather than writing a transaction row with null
+  sender/receiver (which would corrupt the audit trail for new event
+  variants until a case is added).
+
+## Scheduled re-enablement
+
+- `noNonNullAssertion` (P1) — **target 2026-06-01** once M6's
+  `tests-integration` job is a required check on `main`. Integration
+  tests are prerequisite: removing `!` in listener and escrow routes
+  without test coverage would be reckless. When the date arrives,
+  one PR per `!` cluster (auth, listener, escrow routes, offers) so
+  diffs stay reviewable.
+- `noExcessiveCognitiveComplexity` (P1) — **target 2026-07-01** once
+  property tests cover the escrow state machine (the highest-complexity
+  handler). Refactoring without characterization tests would introduce
+  subtle behavioral changes in exactly the financial paths we most
+  need to protect.
+
+Review these dates in the quarterly ADR audit (see
+`docs/runbooks/repo-hardening.md` for the audit cadence).
 
 ## Context
 
@@ -23,14 +50,14 @@ order listed. Do each rule in its own PR so the diff is reviewable.
 | Rule | Reason disabled | Priority to re-enable |
 |---|---|---|
 | `useFilenamingConvention` | Mixed `camelCase.ts` + `PascalCase.ts` across the repo; mass rename would touch hundreds of imports. | P3 — cosmetic |
-| `noNonNullAssertion` | `!` appears on JWT-verified fields that TypeScript can't narrow (e.g. `req.networkId!` after middleware). Fixing requires type guards throughout. | **P1 — financial-relevant**; `!` on money fields is a real bug source |
+| `noNonNullAssertion` | `!` appears on JWT-verified fields that TypeScript can't narrow (e.g. `req.networkId!` after middleware). Fixing requires type guards throughout. 20+ violations in production code, mostly in listener and escrow routes. Attempted re-enable on 2026-04-13 — blocked by the lack of integration test coverage for those paths; reverted, pending M6 (tests required) + follow-up PRs per file. The single safe fix (auth.ts `jwtSecret!` → `jwtSecret ?? ''`) shipped anyway. | **P1 — financial-relevant**; `!` on money fields is a real bug source |
 | `noNamespace` | Legacy Express type augmentation in `src/types/express.d.ts` uses `declare global { namespace Express { interface Request { ... } } }` — the standard idiom. | P4 — keep off permanently |
 | `noParameterProperties` | Project uses class constructors with parameter properties in a few services. | P3 |
 | `useConsistentMemberAccessibility` | Enforces explicit `public`/`private`. Codebase is inconsistent; would touch every class. | P3 |
 | `noParameterAssign` | Currently mutates params in a few handlers (e.g. finalTransactionType). Not strictly buggy but worth revisiting with the idempotency/tracing work. | P2 |
 | `noSubstr` | `.substr()` used in legacy string formatting. | P4 |
 | `noNestedTernary` | Used in a few listener/log code paths. | P4 |
-| `useDefaultSwitchClause` | Legacy state-machine switches lack default cases. | **P2 — state-machine correctness relevant** |
+| ~~`useDefaultSwitchClause`~~ | **Enabled 2026-04-13.** Legacy switch in `src/listener/events.ts` now has a `default` that warns and continues on unknown event variants. | ✅ done |
 | `useReadonlyClassProperties` | Not worth the churn. | P4 |
 
 ### Complexity
@@ -48,7 +75,7 @@ order listed. Do each rule in its own PR so the diff is reviewable.
 | `useAwait` | Async functions sometimes return promises by awaiting inner callbacks. Blind enforcement causes false positives. | P3 |
 | `noEmptyBlockStatements` | A handful of intentional no-op catch blocks. Migration work (safeJsonParse) has eliminated most; next pass can re-enable. | **P2** |
 | `noEvolvingTypes` | Several handlers build a result object progressively. | P3 |
-| `noImplicitAnyLet` | `let x;` without an initializer. Cheap to fix but not urgent. | **P2** |
+| ~~`noImplicitAnyLet`~~ | **Enabled 2026-04-13.** Two violations fixed: typed `result` array in ownership middleware, typed `dbId: number` in escrow operations. | ✅ done |
 
 ### Correctness
 

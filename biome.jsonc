@@ -20,7 +20,6 @@
         "noParameterAssign": "off",
         "noSubstr": "off",
         "noNestedTernary": "off",
-        "useDefaultSwitchClause": "off",
         "useReadonlyClassProperties": "off"
       },
       "complexity": {
@@ -31,8 +30,7 @@
       "suspicious": {
         "useAwait": "off",
         "noEmptyBlockStatements": "off",
-        "noEvolvingTypes": "off",
-        "noImplicitAnyLet": "off"
+        "noEvolvingTypes": "off"
       },
       "correctness": {
         "noGlobalDirnameFilename": "off"

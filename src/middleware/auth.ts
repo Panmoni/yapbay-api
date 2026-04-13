@@ -62,9 +62,12 @@ export const requireJWT = (req: AuthenticatedRequest, res: Response, next: NextF
     ...(jwtAudience ? { audience: jwtAudience } : {}),
   };
 
+  // jwtSecret is guaranteed non-empty for HS256 by the check above (line 54).
+  // Narrow it here for type safety without a non-null assertion.
+  const hs256Secret = jwtSecret ?? '';
   const verifier =
     alg === 'HS256'
-      ? (cb: jwt.VerifyCallback) => jwt.verify(token, jwtSecret!, verifyOptions, cb)
+      ? (cb: jwt.VerifyCallback) => jwt.verify(token, hs256Secret, verifyOptions, cb)
       : (cb: jwt.VerifyCallback) => jwt.verify(token, getKey, verifyOptions, cb);
   verifier((err, decoded) => {
     if (err) {

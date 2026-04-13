@@ -102,7 +102,7 @@ router.post(
           [escrow_id, networkId],
         );
 
-        let dbId;
+        let dbId: number;
 
         if (existingEscrow.length > 0) {
           dbId = existingEscrow[0].id;

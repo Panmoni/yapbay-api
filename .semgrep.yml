@@ -1,0 +1,159 @@
+# Semgrep SAST rules for yapbay-api.
+#
+# Scanned in CI on every PR. Rules are grouped by theme:
+#   - general security (eval, unsafe deserialization)
+#   - financial-domain (decimal/money safety)
+#   - supply-chain hygiene (raw JSON.parse on request paths)
+#
+# Registry rules (p/javascript, p/typescript, p/owasp-top-ten, p/security-audit)
+# are pulled separately by the Semgrep action in the security-scan workflow —
+# this file holds only the custom, yapbay-specific rules.
+
+rules:
+  # ── Financial-domain rules ────────────────────────────────────────────
+  - id: yapbay-no-float-on-money
+    message: >-
+      Do not apply Number()/parseFloat()/parseInt() to fields matching money
+      semantics (amount, balance, fee, price). Use `decimalMath` (src/db.ts)
+      which converts via BigInt micro-units. Float arithmetic on USDC values
+      loses precision at ~15 significant digits and can cause off-by-one
+      errors in ledger writes.
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      exclude:
+        - '**/*.test.ts'
+        - '**/*.spec.ts'
+        - 'src/tests/**'
+        - 'scripts/**'
+        - 'dist/**'
+    patterns:
+      - pattern-either:
+          - pattern: Number($X)
+          - pattern: parseFloat($X)
+          - pattern: parseInt($X, ...)
+          - pattern: +$X
+      - metavariable-regex:
+          metavariable: $X
+          regex: '.*(amount|balance|fee|price|total|cost)(_[a-z]+)?$'
+
+  - id: yapbay-no-decimal-multiply-add
+    message: >-
+      Arithmetic operators on identifiers matching money semantics must go
+      through `decimalMath` (toMicro/fromMicro). Direct +, -, *, / drops
+      precision on decimal values.
+    severity: WARNING
+    languages: [typescript, javascript]
+    paths:
+      exclude:
+        - '**/*.test.ts'
+        - '**/*.spec.ts'
+        - 'src/tests/**'
+        - 'src/utils/decimalMath.ts'
+        - 'src/db.ts'
+        - 'scripts/**'
+        - 'dist/**'
+    patterns:
+      - pattern-either:
+          - pattern: $A + $B
+          - pattern: $A - $B
+          - pattern: $A * $B
+          - pattern: $A / $B
+      # Match either operand — a naive rule that only checks $A misses
+      # `2 * userBalance` while catching `userBalance * 2`.
+      - pattern-either:
+          - metavariable-regex:
+              metavariable: $A
+              regex: '.*(amount|balance|fee|price|total|cost)(_[a-z]+)?$'
+          - metavariable-regex:
+              metavariable: $B
+              regex: '.*(amount|balance|fee|price|total|cost)(_[a-z]+)?$'
+
+  - id: yapbay-no-compound-assign-on-money
+    message: >-
+      Compound assignment (+=, -=, *=, /=) on a money-named variable drops
+      precision the same way `a + b` does. Convert via decimalMath first.
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      exclude:
+        - '**/*.test.ts'
+        - '**/*.spec.ts'
+        - 'src/tests/**'
+        - 'src/utils/decimalMath.ts'
+        - 'src/db.ts'
+        - 'scripts/**'
+        - 'dist/**'
+    patterns:
+      - pattern-either:
+          - pattern: $X += $Y
+          - pattern: $X -= $Y
+          - pattern: $X *= $Y
+          - pattern: $X /= $Y
+      - metavariable-regex:
+          metavariable: $X
+          regex: '.*(amount|balance|fee|price|total|cost)(_[a-z]+)?$'
+
+  # ── Input validation ─────────────────────────────────────────────────
+  - id: yapbay-no-raw-json-parse-on-request
+    message: >-
+      Use safeJsonParse (src/utils/safeJson.ts) instead of raw JSON.parse on
+      request body data. Raw parse throws on malformed input, which, without
+      a try/catch, 500s the request and leaks stack traces.
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      include:
+        - 'src/routes/**'
+        - 'src/middleware/**'
+      exclude:
+        - '**/*.test.ts'
+        - '**/*.spec.ts'
+    pattern: JSON.parse(...)
+
+  # ── General security ─────────────────────────────────────────────────
+  - id: yapbay-no-eval
+    message: eval() is never required for this codebase.
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      exclude: ['**/*.test.ts', 'scripts/**', 'dist/**']
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+
+  - id: yapbay-no-math-random-for-tokens
+    message: >-
+      Math.random() is not cryptographically secure. Use crypto.randomUUID()
+      or crypto.randomBytes() for any token, nonce, or key material.
+    severity: ERROR
+    languages: [typescript, javascript]
+    paths:
+      exclude: ['**/*.test.ts', 'scripts/**', 'dist/**']
+    patterns:
+      - pattern: Math.random()
+      # Heuristic: only warn when the surrounding context looks security-sensitive.
+      # Keep false-positives low by limiting to assignments/returns with suggestive names.
+      - pattern-either:
+          - pattern-inside: |
+              const $X = ...;
+          - pattern-inside: |
+              return ...;
+      - metavariable-regex:
+          metavariable: $X
+          regex: '.*(token|nonce|secret|key|salt|iv|id)$'
+
+  - id: yapbay-no-sha1-md5-for-security
+    message: >-
+      SHA-1 and MD5 are broken for security purposes. Use SHA-256 or better
+      (crypto.createHash('sha256')). Non-security deduplication use cases are
+      fine — add `// semgrep-ignore-next-line: not-security-sensitive`.
+    severity: WARNING
+    languages: [typescript, javascript]
+    paths:
+      exclude: ['**/*.test.ts', 'scripts/**', 'dist/**']
+    pattern-either:
+      - pattern: createHash('md5')
+      - pattern: createHash('sha1')
+      - pattern: createHash("md5")
+      - pattern: createHash("sha1")

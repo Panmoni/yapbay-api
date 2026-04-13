@@ -1,0 +1,80 @@
+# gitleaks config for yapbay-api.
+#
+# Extends the default ruleset with yapbay-specific patterns for JWT secrets,
+# Postgres DSNs, Solana keypairs (64-byte byte array literals), and Dynamic
+# SDK env IDs. Run in CI on every PR and locally via the pre-commit hook.
+#
+# Docs: https://github.com/gitleaks/gitleaks/blob/master/README.md
+
+title = "yapbay-api gitleaks config"
+
+[extend]
+# Start from the built-in default ruleset rather than reinventing common
+# patterns (AWS keys, Slack tokens, Stripe keys, private keys, etc.).
+useDefault = true
+
+# ── Custom rules ──────────────────────────────────────────────────────
+
+[[rules]]
+id = "yapbay-postgres-dsn"
+description = "Postgres connection string with credentials"
+regex = '''postgres(ql)?://[^\s'"]+:[^\s'"]+@[^\s'"]+'''
+tags = ["secret", "database"]
+
+[[rules]]
+id = "yapbay-jwt-secret-literal"
+description = "JWT_SECRET assigned to a non-placeholder literal"
+# 32+ chars enforces the 256-bit floor for HS256 secrets. The common
+# placeholders (your-jwt-secret, change-me, etc.) are allowlisted below.
+regex = '''(?i)jwt[_-]?secret\s*[:=]\s*["']?([A-Za-z0-9_\-+/=]{32,})["']?'''
+tags = ["secret", "auth"]
+[rules.allowlist]
+description = "docs + example placeholders"
+regexes = [
+  '''(?i)(your[_-]jwt[_-]?secret|change[_-]?me|replace[_-]?me|placeholder|example|todo|<[^>]+>|ci-test-secret-not-used-outside-ci)''',
+]
+
+[[rules]]
+id = "yapbay-solana-keypair-bytes"
+description = "Solana keypair exported as a 64-byte JSON array"
+# Solana CLI exports keypairs as exactly 64 decimal entries — match that
+# length precisely to keep false positives off unrelated numeric arrays.
+regex = '''\[\s*(\d{1,3}\s*,\s*){63}\d{1,3}\s*\]'''
+tags = ["secret", "blockchain"]
+[rules.allowlist]
+description = "test fixtures and docs"
+paths = [
+  '''src/tests/.*''',
+  '''src/contracts/.*''',
+  '''docs/.*''',
+]
+
+[[rules]]
+id = "yapbay-dynamic-env-id"
+description = "Dynamic.xyz SDK environment id looks like a UUID"
+# Dynamic env IDs are normal UUIDs. We only flag them when they appear
+# *inside literal source* rather than being fetched from env. The public
+# env id in the JWKS URL (middleware/auth.ts) is already public so
+# whitelist by path.
+regex = '''(DYNAMIC_ENV_ID|dynamic[_-]?env[_-]?id)\s*[:=]\s*["']?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}["']?'''
+tags = ["config"]
+
+# ── Global allowlist ──────────────────────────────────────────────────
+
+[allowlist]
+description = "files we don't care about leaking from"
+paths = [
+  '''node_modules/.*''',
+  '''dist/.*''',
+  '''pnpm-lock\.yaml''',
+  '''\.git/.*''',
+  '''backups/.*''',
+  '''logs/.*''',
+  # Example/placeholder files intentionally contain token-shaped strings.
+  '''env\.example''',
+  '''docs/api-ref\.md''',
+]
+regexes = [
+  # Git object hashes + commit SHAs look vaguely secret-ish.
+  '''\b[0-9a-f]{40}\b''',
+]

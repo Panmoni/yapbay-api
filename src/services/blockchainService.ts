@@ -2,6 +2,7 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { ethers } from 'ethers';
 import type { NetworkInfo } from '../types/api';
 import { type NetworkConfig, NetworkFamily, NetworkType } from '../types/networks';
+import { getBreaker } from '../utils/circuitBreaker';
 
 export interface BlockchainService {
   getBlockExplorerUrl(txHash: string): string;
@@ -76,8 +77,16 @@ export class SolanaBlockchainService implements BlockchainService {
 
   async getNetworkInfo(): Promise<NetworkInfo> {
     try {
-      const version = await this.connection.getVersion();
-      const slot = await this.connection.getSlot();
+      // Breaker scoped per network so a single flaky RPC doesn't trip other
+      // chains. Both RPC calls fire in parallel inside a single breaker
+      // invocation so the returned {version, slot} pair is consistent with
+      // a single RPC snapshot — fetching them separately could straddle an
+      // endpoint rollover.
+      const breaker = getBreaker(`solana-rpc:${this.network.name}`);
+      const { version, slot } = await breaker.fire(async () => {
+        const [v, s] = await Promise.all([this.connection.getVersion(), this.connection.getSlot()]);
+        return { version: v, slot: s };
+      });
 
       return {
         version: version['solana-core'],

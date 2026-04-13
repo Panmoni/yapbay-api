@@ -5,6 +5,7 @@ import { Connection, type ParsedTransactionWithMeta, PublicKey } from '@solana/w
 import { query, recordTransaction, type TransactionType } from '../db';
 import { SolanaService } from '../services/solanaService';
 import type { NetworkConfig } from '../types/networks';
+import { getBreaker } from '../utils/circuitBreaker';
 
 const logFilePath = path.join(process.cwd(), 'solana-events.log');
 const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
@@ -102,9 +103,12 @@ export class SolanaEventListener {
         return;
       }
 
-      // Test connection and program ID
+      // Test connection and program ID (circuit-breaker-wrapped so a flaky
+      // RPC doesn't stall listener startup indefinitely).
       try {
-        const programInfo = await this.connection.getAccountInfo(this.programId!);
+        const programInfo = await getBreaker(`solana-rpc:${this.network.name}`).fire(() =>
+          this.connection.getAccountInfo(this.programId!),
+        );
         if (!programInfo) {
           console.log(
             `⚠️  Program ${this.programId!.toBase58()} not found on ${
@@ -135,21 +139,28 @@ export class SolanaEventListener {
         // Continue without full event parsing - we can still detect transactions
       }
 
-      // Start real-time event monitoring
-      this.subscriptionId = this.connection.onLogs(
-        this.programId!,
-        (logs, context) => {
-          this.parseTransactionLogs(
-            {
-              slot: context.slot,
-              transaction: {},
-              meta: { logMessages: logs.logs },
-              // biome-ignore lint/suspicious/noExplicitAny: Solana log subscription callback shape doesn't match full transaction type
-            } as any,
-            logs.signature,
-          );
-        },
-        'confirmed',
+      // Start real-time event monitoring. The subscribe call itself runs
+      // under the circuit breaker so a flapping RPC counts as failure — the
+      // long-lived WS subscription afterward isn't tracked per-event (no
+      // opossum hook exists for streaming). Individual parse failures
+      // bubble up as logs, not breaker counts.
+      const breaker = getBreaker(`solana-rpc:${this.network.name}`);
+      this.subscriptionId = await breaker.fire(async () =>
+        this.connection.onLogs(
+          this.programId!,
+          (logs, context) => {
+            this.parseTransactionLogs(
+              {
+                slot: context.slot,
+                transaction: {},
+                meta: { logMessages: logs.logs },
+                // biome-ignore lint/suspicious/noExplicitAny: Solana log subscription callback shape doesn't match full transaction type
+              } as any,
+              logs.signature,
+            );
+          },
+          'confirmed',
+        ),
       );
 
       this.isRunning = true;

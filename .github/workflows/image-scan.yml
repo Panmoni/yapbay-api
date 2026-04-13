@@ -1,0 +1,111 @@
+name: Container Image Scan
+
+# Builds the container image in CI and scans it with Trivy for OS + lang
+# vulnerabilities, plus emits an SBOM via Syft. Runs:
+#   - on changes to Containerfile or dependency manifests
+#   - weekly (catches newly-disclosed CVEs against otherwise-unchanged images)
+#   - manually via workflow_dispatch
+#
+# Not a deploy gate yet — advisory signal while the image-build pipeline is
+# still SSH-based in deploy.yml. Flip to required once CI-built images feed
+# deploys directly.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Containerfile'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.npmrc'
+      - '.github/workflows/image-scan.yml'
+  pull_request:
+    paths:
+      - 'Containerfile'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.npmrc'
+  schedule:
+    - cron: '0 7 * * 1'  # Mondays 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write  # upload SARIF to the Security tab
+
+concurrency:
+  group: image-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # Docker is pre-installed on GitHub-hosted runners; the Containerfile
+      # is OCI-compliant, so buildx reads it like any Dockerfile.
+      - name: Build image
+        run: |
+          docker buildx build \
+            -f Containerfile \
+            -t yapbay-api:scan \
+            --load \
+            .
+
+      - name: Trivy vulnerability scan (table output in logs)
+        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # 0.30.0
+        with:
+          image-ref: yapbay-api:scan
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: os,library
+
+      # On failure, dump the image to disk so a human can pull it back and
+      # reproduce the Trivy finding locally. Retained 7 days.
+      - name: Save failing image for debugging
+        if: failure()
+        run: docker image save yapbay-api:scan -o yapbay-api-scan.tar
+      - name: Upload failing image as artifact
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: yapbay-api-scan-image
+          path: yapbay-api-scan.tar
+          retention-days: 7
+
+      - name: Trivy SARIF upload (always, even on pass)
+        if: always()
+        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # 0.30.0
+        with:
+          image-ref: yapbay-api:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload SARIF to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@b56ba49b26e50535fa1e7f7db0f4f7b4bf65d80d # v3.28.8
+        with:
+          sarif_file: trivy-results.sarif
+
+      # Syft emits a CycloneDX JSON SBOM for the image. Upload as an artifact
+      # so we keep a verifiable dependency snapshot per build.
+      - name: Generate SBOM (syft, CycloneDX)
+        uses: anchore/sbom-action@f325610c9f50a54015d37c8d16cb3b0e2c8f4de0 # v0.18.0
+        with:
+          image: yapbay-api:scan
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          upload-artifact-retention: 90
+
+      - name: Upload SBOM as workflow artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cyclonedx.json
+          retention-days: 90

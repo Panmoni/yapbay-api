@@ -20,7 +20,9 @@ concurrency:
 jobs:
   stryker:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Increased from 60 → 90 after adding safeJson to the mutate list.
+    # Revisit when idempotency joins (will need DB fixture + more time).
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0

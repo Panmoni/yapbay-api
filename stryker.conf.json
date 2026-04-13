@@ -5,12 +5,11 @@
   "reporters": ["progress", "clear-text", "html", "json"],
   "testRunner": "mocha",
   "mochaOptions": {
-    "config": ".mocharc.json",
-    "spec": ["src/tests/**/*.property.test.ts"]
+    "config": ".mocharc.stryker.json"
   },
   "coverageAnalysis": "perTest",
-  "_comment_mutate": "Only files with dedicated property/unit tests. idempotency + safeJson return when tests exist — leaving them in now produces a meaningless 0% score.",
-  "mutate": ["src/utils/decimalMath.ts"],
+  "_comment_mutate": "Files with dedicated property/unit tests. decimalMath + safeJson run via `test:property` (no DB). idempotency is covered by `test:integration` against the docker-compose fixture and is mutated separately once the fixture is wired into CI.",
+  "mutate": ["src/utils/decimalMath.ts", "src/utils/safeJson.ts"],
   "ignorers": [],
   "thresholds": {
     "high": 90,
@@ -19,6 +18,7 @@
   },
   "checkers": ["typescript"],
   "tsconfigFile": "tsconfig.json",
-  "timeoutMS": 60000,
+  "_comment_timeout": "Per-mutant timeout (not per-run). Stryker kills a mutant that runs longer than this. Low enough to keep runaway mutants from burning workflow time, high enough that real property tests (which run 500 iterations with fast-check) complete.",
+  "timeoutMS": 30000,
   "concurrency": 2
 }

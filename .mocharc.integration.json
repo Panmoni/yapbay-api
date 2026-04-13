@@ -1,0 +1,9 @@
+{
+  "_comment": "Integration test profile. Runs only *.integration.test.ts files. Requires the docker-compose.test.yml fixture to be running and bootstrapped via scripts/test-db-bootstrap.sh. setup.ts enforces the _test DB suffix.",
+  "require": ["ts-node/register", "src/tests/setup.ts"],
+  "spec": "src/tests/**/*.integration.test.ts",
+  "timeout": 30000,
+  "recursive": true,
+  "exit": true,
+  "extensions": ["ts"]
+}

@@ -1,0 +1,9 @@
+{
+  "_comment": "Mocha profile for Stryker mutation testing. Deliberately omits the test-DB guard from src/tests/setup.ts because Stryker runs property tests only — no DB access, no need for the _test-suffix check.",
+  "require": ["ts-node/register"],
+  "spec": "src/tests/**/*.property.test.ts",
+  "timeout": 30000,
+  "recursive": true,
+  "exit": true,
+  "extensions": ["ts"]
+}

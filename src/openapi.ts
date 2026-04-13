@@ -141,6 +141,18 @@ openApiRegistry.registerPath({
   },
 });
 
+// ── Per-route registrations (imports trigger registerPath side effects) ─
+// Ordered by how often the routes are documented-against in practice so
+// the common ones appear first in the generated paths map.
+import './openapi/registrations/public';
+import './openapi/registrations/auth';
+import './openapi/registrations/admin';
+import './openapi/registrations/accounts';
+import './openapi/registrations/offers';
+import './openapi/registrations/trades';
+import './openapi/registrations/escrows';
+import './openapi/registrations/transactions';
+
 // ── Generator ────────────────────────────────────────────────────────
 
 export function generateOpenApiDocument() {

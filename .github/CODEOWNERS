@@ -1,0 +1,37 @@
+# CODEOWNERS — automatic reviewer assignment.
+#
+# Path-based ownership for code review. Changes to files in a matched path
+# automatically request review from the listed owner(s). Last matching rule
+# wins, so order matters: more specific paths go later.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+
+# Global default — everything reviewed by the repo owner unless a more
+# specific rule below overrides.
+*                               @georgedonnelly
+
+# ── Financial hot path ────────────────────────────────────────────────
+# These paths touch money directly. Require explicit review even if the
+# author is the owner — the PR template checklist must be completed.
+/src/utils/decimalMath.ts       @georgedonnelly
+/src/middleware/idempotency.ts  @georgedonnelly
+/src/routes/transactions/       @georgedonnelly
+/src/routes/escrows/            @georgedonnelly
+/src/routes/trades/             @georgedonnelly
+/src/jobs/                      @georgedonnelly
+/migrations/                    @georgedonnelly
+/src/db.ts                      @georgedonnelly
+
+# ── Security surface ──────────────────────────────────────────────────
+/src/middleware/auth.ts         @georgedonnelly
+/src/middleware/rateLimiting.ts @georgedonnelly
+/src/middleware/httpsEnforcement.ts @georgedonnelly
+/.semgrep.yml                   @georgedonnelly
+/.gitleaks.toml                 @georgedonnelly
+/.github/workflows/             @georgedonnelly
+
+# ── Infrastructure ────────────────────────────────────────────────────
+/Containerfile                  @georgedonnelly
+/.npmrc                         @georgedonnelly
+/scripts/deploy-remote.sh       @georgedonnelly
+/systemd/                       @georgedonnelly

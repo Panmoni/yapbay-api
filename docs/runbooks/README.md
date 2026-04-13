@@ -10,6 +10,7 @@ have shell access to the API host and psql access to the primary DB.
 - [rpc-failover.md](rpc-failover.md) — Solana / Celo RPC is degraded
 - [deploy-rollback.md](deploy-rollback.md) — revert a bad deploy
 - [reconciliation-breach.md](reconciliation-breach.md) — escrow balance mismatch alert
+- [repo-hardening.md](repo-hardening.md) — one-time GitHub settings (branch protection, signed commits, Dependabot, secret scanning)
 
 ## Conventions
 

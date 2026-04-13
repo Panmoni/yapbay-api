@@ -6,6 +6,13 @@ All endpoints except those marked as public require a valid JWT token in the Aut
 Authorization: Bearer <jwt_token>
 ```
 
+## Machine-readable spec
+
+- [`/openapi.json`](../openapi.json) — OpenAPI 3.1 document (machine-generated from Zod schemas via `src/openapi.ts`).
+- [`/api-docs`](../api-docs) — Swagger UI.
+
+The spec currently covers the observability endpoints (`/health/*`, `/metrics`). Per-route schemas across `/accounts`, `/offers`, `/trades`, `/escrows`, `/transactions` are migrated incrementally — this document remains authoritative until coverage reaches ~100%.
+
 ## Idempotency
 
 Mutating endpoints under `/transactions`, `/escrows`, and `/trades` accept an

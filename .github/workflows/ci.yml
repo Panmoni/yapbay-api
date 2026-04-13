@@ -41,6 +41,25 @@ jobs:
       - name: Dependency audit
         run: pnpm audit --audit-level moderate
 
+      # Financial-safety guard: fails the build if any code under
+      # src/routes, src/schemas, or src/middleware applies Number()/parseFloat
+      # to an identifier matching money semantics (amount, balance, fee,
+      # price). Complements the Semgrep rule in .semgrep.yml — this guard is
+      # cheap and catches most regressions locally before Semgrep even runs.
+      - name: Amount coercion guard
+        run: pnpm run check:coercion
+
+      # Commit message lint on PRs: every commit in the PR range must match
+      # Conventional Commits. Skipped on push-to-main since history there is
+      # already protected by PR gate.
+      - name: commitlint PR range
+        if: github.event_name == 'pull_request'
+        run: |
+          pnpm exec commitlint \
+            --from ${{ github.event.pull_request.base.sha }} \
+            --to ${{ github.event.pull_request.head.sha }} \
+            --verbose
+
   # Advisory-only for now. Wired up but not required — the current Mocha suite
   # depends on a live Postgres + blockchain fixtures that aren't reproducible
   # in CI yet. Flip `continue-on-error: false` and mark this job a required

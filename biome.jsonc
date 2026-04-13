@@ -57,6 +57,12 @@
       }
     },
     {
+      "includes": ["scripts/load-test/**"],
+      "javascript": {
+        "globals": ["__ENV", "__VU", "__ITER"]
+      }
+    },
+    {
       "includes": ["**/*.test.ts", "**/*.spec.ts", "src/tests/**"],
       "linter": {
         "rules": {

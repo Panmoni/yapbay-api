@@ -76,13 +76,14 @@ jobs:
         run: |
           set -euo pipefail
           base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
-          curl -fsSL -o gitleaks.tar.gz "${base}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -fsSL -o checksums.txt   "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
-          # Verify the tarball before extracting. --ignore-missing lets us keep
-          # only the linux_x64 line relevant to this runner; any mismatch aborts.
-          grep "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" checksums.txt \
-            | sha256sum -c -
-          tar -xzf gitleaks.tar.gz gitleaks
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          # Keep the upstream filename so the checksum line matches what
+          # `sha256sum -c` expects on disk — saving under a different name
+          # would make verification fail with "No such file or directory".
+          curl -fsSL -o "${tarball}" "${base}/${tarball}"
+          curl -fsSL -o checksums.txt "${base}/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep "${tarball}" checksums.txt | sha256sum -c -
+          tar -xzf "${tarball}" gitleaks
           sudo mv gitleaks /usr/local/bin/gitleaks
           gitleaks version
 

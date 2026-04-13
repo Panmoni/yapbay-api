@@ -126,6 +126,12 @@ export function mapPgError(err: unknown): PgErrorMapping | null {
         message: 'A value failed a database check constraint',
         fields,
       };
+    case 'YB001': // yapbay: finalized_row (migration 0038 triggers)
+      return {
+        status: 409,
+        code: 'resource_finalized',
+        message: 'This resource is in a terminal state and cannot be modified or deleted.',
+      };
     case '22P02': // invalid_text_representation
       return {
         status: 400,

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# commit-msg hook: enforce Conventional Commits via commitlint.
+#
+# Install with:  pnpm run hooks:install
+# Bypass with:   git commit --no-verify   (use sparingly; will not pass CI)
+
+set -euo pipefail
+
+# $1 is the path to the file containing the commit message. pnpm exec
+# runs commitlint from the workspace's node_modules.
+if ! pnpm exec commitlint --edit "$1"; then
+  echo
+  echo "commit message does not follow Conventional Commits."
+  echo "format: <type>(<scope>): <description>"
+  echo "types : feat, fix, refactor, docs, style, perf, test, build, ci, chore"
+  exit 1
+fi

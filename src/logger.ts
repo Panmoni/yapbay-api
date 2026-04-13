@@ -92,7 +92,7 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction) =
       path: req.path,
       status: res.statusCode,
       durationMs: duration,
-      requestId: req.requestId,
+      requestId: (req as Request & { requestId?: string }).requestId,
     };
     if (env.LOG_BODY) {
       entry.body = req.body;

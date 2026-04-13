@@ -1,5 +1,6 @@
 import { Pool, type PoolClient } from 'pg';
 import { env } from './config/env';
+import { decimalMath as _decimalMath } from './utils/decimalMath';
 
 const pool = new Pool({
   connectionString: env.POSTGRES_URL,
@@ -66,55 +67,11 @@ export async function withTransaction<T>(callback: (client: PoolClient) => Promi
   }
 }
 
-/**
- * Safe decimal arithmetic helpers to avoid floating-point errors on financial values.
- * All amounts use 6 decimal places (USDC standard).
- */
-const DECIMAL_PLACES = 6;
-const SCALE = 10 ** DECIMAL_PLACES;
-
-export const decimalMath = {
-  /** Convert a decimal string/number to integer micro-units for safe arithmetic */
-  toMicro(value: string | number): bigint {
-    const str = typeof value === 'number' ? value.toFixed(DECIMAL_PLACES) : value;
-    const [whole = '0', frac = ''] = str.split('.');
-    const paddedFrac = frac.padEnd(DECIMAL_PLACES, '0').slice(0, DECIMAL_PLACES);
-    return BigInt(whole) * BigInt(SCALE) + BigInt(paddedFrac);
-  },
-
-  /** Convert micro-units back to a decimal string */
-  fromMicro(micro: bigint): string {
-    const isNegative = micro < 0n;
-    const abs = isNegative ? -micro : micro;
-    const whole = abs / BigInt(SCALE);
-    const frac = (abs % BigInt(SCALE)).toString().padStart(DECIMAL_PLACES, '0');
-    const sign = isNegative ? '-' : '';
-    return `${sign}${whole}.${frac}`;
-  },
-
-  /** Subtract b from a, returning decimal string */
-  subtract(a: string | number, b: string | number): string {
-    return decimalMath.fromMicro(decimalMath.toMicro(a) - decimalMath.toMicro(b));
-  },
-
-  /** Compare: returns -1 if a < b, 0 if equal, 1 if a > b */
-  compare(a: string | number, b: string | number): number {
-    const diff = decimalMath.toMicro(a) - decimalMath.toMicro(b);
-    return diff < 0n ? -1 : diff > 0n ? 1 : 0;
-  },
-
-  /** Parse a value safely, returning null if not a valid number */
-  parse(value: unknown): string | null {
-    if (value === null || value === undefined) {
-      return null;
-    }
-    const num = Number(value);
-    if (!Number.isFinite(num)) {
-      return null;
-    }
-    return num.toFixed(DECIMAL_PLACES);
-  },
-};
+// Re-export decimalMath so existing call sites `import { decimalMath } from '../db'`
+// keep working. Implementation lives in a side-effect-free module under
+// src/utils/ so it can be imported from tests and scripts without bringing
+// up the full DB pool.
+export { decimalMath } from './utils/decimalMath';
 
 export async function query(text: string, params?: unknown[]) {
   let retries = 3; // Number of retries for transient errors
@@ -161,7 +118,7 @@ export async function syncEscrowBalance(
   contractBalance: string,
   reason?: string,
 ) {
-  const balanceInDecimal = decimalMath.parse(contractBalance);
+  const balanceInDecimal = _decimalMath.parse(contractBalance);
   if (balanceInDecimal === null) {
     console.error(`[DB] Invalid balance value for escrow ${onchainEscrowId}: ${contractBalance}`);
     return;

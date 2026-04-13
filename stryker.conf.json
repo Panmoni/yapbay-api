@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing for the financial hot path. Runs nightly; not a per-PR gate (too slow). Target >80% mutation score on decimalMath + idempotency.",
+  "packageManager": "pnpm",
+  "reporters": ["progress", "clear-text", "html", "json"],
+  "testRunner": "mocha",
+  "mochaOptions": {
+    "config": ".mocharc.json",
+    "spec": ["src/tests/**/*.property.test.ts"]
+  },
+  "coverageAnalysis": "perTest",
+  "_comment_mutate": "Only files with dedicated property/unit tests. idempotency + safeJson return when tests exist — leaving them in now produces a meaningless 0% score.",
+  "mutate": ["src/utils/decimalMath.ts"],
+  "ignorers": [],
+  "thresholds": {
+    "high": 90,
+    "low": 80,
+    "break": 70
+  },
+  "checkers": ["typescript"],
+  "tsconfigFile": "tsconfig.json",
+  "timeoutMS": 60000,
+  "concurrency": 2
+}

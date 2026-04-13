@@ -6,19 +6,26 @@ All endpoints except those marked as public require a valid JWT token in the Aut
 Authorization: Bearer <jwt_token>
 ```
 
-## Machine-readable spec
+## Machine-readable spec (canonical)
 
-- [`/openapi.json`](../openapi.json) — OpenAPI 3.1 document (machine-generated from Zod schemas via `src/openapi.ts`).
-- [`/api-docs`](../api-docs) — Swagger UI.
+- [`/openapi.json`](../openapi.json) — OpenAPI 3.1 document generated from Zod schemas at server start. **This is the source of truth.**
+- [`/api-docs`](../api-docs) — Swagger UI. Includes "Try it out" against any registered endpoint.
 
-The spec currently covers the observability endpoints (`/health/*`, `/metrics`). Per-route schemas across `/accounts`, `/offers`, `/trades`, `/escrows`, `/transactions` are migrated incrementally — this document remains authoritative until coverage reaches ~100%.
+Every route under `src/routes/` registers itself via `src/openapi/registrations/*.ts`. A contract test (`pnpm test:contract`) fails the build if a router handler ships without a matching OpenAPI path registration, so this doc cannot drift.
+
+The sections below summarize contracts that Swagger doesn't render as readably (idempotency header semantics, response-field conventions). For specific request/response shapes, **read the spec** rather than this file.
 
 ## Idempotency
 
-Mutating endpoints under `/transactions`, `/escrows`, and `/trades` accept an
-optional `Idempotency-Key` header. Send it on any `POST`/`PUT`/`PATCH`/`DELETE`
-whose re-execution would be unsafe (escrow creation, trade state change,
-transaction recording).
+Mutating endpoints under `/transactions`, `/escrows`, and `/trades`:
+
+- **`/transactions/*` and `/escrows/*`** mutating verbs (POST/PUT/PATCH/DELETE)
+  **require** the `Idempotency-Key` header. Requests without it are rejected
+  with `400 missing_idempotency_key`. These two surfaces are the
+  highest-impact replay-vulnerable write paths (ledger row + escrow record
+  creation), so the key is mandatory.
+- **`/trades/*`** mutating verbs accept the header optionally. Recommended for
+  state-transition mutations (e.g. MARK_FIAT_PAID) but not strictly required.
 
 Contract:
 - **Format**: a UUID v4, lowercased. Example: `Idempotency-Key: 9d6b9e4c-3a2f-4f1a-8b8d-2b5a6e0f5b21`.

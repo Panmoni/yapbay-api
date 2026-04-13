@@ -5,10 +5,11 @@ import recordRouter from './record';
 
 const router = express.Router();
 
-// Idempotency applies to mutating verbs only (filtered inside middleware).
-// Currently permissive — key is honored when present, not required, to keep
-// existing clients working. Flip to `{ required: true }` once rolled out.
-router.use(idempotency());
+// Mutating verbs under /transactions MUST carry a valid Idempotency-Key.
+// POST /transactions is the hottest replay-vulnerable write path — a
+// client retry after a network failure must never create a second ledger
+// row. GET requests pass through unaffected.
+router.use(idempotency({ required: true }));
 
 // Mount transaction routes
 router.use('/', recordRouter);

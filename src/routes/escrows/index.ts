@@ -5,7 +5,12 @@ import operationsRouter from './operations';
 
 const router = express.Router();
 
-router.use(idempotency());
+// Mutating verbs under /escrows (POST/PUT/PATCH/DELETE) MUST carry a valid
+// Idempotency-Key. Financial double-write (double-recorded escrow creation)
+// is the single worst failure mode here, so the middleware is strict.
+// GET requests pass through unaffected — the middleware only gates
+// mutating verbs.
+router.use(idempotency({ required: true }));
 
 // Mount operations routes
 router.use('/', operationsRouter);

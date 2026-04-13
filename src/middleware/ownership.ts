@@ -18,7 +18,7 @@ export const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: 
       const table = resourceType === 'account' ? 'accounts' : 'offers';
       const column = resourceType === 'account' ? 'wallet_address' : 'creator_account_id';
 
-      let result;
+      let result: Record<string, unknown>[];
       if (resourceType === 'offer' && req.networkId) {
         // For offers, include network filtering
         result = await query(`SELECT ${column} FROM ${table} WHERE id = $1 AND network_id = $2`, [
@@ -46,8 +46,19 @@ export const restrictToOwner = (resourceType: 'account' | 'offer', resourceKey: 
           res.status(404).json({ error: `Creator account for ${resourceType} not found` });
           return;
         }
-        ownerWalletAddress = accountCheck[0].wallet_address;
+        const raw = accountCheck[0].wallet_address;
+        if (typeof raw !== 'string' || raw === '') {
+          // Schema drift or soft-deleted account — fail loudly rather than
+          // crashing on .toLowerCase(). 404 is the closest HTTP contract.
+          res.status(404).json({ error: 'Creator account wallet_address missing' });
+          return;
+        }
+        ownerWalletAddress = raw;
       } else {
+        if (typeof ownerField !== 'string' || ownerField === '') {
+          res.status(404).json({ error: `${resourceType} has no wallet_address` });
+          return;
+        }
         ownerWalletAddress = ownerField;
       }
 

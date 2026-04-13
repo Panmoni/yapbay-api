@@ -10,6 +10,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cron from 'node-cron';
 import pool, { warmPool } from './db';
+import { fetchSolanaEscrowBalance } from './jobs/fetchSolanaEscrowBalance';
+import { reconcileEscrowBalances } from './jobs/reconcileEscrowBalances';
 import {
   closeListenerLogStreams,
   type MultiNetworkEventListener,
@@ -24,6 +26,7 @@ import { defaultRateLimit, suspiciousPatternRateLimit } from './middleware/rateL
 import { requestIdMiddleware } from './middleware/requestId';
 import { serverTimingMiddleware } from './middleware/serverTiming';
 import { getMatchedPattern, isSuspiciousRequest } from './middleware/suspiciousPatternDetection';
+import { openApiJsonHandler, swaggerUiMiddleware } from './openapi';
 import routes from './routes';
 import { expireDeadlines } from './services/deadlineService';
 import { monitorExpiredEscrows } from './services/escrowMonitoringService';
@@ -155,6 +158,24 @@ async function startServer(): Promise<void> {
       }
     }),
   );
+
+  // Daily balance reconciliation at 04:00 UTC. Compares on-chain escrow
+  // balance against DB `current_balance`; logs + webhooks mismatches. Never
+  // writes corrections — human review per runbook.
+  const reconcileSchedule = process.env.RECONCILE_CRON_SCHEDULE || '0 4 * * *';
+  if (process.env.RECONCILE_ENABLED !== 'false') {
+    scheduledTasks.push(
+      cron.schedule(reconcileSchedule, async () => {
+        try {
+          logger.info('[Scheduler] Running escrow reconciliation');
+          await reconcileEscrowBalances(fetchSolanaEscrowBalance);
+        } catch (e) {
+          logger.error({ err: e }, '[Scheduler] reconciliation error');
+        }
+      }),
+    );
+    console.log(`[Scheduler] Scheduled reconciliation job: ${reconcileSchedule}`);
+  }
 
   const app = express();
   const isProduction = process.env.NODE_ENV === 'production';
@@ -314,6 +335,13 @@ async function startServer(): Promise<void> {
   // ── 12b. Prometheus metrics middleware + endpoint ──────────────────────
   app.use(metricsMiddleware);
   app.get('/metrics', metricsHandler);
+
+  // ── 12c. OpenAPI spec + Swagger UI ─────────────────────────────────────
+  // /openapi.json is the machine-readable contract; /api-docs is the
+  // Swagger UI. Both are public — they describe the API surface without
+  // exposing secrets.
+  app.get('/openapi.json', openApiJsonHandler);
+  app.use('/api-docs', ...swaggerUiMiddleware);
 
   // ── 13. Routes ─────────────────────────────────────────────────────────
   app.use('/', routes);

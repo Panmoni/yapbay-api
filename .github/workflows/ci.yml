@@ -63,8 +63,70 @@ jobs:
   # Advisory-only for now. Wired up but not required — the current Mocha suite
   # depends on a live Postgres + blockchain fixtures that aren't reproducible
   # in CI yet. Flip `continue-on-error: false` and mark this job a required
-  # check once the suite is CI-ready (see plan M5 fallback strategy).
-  tests:
+  # Fast pure tests that don't need a DB: property tests (decimalMath,
+  # safeJson) + OpenAPI contract test. Required.
+  tests-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Property tests
+        run: pnpm test:property
+      - name: OpenAPI contract test
+        run: pnpm test:contract
+
+  # Integration tests that need a real Postgres. Required. Uses the same
+  # postgres service container the legacy `tests` job used, plus the
+  # bootstrap script + migration runner, so advisory locks and partial
+  # unique indexes the idempotency middleware depends on are present.
+  tests-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: yapbay
+          POSTGRES_PASSWORD: yapbay
+          POSTGRES_DB: yapbay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yapbay"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_URL: postgres://yapbay:yapbay@localhost:5432/yapbay_test
+      JWT_SECRET: ci-test-secret-not-used-outside-ci
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply schema
+        run: psql "$POSTGRES_URL" -f schema.sql
+      - name: Apply migrations
+        # Override flag is safe: DB name ends in `_test`. Set explicitly so
+        # the migration runner's safety check can't drift silently.
+        run: YAPBAY_TEST_DB_OVERRIDE=1 pnpm migrate
+      - name: Integration tests
+        run: pnpm test:integration
+
+  # Legacy Solana-dependent mocha suite. Advisory-only for now — many tests
+  # need live devnet access and are flaky in CI. Keep visible so we know
+  # when a PR breaks a covered path, but don't block merges on it.
+  tests-legacy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     continue-on-error: true
@@ -88,18 +150,19 @@ jobs:
       NODE_ENV: test
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
       - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
-
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 20
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
-
       - name: Apply schema
         run: psql "$POSTGRES_URL" -f schema.sql
-
-      - name: Run tests
+      - name: Apply migrations
+        # Legacy tests depend on tables created by migrations 0035-0038
+        # (idempotency_records, immutability triggers). Applying schema.sql
+        # alone produces spurious "table does not exist" failures that mask
+        # real legacy-test regressions.
+        run: YAPBAY_TEST_DB_OVERRIDE=1 pnpm migrate
+      - name: Run legacy tests
         run: pnpm test

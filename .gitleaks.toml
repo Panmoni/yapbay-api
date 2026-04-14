@@ -20,6 +20,15 @@ id = "yapbay-postgres-dsn"
 description = "Postgres connection string with credentials"
 regex = '''postgres(ql)?://[^\s'"]+:[^\s'"]+@[^\s'"]+'''
 tags = ["secret", "database"]
+[[rules.allowlists]]
+description = "documented placeholder credentials and local test clusters"
+regexTarget = "match"
+regexes = [
+  # Common literal placeholders used in docs, READMEs, docker-compose,
+  # systemd units, and test-harness scripts. Real credentials are never
+  # the literal string 'user', 'yapbay', or 'password'.
+  '''://(yapbay|user|username|postgres):(yapbay|user|pass|password|PASSWD|PASSWORD)@''',
+]
 
 [[rules]]
 id = "yapbay-jwt-secret-literal"
@@ -73,8 +82,16 @@ paths = [
   # Example/placeholder files intentionally contain token-shaped strings.
   '''env\.example''',
   '''docs/api-ref\.md''',
+  # Test files with Solana base58 public keys (not secrets — public keys
+  # are safe to publish; the built-in generic-api-key rule flags their
+  # high-entropy encoding).
+  '''src/tests/schemas/.*\.test\.ts''',
+  '''src/contracts/solana/.*\.ts''',
 ]
 regexes = [
   # Git object hashes + commit SHAs look vaguely secret-ish.
   '''\b[0-9a-f]{40}\b''',
+  # Post-redaction placeholder strings left in git history by
+  # `git filter-repo --replace-text` — these are sentinels, not secrets.
+  '''REDACTED_(CELO_KEY|PGPASSWORD)''',
 ]

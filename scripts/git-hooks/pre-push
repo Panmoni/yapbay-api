@@ -24,7 +24,7 @@ echo "pre-push: dependency audit (pnpm)..."
 audit_out=$(pnpm audit --audit-level moderate 2>&1) && audit_rc=0 || audit_rc=$?
 if [ "$audit_rc" -eq 0 ]; then
   :
-elif echo "$audit_out" | grep -qE "ERR_PNPM_AUDIT_BAD_RESPONSE|410"; then
+elif echo "$audit_out" | grep -q "ERR_PNPM_AUDIT_BAD_RESPONSE"; then
   echo "WARN: pnpm audit endpoint unreachable (upstream 410 / retired endpoint)."
   echo "      This is not a vulnerability finding — skipping the check."
   echo "      Fix by upgrading pnpm once it ships the bulk-advisory endpoint."

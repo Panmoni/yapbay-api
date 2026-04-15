@@ -51,7 +51,7 @@ jobs:
           if pnpm audit --audit-level moderate | tee pnpm-audit.txt; then
             exit 0
           fi
-          if grep -qE "ERR_PNPM_AUDIT_BAD_RESPONSE|410" pnpm-audit.txt; then
+          if grep -q "ERR_PNPM_AUDIT_BAD_RESPONSE" pnpm-audit.txt; then
             echo "::warning::pnpm audit endpoint unreachable (upstream 410 / retired endpoint)"
             echo "This is not a vulnerability finding. Skipping until pnpm upgrades."
             exit 0

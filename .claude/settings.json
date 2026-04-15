@@ -64,7 +64,8 @@
       "Bash(pnpm hooks:install)",
       "Bash(rsync -e 'ssh -p 2222' -az /home/george9874/repos/yapbay-api/Containerfile /home/george9874/repos/yapbay-api/package.json /home/george9874/repos/yapbay-api/pnpm-lock.yaml /home/george9874/repos/yapbay-api/.npmrc george9874@192.99.247.151:/tmp/yapbay-containerfile-test/)",
       "Bash(rsync -e 'ssh -p 2222' -az --exclude node_modules --exclude dist --exclude .git --exclude logs --exclude backups . george9874@192.99.247.151:/tmp/yapbay-containerfile-test/)",
-      "Bash(pnpm lint:shell)"
+      "Bash(pnpm lint:shell)",
+      "Bash(GIT_SEQUENCE_EDITOR=\"sed -i -e '/^pick e4c402e/d' -e '/^pick d244f95/d'\" git rebase -i a933d0c)"
     ],
     "additionalDirectories": [
       "/home/george9874/repos/yapbay",

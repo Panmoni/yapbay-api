@@ -41,9 +41,22 @@ jobs:
 
       - name: pnpm audit (moderate+)
         id: pnpm_audit
+        # npm retired the quick-audit endpoint in 2026 (HTTP 410). pnpm 10.x
+        # still calls it, so a raw exit-1 can mean either "real vulns found"
+        # or "upstream endpoint is gone". Tease them apart so the scheduled
+        # run doesn't open a bogus [security] issue every night until pnpm
+        # ships the bulk-advisory endpoint.
         run: |
           set -o pipefail
-          pnpm audit --audit-level moderate | tee pnpm-audit.txt
+          if pnpm audit --audit-level moderate | tee pnpm-audit.txt; then
+            exit 0
+          fi
+          if grep -qE "ERR_PNPM_AUDIT_BAD_RESPONSE|410" pnpm-audit.txt; then
+            echo "::warning::pnpm audit endpoint unreachable (upstream 410 / retired endpoint)"
+            echo "This is not a vulnerability finding. Skipping until pnpm upgrades."
+            exit 0
+          fi
+          exit 1
 
       # On failure, open a GitHub issue tagged [security]. GitHub's
       # notification system emails me@georgedonnelly.com when the configured

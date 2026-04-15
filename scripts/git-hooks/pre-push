@@ -15,7 +15,20 @@ bash scripts/check-amount-coercion.sh
 echo "pre-push: dependency audit (pnpm)..."
 # --audit-level moderate means Low findings (typically dev-only DoS) don't
 # block pushes. To fix blocking Lows, update deps and commit pnpm-lock.yaml.
-if ! pnpm audit --audit-level moderate >/dev/null 2>&1; then
+#
+# npm retired the quick-audit endpoint in 2026 (returns HTTP 410). pnpm 10.x
+# still calls it, so every `pnpm audit` fails with ERR_PNPM_AUDIT_BAD_RESPONSE
+# on networks that reach the real npm registry. Distinguish that from a real
+# vulnerability finding so the hook doesn't block indefinitely on upstream
+# infrastructure rot.
+audit_out=$(pnpm audit --audit-level moderate 2>&1) && audit_rc=0 || audit_rc=$?
+if [ "$audit_rc" -eq 0 ]; then
+  :
+elif echo "$audit_out" | grep -qE "ERR_PNPM_AUDIT_BAD_RESPONSE|410"; then
+  echo "WARN: pnpm audit endpoint unreachable (upstream 410 / retired endpoint)."
+  echo "      This is not a vulnerability finding — skipping the check."
+  echo "      Fix by upgrading pnpm once it ships the bulk-advisory endpoint."
+else
   echo "FAIL: pnpm audit found moderate+ severity vulnerabilities."
   echo "Run 'pnpm audit' to see details, then fix or add a pnpm.overrides entry."
   exit 1

@@ -53,18 +53,27 @@ rules:
         - 'src/db.ts'
         - 'scripts/**'
         - 'dist/**'
-    patterns:
-      - pattern-either:
-          - pattern: $A + $B
-          - pattern: $A - $B
-          - pattern: $A * $B
-          - pattern: $A / $B
-      # Match either operand — a naive rule that only checks $A misses
-      # `2 * userBalance` while catching `userBalance * 2`.
-      - pattern-either:
+    # Match either operand — `userBalance * 2` (money name as $A) or
+    # `2 * userBalance` (money name as $B). Semgrep 1.159+ rejects having
+    # `metavariable-regex` directly inside a `pattern-either`, so this is
+    # split into two parallel `patterns` branches, each pairing the four
+    # operator patterns with one of the two metavariable filters.
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: $A + $B
+              - pattern: $A - $B
+              - pattern: $A * $B
+              - pattern: $A / $B
           - metavariable-regex:
               metavariable: $A
               regex: '.*(amount|balance|fee|price|total|cost)(_[a-z]+)?$'
+      - patterns:
+          - pattern-either:
+              - pattern: $A + $B
+              - pattern: $A - $B
+              - pattern: $A * $B
+              - pattern: $A / $B
           - metavariable-regex:
               metavariable: $B
               regex: '.*(amount|balance|fee|price|total|cost)(_[a-z]+)?$'

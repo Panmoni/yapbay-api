@@ -3,7 +3,7 @@ import path from 'node:path';
 import * as dotenv from 'dotenv';
 import type { LogDescription, ParamType } from 'ethers';
 import { CeloService } from '../celo';
-import pool, { query, recordTransaction, type TransactionType } from '../db';
+import pool, { decimalMath, query, recordTransaction, type TransactionType } from '../db';
 import { NetworkService } from '../services/networkService';
 
 dotenv.config();
@@ -197,8 +197,12 @@ export async function startEventListener() {
           const buyer = parsed.args.buyer as string;
           const arbitrator = parsed.args.arbitrator as string;
           const amount = parsed.args.amount.toString();
-          // Convert blockchain amount (with 6 decimals) to database decimal format
-          const _amountInDecimal = Number(amount) / 1_000_000;
+          // On-chain amount is an integer in micro-units (6 decimals). Convert
+          // via BigInt -> decimalMath so the value written to escrows.amount
+          // stays exact at every scale. `Number(amount) / 1e6` is a
+          // ledger-corruption hazard above ~$9B per escrow and gets caught by
+          // the yapbay-no-float-on-money semgrep rule.
+          const amountInDecimal = decimalMath.fromMicro(BigInt(amount));
           const depositTs = Number(parsed.args.deposit_deadline.toString());
           const fiatTs = Number(parsed.args.fiat_deadline.toString());
           const depositDate = new Date(depositTs * 1000);
@@ -250,7 +254,7 @@ export async function startEventListener() {
                 seller,
                 buyer,
                 arbitrator,
-                _amountInDecimal,
+                amountInDecimal,
                 'CREATED',
                 sequential,
                 seqAddr,
@@ -438,8 +442,9 @@ export async function startEventListener() {
           const counter = parsed.args.counter.toString();
           const amount = parsed.args.amount.toString();
 
-          // Convert blockchain amount (with 6 decimals) to database decimal format
-          const amountInDecimal = Number(amount) / 1_000_000;
+          // On-chain amount is an integer in micro-units (6 decimals). See the
+          // EscrowCreated handler above for rationale on using decimalMath.
+          const amountInDecimal = decimalMath.fromMicro(BigInt(amount));
 
           // Update the escrow state and balance
           await query(
@@ -714,8 +719,9 @@ export async function startEventListener() {
           const newBalance = parsed.args.newBalance.toString();
           const reason = parsed.args.reason as string;
 
-          // Convert blockchain amount (with 6 decimals) to database decimal format
-          const balanceInDecimal = Number(newBalance) / 1_000_000;
+          // On-chain amount is an integer in micro-units (6 decimals). See the
+          // EscrowCreated handler above for rationale on using decimalMath.
+          const balanceInDecimal = decimalMath.fromMicro(BigInt(newBalance));
 
           await query(
             'UPDATE escrows SET current_balance = $1, updated_at = CURRENT_TIMESTAMP WHERE onchain_escrow_id = $2',

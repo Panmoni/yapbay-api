@@ -1,0 +1,10 @@
+# Path exclusions applied to every semgrep scan in this repo. Same syntax
+# as .gitignore. Prefer this file over per-rule `paths: exclude:` blocks
+# for whole-directory carve-outs — keeps .semgrep.yml focused on rule
+# logic and makes exclusions easy to audit at a glance.
+
+# Solana program test harness kept in-tree as reference documentation of
+# the on-chain contract. Already excluded from tsconfig.json for the same
+# reason — imports resolve against Anchor build artifacts that live in the
+# contract repo, not here.
+src/contracts/solana/

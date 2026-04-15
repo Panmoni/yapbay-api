@@ -8,6 +8,12 @@
 # Registry rules (p/javascript, p/typescript, p/owasp-top-ten, p/security-audit)
 # are pulled separately by the Semgrep action in the security-scan workflow —
 # this file holds only the custom, yapbay-specific rules.
+#
+# Path conventions: all `paths:` globs are prefixed with `**/` so they match
+# anywhere in the tree regardless of the semgrep working directory. Semgrep's
+# Semgrepignore v2 (Gitignore-compatible) treats unprefixed patterns as
+# repo-root-anchored, which breaks when invoked from CI runners that checkout
+# to nested paths.
 
 rules:
   # ── Financial-domain rules ────────────────────────────────────────────
@@ -24,9 +30,14 @@ rules:
       exclude:
         - '**/*.test.ts'
         - '**/*.spec.ts'
-        - 'src/tests/**'
-        - 'scripts/**'
-        - 'dist/**'
+        - '**/src/tests/**'
+        # Reference copy of the Solana program's own test harness kept in
+        # this repo as documentation of the on-chain contract's behavior.
+        # Not compiled, not executed by our mocha runner — imports resolve
+        # against Anchor build artifacts that only exist in the contract
+        # repo.
+        - '**/scripts/**'
+        - '**/dist/**'
     patterns:
       - pattern-either:
           - pattern: Number($X)
@@ -48,11 +59,11 @@ rules:
       exclude:
         - '**/*.test.ts'
         - '**/*.spec.ts'
-        - 'src/tests/**'
-        - 'src/utils/decimalMath.ts'
-        - 'src/db.ts'
-        - 'scripts/**'
-        - 'dist/**'
+        - '**/src/tests/**'
+        - '**/src/utils/decimalMath.ts'
+        - '**/src/db.ts'
+        - '**/scripts/**'
+        - '**/dist/**'
     # Match either operand — `userBalance * 2` (money name as $A) or
     # `2 * userBalance` (money name as $B). Semgrep 1.159+ rejects having
     # `metavariable-regex` directly inside a `pattern-either`, so this is
@@ -88,11 +99,11 @@ rules:
       exclude:
         - '**/*.test.ts'
         - '**/*.spec.ts'
-        - 'src/tests/**'
-        - 'src/utils/decimalMath.ts'
-        - 'src/db.ts'
-        - 'scripts/**'
-        - 'dist/**'
+        - '**/src/tests/**'
+        - '**/src/utils/decimalMath.ts'
+        - '**/src/db.ts'
+        - '**/scripts/**'
+        - '**/dist/**'
     patterns:
       - pattern-either:
           - pattern: $X += $Y
@@ -113,8 +124,8 @@ rules:
     languages: [typescript, javascript]
     paths:
       include:
-        - 'src/routes/**'
-        - 'src/middleware/**'
+        - '**/src/routes/**'
+        - '**/src/middleware/**'
       exclude:
         - '**/*.test.ts'
         - '**/*.spec.ts'
@@ -126,7 +137,7 @@ rules:
     severity: ERROR
     languages: [typescript, javascript]
     paths:
-      exclude: ['**/*.test.ts', 'scripts/**', 'dist/**']
+      exclude: ['**/*.test.ts', '**/scripts/**', '**/dist/**']
     pattern-either:
       - pattern: eval(...)
       - pattern: new Function(...)
@@ -138,7 +149,7 @@ rules:
     severity: ERROR
     languages: [typescript, javascript]
     paths:
-      exclude: ['**/*.test.ts', 'scripts/**', 'dist/**']
+      exclude: ['**/*.test.ts', '**/scripts/**', '**/dist/**']
     patterns:
       - pattern: Math.random()
       # Heuristic: only warn when the surrounding context looks security-sensitive.
@@ -160,7 +171,7 @@ rules:
     severity: WARNING
     languages: [typescript, javascript]
     paths:
-      exclude: ['**/*.test.ts', 'scripts/**', 'dist/**']
+      exclude: ['**/*.test.ts', '**/scripts/**', '**/dist/**']
     pattern-either:
       - pattern: createHash('md5')
       - pattern: createHash('sha1')

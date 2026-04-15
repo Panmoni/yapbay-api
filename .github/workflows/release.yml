@@ -42,10 +42,24 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: 20
+          # semantic-release requires Node ^22.14 || >=24.10 since its
+          # 2026-03 release. The API runtime still targets Node 20 — this
+          # is only the version used to run the release tooling in CI.
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # Explicit identity on the `chore(release)` commits that
+      # @semantic-release/git pushes back to main. The plugin has its own
+      # `semantic-release-bot` fallback, but pinning to the GitHub-issued
+      # github-actions identity keeps release commits consistent with other
+      # automation in this repo and plays cleanly with any future commit
+      # signing / verified-author rules.
+      - name: Configure git identity for release bot
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Run semantic-release
         env:

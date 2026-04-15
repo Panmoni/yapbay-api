@@ -13,8 +13,11 @@ name: Release
 # so it doesn't loop.
 
 on:
-  push:
-    branches: [main]
+  # Auto-release on push to main disabled after an accidental v1.0.0 release.
+  # Re-enable deliberately once the team has agreed on versioning policy,
+  # changelog discipline, and when in the merge cycle releases should fire.
+  # For now, releases are manual: "Run workflow" in the GitHub Actions UI.
+  workflow_dispatch:
 
 permissions:
   contents: write        # push CHANGELOG + package.json bump, create tags
@@ -29,9 +32,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Skip if the commit that triggered this workflow was itself the release
-    # bump (avoid infinite loops).
-    if: "!contains(github.event.head_commit.message, 'chore(release)')"
+    # Previously guarded against infinite loops when this workflow was
+    # push-triggered and its own `chore(release)` commit would re-fire it.
+    # Not needed under workflow_dispatch — a human has to click the button.
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

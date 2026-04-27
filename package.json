@@ -137,7 +137,8 @@
       "diff": "8.0.3",
       "serialize-javascript": "7.0.5",
       "follow-redirects": ">=1.16.0",
-      "protobufjs": ">=7.5.5"
+      "protobufjs": ">=7.5.5",
+      "uuid": ">=14.0.0"
     }
   },
   "lint-staged": {

@@ -15,7 +15,12 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 
 # Install all dependencies (dev + prod). --frozen-lockfile refuses to
 # modify the lockfile; fails the build if pnpm-lock.yaml is out of sync.
-RUN pnpm install --frozen-lockfile --shamefully-hoist
+# Cache mount on the pnpm store: persists across podman builds so the
+# ~946 tarballs are downloaded once per machine, not once per deploy.
+# A rebuild after a lockfile-only change drops from ~6m to ~30s.
+# `sharing=locked` serializes concurrent builds against the same cache.
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --shamefully-hoist
 
 # Copy source code
 COPY . .
@@ -43,8 +48,11 @@ RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 # Copy package files, lockfile, and .npmrc
 COPY package.json pnpm-lock.yaml .npmrc ./
 
-# Install production dependencies only
-RUN pnpm install --frozen-lockfile --shamefully-hoist --prod
+# Install production dependencies only. Same cache mount as the builder
+# stage — both stages share the pnpm store so prod-only resolution
+# benefits from the dev install's already-fetched tarballs.
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --shamefully-hoist --prod
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist

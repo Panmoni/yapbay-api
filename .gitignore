@@ -16,3 +16,6 @@ solana-events.log
 # Consolidated on pnpm — block stray yarn/npm lockfile regeneration
 yarn.lock
 package-lock.json
+
+# TypeScript incremental build cache — machine-specific, regenerated per build.
+tsconfig.tsbuildinfo

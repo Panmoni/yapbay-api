@@ -73,7 +73,8 @@
       "/home/george9874/repos/solanacolombia-www",
       "/home/george9874/repos/yapbay-solana",
       "/home/george9874/repos/pushflip",
-      "/tmp"
+      "/tmp",
+      "/home/george9874/repos/yapbay-api/docs"
     ]
   },
   "hooks": {

@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Install build dependencies and enable pnpm via corepack.
 # The "packageManager" field in package.json pins the exact pnpm version.
@@ -33,7 +33,7 @@ RUN if command -v git > /dev/null && [ -d .git ]; then \
 RUN pnpm build
 
 # Production stage
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 

@@ -219,17 +219,30 @@ async function startServer(): Promise<void> {
   );
 
   // ── 6. CORS ────────────────────────────────────────────────────────────
+  //
+  // Dev fallback intentionally does NOT include the prod origin
+  // (`https://app.yapbay.com`). Combined with `credentials: true`, listing
+  // prod here would let an XSS on the prod frontend issue credentialed
+  // cross-origin requests against a developer's locally-running API.
+  // Set `CORS_ORIGINS=https://app.yapbay.com,http://localhost:5173` if you
+  // genuinely need the prod frontend to hit a dev backend.
   const corsOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
     : isProduction
       ? ['https://app.yapbay.com']
-      : ['https://app.yapbay.com', 'http://localhost:5173', 'http://localhost:5174'];
+      : ['http://localhost:5173', 'http://localhost:5174'];
 
   app.use(
     cors({
       origin: corsOrigins,
       methods: ['GET', 'POST', 'PUT', 'DELETE'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'x-network-name', 'X-Request-Id'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'x-network-name',
+        'X-Request-Id',
+        'Idempotency-Key',
+      ],
       exposedHeaders: [
         'X-Rate-Limit-Limit',
         'X-Rate-Limit-Remaining',
@@ -237,6 +250,8 @@ async function startServer(): Promise<void> {
         'X-Rate-Limit-Retry-After',
         'X-Request-Id',
         'Server-Timing',
+        'Idempotent-Replayed',
+        'Retry-After',
       ],
       credentials: true,
     }),

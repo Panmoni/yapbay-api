@@ -97,13 +97,23 @@ export const listOffersQuerySchema = paginationQuery
 // Response schemas
 // ---------------------------------------------------------------------------
 
+/**
+ * Postgres `INTERVAL` columns come back through `node-postgres` as a
+ * `PostgresInterval` object (`{ years?, months?, days?, hours?, minutes?,
+ * seconds?, milliseconds? }`), NOT a string. The schema must accept either
+ * that object shape or the string form (which arrives when the column was
+ * inserted as a literal like `'15 minutes'` and pg short-circuits the
+ * parse). Frontends already handle both via `parseTimeLimit`.
+ */
+const intervalLike = z.union([z.string(), z.object({}).passthrough()]).nullable();
+
 /** A single offer row as returned by pg (RETURNING * or SELECT *). */
 export const offerRowSchema = z.strictObject({
   created_at: dateOrIsoString,
   creator_account_id: z.number().int(),
-  escrow_deposit_time_limit: z.string().nullable(),
+  escrow_deposit_time_limit: intervalLike,
   fiat_currency: z.string(),
-  fiat_payment_time_limit: z.string().nullable(),
+  fiat_payment_time_limit: intervalLike,
   id: z.number().int().positive(),
   max_amount: z.string(),
   min_amount: z.string(),

@@ -19,7 +19,7 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 # ~946 tarballs are downloaded once per machine, not once per deploy.
 # A rebuild after a lockfile-only change drops from ~6m to ~30s.
 # `sharing=locked` serializes concurrent builds against the same cache.
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=shared \
     pnpm install --frozen-lockfile --shamefully-hoist
 
 # Copy source code
@@ -51,7 +51,7 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 # Install production dependencies only. Same cache mount as the builder
 # stage — both stages share the pnpm store so prod-only resolution
 # benefits from the dev install's already-fetched tarballs.
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=shared \
     pnpm install --frozen-lockfile --shamefully-hoist --prod
 
 # Copy built files from builder stage
